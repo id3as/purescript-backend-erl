@@ -1,0 +1,14 @@
+package:
+  name: test-snapshots
+  dependencies:
+    - assert
+    - console
+    - effect
+    - functions
+    - partial
+    - prelude
+    - refs
+    - integers
+workspace:
+  package_set:
+    registry: 19.1.0

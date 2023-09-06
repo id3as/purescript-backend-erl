@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "scripts": {
+    "test": "spago test"
+  },
+  "dependencies": {
+    "spago": "^0.93.2"
+  }
+}
