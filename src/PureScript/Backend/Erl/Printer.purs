@@ -3,7 +3,12 @@ module PureScript.Backend.Erl.Printer where
 import Prelude
 
 import Data.Array as Array
-import Data.Maybe (maybe)
+import Data.CodePoint.Unicode as CodePointU
+import Data.Foldable (foldMap)
+import Data.Maybe (Maybe(..), maybe)
+import Data.String (CodePoint)
+import Data.String as CodePoints
+import Data.String as String
 import Data.String.CodeUnits as StringCU
 import Data.Tuple (Tuple(..))
 import Dodo (Doc, flexAlt)
@@ -44,7 +49,7 @@ printDefinition :: ErlDefinition -> Doc Void
 printDefinition = case _ of
   S.UnimplementedDefinition -> D.text "?"
   S.FunctionDefinition name args e ->
-    D.text name <> printParens (D.foldWithSeparator (D.text ", ") $ D.text <$> args) <> D.text " -> "
+    D.text (escapeAtom name) <> printParens (D.foldWithSeparator (D.text ", ") $ D.text <$> args) <> D.text " -> "
       <> D.break <> D.indent (printExpr e)
       <> D.text "."
 
@@ -55,7 +60,7 @@ printExpr = case _ of
   S.Literal (S.Float f) -> D.text $ show f
   S.Literal (S.String s) -> D.text $ "<<\"" <> s <> "\">>"
   S.Literal (S.Char c) -> D.text $ "$" <> StringCU.singleton c
-  S.Literal (S.Atom a) -> D.text a
+  S.Literal (S.Atom a) -> D.text $ escapeAtom a
 
   S.Var v -> D.text v
 
@@ -123,6 +128,60 @@ printCaseClause (CaseClause test guard e) =
 
 trailingSemi :: forall a. Doc a
 trailingSemi = flexAlt (D.text "; ") (D.text ";" <> D.break)
+
+escapeAtom :: String -> String
+escapeAtom a =
+  if isValidAtom a 
+    then a
+    else "'" <> (foldMap replaceChar $ String.toCodePointArray a) <> "'"
+  where
+  replaceChar c | c == CodePoints.codePointFromChar '\'' = "\\'"
+  -- TODO: hex format
+  -- replaceChar c | not (CodePointU.isLatin1 c) = "@x" <> hex 4 c
+  replaceChar c = String.singleton c
+
+  atomCP c | c == String.codePointFromChar '_' = true
+  atomCP c | c == String.codePointFromChar '@' = true
+  atomCP c = CodePointU.isDecDigit c || (CodePointU.isLatin1 c && CodePointU.isAlpha c)
+
+  isValidAtom a = case String.uncons a of
+    Nothing -> false
+    Just { head, tail }-> CodePointU.isLower head && Array.all atomCP (String.toCodePointArray a) && not (nameIsErlReserved a)
+
+nameIsErlReserved :: String -> Boolean
+nameIsErlReserved name =
+  name `Array.elem` erlAnyReserved
+
+erlAnyReserved :: Array String
+erlAnyReserved = [
+  "after",
+  "and",
+  "andalso",
+  "band",
+  "begin",
+  "bnot",
+  "bor",
+  "bsl",
+  "bsr",
+  "bxor",
+  "case",
+  "catch",
+  "cond",
+  "div",
+  "end",
+  "fun",
+  "if",
+  "let",
+  "not",
+  "of",
+  "or",
+  "orelse",
+  "receive",
+  "rem",
+  "try",
+  "when",
+  "xor"
+  ]
 
 
 printBinOp :: BinaryOperator -> Doc Void

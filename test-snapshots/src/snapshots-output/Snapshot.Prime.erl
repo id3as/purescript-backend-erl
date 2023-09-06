@@ -1,10 +1,10 @@
 -module(snapshot_prime).
-NCtor() -> 
+'NCtor'() -> 
   (fun
     (X@0) -> 
       X@0
   end).
-NewtypeCtor'() -> 
+'NewtypeCtor\''() -> 
   (fun
     (X@0) -> 
       X@0
@@ -26,7 +26,7 @@ useNewtypeCtor() ->
 useDataType() -> 
   (fun
     (V@0) -> 
-      (snapshot_prime:DCtor())
+      (snapshot_prime:'DCtor'())
   end).
 useDataCtor() -> 
   (fun
@@ -52,7 +52,7 @@ useNormal() ->
           end)
       end)
   end).
-instanceName'() -> 
+'instanceName\''() -> 
   #{normal => (fun
     (V@0) -> 
       case ?istag of
@@ -79,27 +79,27 @@ useClass() ->
     (DictClassName'@0) -> 
       (maps:get(ignore, DictClassName'@0))
   end).
-foo'oo() -> 
+'foo\'oo'() -> 
   <<"foo'oo">>.
 useFooPrime3() -> 
   <<"foo'oo">>.
-foo''() -> 
+'foo\'\''() -> 
   <<"foo'">>.
 useFooPrime2() -> 
   <<"foo'">>.
-foo'() -> 
+'foo\''() -> 
   <<"foo'">>.
 useFooPrime1() -> 
   <<"foo'">>.
 foo() -> 
   <<"foo">>.
-classMember'() -> 
+'classMember\''() -> 
   (fun
     (Dict@0) -> 
-      (maps:get(classMember', Dict@0))
+      (maps:get('classMember\'', Dict@0))
   end).
 useMember() -> 
   (fun
     (DictClassMember@0) -> 
-      (maps:get(classMember', DictClassMember@0))
+      (maps:get('classMember\'', DictClassMember@0))
   end).

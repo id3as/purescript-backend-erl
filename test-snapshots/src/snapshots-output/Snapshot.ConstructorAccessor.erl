@@ -7,9 +7,9 @@
 z() -> 
   ?ctor_saturated.
 y() -> 
-  (((snapshot_constructorAccessor:Foo())(1))(1)).
+  (((snapshot_constructorAccessor:'Foo'())(1))(1)).
 x() -> 
-  ((snapshot_constructorAccessor:Foo())(1)).
+  ((snapshot_constructorAccessor:'Foo'())(1)).
 test5() -> 
   (fun
     ($__unused@0) -> 

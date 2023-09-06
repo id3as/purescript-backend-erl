@@ -182,7 +182,7 @@ codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
         -- S.If (S.IfClause c Nothing e NEA.: NEA.singleton (S.IfClause (S.Literal $ S.Atom "true") Nothing ee))
         S.Case c
           ( S.CaseClause (S.atomLiteral C.true_) Nothing e NEA.:
-              NEA.singleton (S.CaseClause (S.atomLiteral "_") Nothing ee)
+              NEA.singleton (S.CaseClause (S.Var "_") Nothing ee)
           )
 
     foldr go (codegenExpr codegenEnv o) (goPair <$> b)
