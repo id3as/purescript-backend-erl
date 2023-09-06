@@ -4,7 +4,7 @@ f() ->
     (X@0) -> 
       (fun
         (Y@1) -> 
-          [X@0,Y@1,X@0,Y@1,X@0]
+          (array:from_list([X@0,Y@1,X@0,Y@1,X@0]))
       end)
   end).
 g() -> 

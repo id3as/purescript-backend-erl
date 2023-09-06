@@ -138,11 +138,11 @@ codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
   --       (codegenChain effectChainMode codegenEnv e)
 
   Accessor e (GetProp i) ->
-    S.FunCall (Just $ atomLiteral "maps") (atomLiteral "get")
+    S.FunCall (Just $ atomLiteral C.maps) (atomLiteral C.get)
       [ S.atomLiteral i, codegenExpr codegenEnv e ]
 
   Accessor e (GetIndex i) ->
-    S.FunCall (Just $ atomLiteral "array") (atomLiteral "get")
+    S.FunCall (Just $ atomLiteral C.array) (atomLiteral C.get)
       [ S.numberLiteral i, codegenExpr codegenEnv e ]
   --     S.runUncurriedFn
   --       (S.Identifier $ scmPrefixed "vector-ref")
@@ -173,28 +173,28 @@ codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
       , (codegenExpr codegenEnv e')
       ]
 
-  Branch b o -> do 
+  Branch b o -> do
     let
       goPair :: Pair NeutralExpr -> Tuple ErlExpr ErlExpr
       goPair (Pair c e) = Tuple (codegenExpr codegenEnv c) (codegenExpr codegenEnv e)
-      
+
       go (Tuple c e) ee =
         -- S.If (S.IfClause c Nothing e NEA.: NEA.singleton (S.IfClause (S.Literal $ S.Atom "true") Nothing ee))
-        S.Case c (
-          S.CaseClause (S.atomLiteral "true") Nothing e NEA.:
-          NEA.singleton (S.CaseClause (S.atomLiteral "_") Nothing ee)
-        )
+        S.Case c
+          ( S.CaseClause (S.atomLiteral C.true_) Nothing e NEA.:
+              NEA.singleton (S.CaseClause (S.atomLiteral "_") Nothing ee)
+          )
 
     foldr go (codegenExpr codegenEnv o) (goPair <$> b)
   --     S.Cond (goPair <$> b) (codegenExpr codegenEnv o)
 
   EffectBind _ _ _ _ -> S.Unimplemented "effect_bind"
   --     codegenEffectChain codegenEnv s
-  EffectPure _ ->S.Unimplemented "effect_pure"
+  EffectPure _ -> S.Unimplemented "effect_pure"
   --     codegenEffectChain codegenEnv s
-  EffectDefer _ ->S.Unimplemented "effect_defer"
+  EffectDefer _ -> S.Unimplemented "effect_defer"
   --     codegenEffectChain codegenEnv s
-  PrimEffect _ ->S.Unimplemented "prim_effect"
+  PrimEffect _ -> S.Unimplemented "prim_effect"
   --     codegenEffectChain codegenEnv s
 
   PrimOp o ->
@@ -205,20 +205,21 @@ codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
   --       (S.StringExpr $ Json.stringify $ Json.fromString undefinedSymbol)
 
   Fail i -> S.Unimplemented "fail"
-  --     -- Note: This can be improved by using `error`, but it requires
-  --     -- that we track where exactly this `Fail` is defined. We can
-  --     -- make use of the `codegenEnv` for this.
-  --     S.List
-  --       [ S.Identifier $ scmPrefixed "raise"
-  --       , S.List
-  --           [ S.Identifier $ scmPrefixed "condition"
-  --           , S.List [ S.Identifier $ scmPrefixed "make-error" ]
-  --           , S.List
-  --               [ S.Identifier $ scmPrefixed "make-message-condition"
-  --               , S.StringExpr $ Json.stringify $ Json.fromString i
-  --               ]
-  --           ]
-  --       ]
+
+--     -- Note: This can be improved by using `error`, but it requires
+--     -- that we track where exactly this `Fail` is defined. We can
+--     -- make use of the `codegenEnv` for this.
+--     S.List
+--       [ S.Identifier $ scmPrefixed "raise"
+--       , S.List
+--           [ S.Identifier $ scmPrefixed "condition"
+--           , S.List [ S.Identifier $ scmPrefixed "make-error" ]
+--           , S.List
+--               [ S.Identifier $ scmPrefixed "make-message-condition"
+--               , S.StringExpr $ Json.stringify $ Json.fromString i
+--               ]
+--           ]
+--       ]
 
 codegenLiteral :: CodegenEnv -> Literal NeutralExpr -> ErlExpr
 codegenLiteral codegenEnv = case _ of
@@ -226,9 +227,10 @@ codegenLiteral codegenEnv = case _ of
   LitNumber n -> S.Literal $ S.Float n
   LitString s -> S.Literal $ S.String s
   LitChar c -> S.Literal $ S.Char c
-  LitBoolean b -> S.Literal $ S.Atom $ if b then "true" else "false"
-  -- TODO arrays are not lists
-  LitArray a -> S.List $ codegenExpr codegenEnv <$> a
+  LitBoolean b -> S.Literal $ S.Atom $ if b then C.true_ else C.false_
+  LitArray a ->
+    S.FunCall (Just $ atomLiteral C.array) (atomLiteral C.from_list)
+      [ S.List $ codegenExpr codegenEnv <$> a ]
   LitRecord r -> S.Map $ (\(Prop f e) -> Tuple f (codegenExpr codegenEnv e)) <$> r
 
 -- jsonToErlString :: String -> String
@@ -340,7 +342,7 @@ codegenPrimOp codegenEnv@{ currentModule } = case _ of
       OpIntBitNot -> S.UnaryOp S.BitwiseNot x'
       OpIntNegate -> S.UnaryOp S.Negate x'
       OpNumberNegate -> S.UnaryOp S.Negate x'
-      OpArrayLength -> S.FunCall (Just $ atomLiteral "array") (atomLiteral "length") [ x' ]
+      OpArrayLength -> S.FunCall (Just $ atomLiteral C.array) (atomLiteral C.length) [ x' ]
       OpIsTag _ -> S.Unimplemented "istag"
   --       OpArrayLength ->
   --         S.List [ S.Identifier $ scmPrefixed "vector-length", x' ]
@@ -366,7 +368,7 @@ codegenPrimOp codegenEnv@{ currentModule } = case _ of
     in
       case o of
         OpArrayIndex ->
-          S.FunCall (Just $ atomLiteral "array") (atomLiteral "get") [ x', y' ]
+          S.FunCall (Just $ atomLiteral C.array) (atomLiteral C.get) [ x', y' ]
         OpBooleanAnd ->
           S.BinOp S.AndAlso x' y'
         OpBooleanOr ->
@@ -411,9 +413,9 @@ codegenPrimOp codegenEnv@{ currentModule } = case _ of
           y'
         OpNumberOrd o' -> opOrd o' x' y'
         OpStringAppend ->
-          S.FunCall (Just $ atomLiteral "unicode") (atomLiteral "characters_to_binary")
+          S.FunCall (Just $ atomLiteral $ C.unicode) (atomLiteral $ C.characters_to_binary)
             [ S.List [ x', y' ]
-            , S.atomLiteral "utf8"
+            , S.atomLiteral C.utf8
             ]
         OpStringOrd o' -> opOrd o' x' y'
 

@@ -16,6 +16,6 @@ boolean2() ->
 boolean1() -> 
   true.
 array2() -> 
-  [1,2,3].
+  (array:from_list([1,2,3])).
 array() -> 
-  [].
+  (array:from_list([])).

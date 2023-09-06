@@ -4,7 +4,7 @@ stringComparison() ->
     (X@0) -> 
       (fun
         (Y@1) -> 
-          [(X@0 =:= Y@1),(X@0 =/= Y@1),(X@0 < Y@1),(X@0 =< Y@1),(X@0 >= Y@1),(X@0 > Y@1)]
+          (array:from_list([(X@0 =:= Y@1),(X@0 =/= Y@1),(X@0 < Y@1),(X@0 =< Y@1),(X@0 >= Y@1),(X@0 > Y@1)]))
       end)
   end).
 numberComparison() -> 
@@ -12,7 +12,7 @@ numberComparison() ->
     (X@0) -> 
       (fun
         (Y@1) -> 
-          [(X@0 =:= Y@1),(X@0 =/= Y@1),(X@0 < Y@1),(X@0 =< Y@1),(X@0 >= Y@1),(X@0 > Y@1)]
+          (array:from_list([(X@0 =:= Y@1),(X@0 =/= Y@1),(X@0 < Y@1),(X@0 =< Y@1),(X@0 >= Y@1),(X@0 > Y@1)]))
       end)
   end).
 integerComparison() -> 
@@ -20,7 +20,7 @@ integerComparison() ->
     (X@0) -> 
       (fun
         (Y@1) -> 
-          [(X@0 =:= Y@1),(X@0 =/= Y@1),(X@0 < Y@1),(X@0 =< Y@1),(X@0 >= Y@1),(X@0 > Y@1)]
+          (array:from_list([(X@0 =:= Y@1),(X@0 =/= Y@1),(X@0 < Y@1),(X@0 =< Y@1),(X@0 >= Y@1),(X@0 > Y@1)]))
       end)
   end).
 charComparison() -> 
@@ -28,7 +28,7 @@ charComparison() ->
     (X@0) -> 
       (fun
         (Y@1) -> 
-          [(X@0 =:= Y@1),(X@0 =/= Y@1),(X@0 < Y@1),(X@0 =< Y@1),(X@0 >= Y@1),(X@0 > Y@1)]
+          (array:from_list([(X@0 =:= Y@1),(X@0 =/= Y@1),(X@0 < Y@1),(X@0 =< Y@1),(X@0 >= Y@1),(X@0 > Y@1)]))
       end)
   end).
 booleanComparison() -> 
@@ -36,6 +36,6 @@ booleanComparison() ->
     (X@0) -> 
       (fun
         (Y@1) -> 
-          [(X@0 =:= Y@1),(X@0 =/= Y@1),(X@0 < Y@1),(X@0 =< Y@1),(X@0 >= Y@1),(X@0 > Y@1)]
+          (array:from_list([(X@0 =:= Y@1),(X@0 =/= Y@1),(X@0 < Y@1),(X@0 =< Y@1),(X@0 >= Y@1),(X@0 > Y@1)]))
       end)
   end).
