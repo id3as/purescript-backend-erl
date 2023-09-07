@@ -7,10 +7,10 @@ import Data.Array.NonEmpty as NEA
 import Data.Bifunctor (lmap)
 import Data.CodePoint.Unicode as StringCP
 import Data.Foldable (foldr)
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (unwrap)
 import Data.String as String
-import Data.Tuple (Tuple(..), uncurry)
+import Data.Tuple (Tuple(..), snd, uncurry)
 import PureScript.Backend.Erl.Constants as C
 import PureScript.Backend.Erl.Syntax (ErlDefinition(..), ErlExport(..), ErlExpr, ErlModule, atomLiteral)
 import PureScript.Backend.Erl.Syntax as S
@@ -48,6 +48,7 @@ definitionExports = case _ of
   FunctionDefinition f a _ -> [ Export f (Array.length a) ]
   _ -> []
 
+erlModuleName :: ModuleName -> String
 erlModuleName name =
   String.joinWith "_"
     $ map toAtomName
@@ -59,17 +60,26 @@ toAtomName text = case String.uncons text of
   Nothing -> text
 
 toErlVar :: Maybe Ident -> Level -> String
-toErlVar text (Level lvl) = case text >>= (unwrap >>> String.uncons) of
-  Just { head, tail } -> 
-    -- Lazy to include start
-    String.replace (String.Pattern "$") (String.Replacement "_@dollar") $
-  
-     String.fromCodePointArray (StringCP.toUpper head) <> tail <> "@" <> show
-    lvl
-  Nothing -> "V" <> "@" <> show lvl
+toErlVar text (Level lvl) =
+  maybe "V" (toErlVarName <<< unwrap) text <> "@" <> show lvl
 
 -- String.replace (String.Pattern ".") (String.Replacement "_") (unwrap name)
---   T.intercalate "_" (toAtomName <$> T.splitOn "." name) 
+--   T.intercalate "_" (toAtomName <$> T.splitOn "." name)
+
+toErlVarName :: String -> String
+toErlVarName text = case String.uncons text of
+  Just { head, tail } ->
+    -- Lazy to include start
+    String.replace (String.Pattern "$") (String.Replacement "_@dollar") $
+
+     String.fromCodePointArray (StringCP.toUpper head) <> tail
+  Nothing -> "V"
+
+toErlVarExpr :: Tuple (Maybe Ident) Level -> ErlExpr
+toErlVarExpr = S.Var <<< uncurry toErlVar
+
+tagAtom :: Ident -> ErlExpr
+tagAtom tagName = S.Literal $ S.Atom $ toAtomName $ unwrap tagName
 
 codegenTopLevelBindingGroup
   :: CodegenEnv
@@ -84,11 +94,15 @@ codegenTopLevelBinding
   -> Array ErlDefinition
 codegenTopLevelBinding codegenEnv (Tuple (Ident i) n) =
   case unwrap n of
-    CtorDef _ _ _ ss -> [ UnimplementedDefinition ]
+    CtorDef _ _ tag fields | vars <- S.Var <<< toErlVarName <$> fields ->
+      [ FunctionDefinition i [] $
+          S.curriedFun vars $
+            S.Tupled $ [ tagAtom tag ] <> vars
+      ]
     -- CtorDef _ _ _ ss ->
     --   case NonEmptyArray.fromArray ss of
     --     Nothing ->
-    --       [ 
+    --       [
     --         Define i (S.quote $ S.Identifier i)
     --       , Define (S.recordTypePredicate i)
     --           $ S.mkUncurriedFn [ "v" ]
@@ -124,23 +138,15 @@ codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
   App f p ->
     S.curriedApp (codegenExpr codegenEnv f) (codegenExpr codegenEnv <$> p)
   Abs a e -> do
-    S.curriedFun ((S.Var <<< uncurry toErlVar) <$> a) (codegenExpr codegenEnv e)
+    S.curriedFun (toErlVarExpr <$> a) (codegenExpr codegenEnv e)
   UncurriedApp f p ->
     S.FunCall Nothing (codegenExpr codegenEnv f) (codegenExpr codegenEnv <$> p)
   UncurriedAbs a e ->
-    S.Fun Nothing
-      [ Tuple
-          (S.FunHead ((S.Var <<< uncurry toErlVar) <$> a) Nothing)
-          (codegenExpr codegenEnv e)
-      ]
+    S.simpleFun (toErlVarExpr <$> a) (codegenExpr codegenEnv e)
   UncurriedEffectApp f p ->
     S.thunk $ S.FunCall Nothing (codegenExpr codegenEnv f) (codegenExpr codegenEnv <$> p)
   UncurriedEffectAbs a e ->
-    S.Fun Nothing
-      [ Tuple
-          (S.FunHead ((S.Var <<< uncurry toErlVar) <$> a) Nothing)
-          (codegenChain effectChainMode codegenEnv e)
-      ]
+    S.simpleFun (toErlVarExpr <$> a) (codegenChain effectChainMode codegenEnv e)
   Accessor e (GetProp i) ->
     S.FunCall (Just $ atomLiteral C.maps) (atomLiteral C.get)
       [ S.atomLiteral i, codegenExpr codegenEnv e ]
@@ -148,22 +154,22 @@ codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
   Accessor e (GetIndex i) ->
     S.FunCall (Just $ atomLiteral C.array) (atomLiteral C.get)
       [ S.numberLiteral i, codegenExpr codegenEnv e ]
-  --     S.runUncurriedFn
-  --       (S.Identifier $ scmPrefixed "vector-ref")
-  --       [ codegenExpr codegenEnv e, S.Integer $ wrap $ show i ]
-  Accessor e (GetCtorField qi _ _ _ field _) ->
-    S.Unimplemented "GetField"
-  --     S.recordAccessor (codegenExpr codegenEnv e) (flattenQualified currentModule qi) field
-  Update _ _ ->
-    S.Unimplemented "update"
-  --     S.Identifier "object-update"
 
-  CtorSaturated qi _ _ _ xs ->
-    S.Unimplemented "ctor_saturated"
-  --   CtorSaturated qi _ _ _ xs ->
-  --     S.runUncurriedFn
-  --       (S.Identifier $ S.recordTypeUncurriedConstructor $ flattenQualified currentModule qi)
-  --       (map (codegenExpr codegenEnv <<< Tuple.snd) xs)
+  Accessor e (GetCtorField _ _ _ _ _ i) ->
+    S.FunCall (Just $ atomLiteral C.erlang) (atomLiteral C.element)
+      -- plus 1 for tag at beginning of tuple
+      -- plus 1 for 1-indexing
+      [ S.numberLiteral (i + 2), codegenExpr codegenEnv e ]
+
+  Update e props ->
+    S.MapUpdate (codegenExpr codegenEnv e) ((\(Prop name p) -> Tuple name (codegenExpr codegenEnv p)) <$> props)
+
+  CtorSaturated _ _ _ tagName xs ->
+    let
+      tagAtom = S.Literal $ S.Atom $ toAtomName $ unwrap tagName
+    in
+      S.Tupled $ [ tagAtom ] <> map (codegenExpr codegenEnv <<< snd) xs
+
   CtorDef _ _ _ _ ->
     S.Unimplemented "ctor_def"
   --     unsafeCrashWith "codegenExpr:CtorDef - handled by codegenTopLevelBinding!"
@@ -255,8 +261,8 @@ codegenLiteral codegenEnv = case _ of
 --     [ (Just x) ] -> "\\x" <> x <> ";"
 --     _ -> unsafeCrashWith "Error matching at unicodeReplaceMatch in jsonToErlString"
 
--- -- > In addition to the standard named characters 
--- -- > #\alarm, #\backspace, #\delete, #\esc, #\linefeed, #\newline, #\page, #\return, #\space, and #\tab, 
+-- -- > In addition to the standard named characters
+-- -- > #\alarm, #\backspace, #\delete, #\esc, #\linefeed, #\newline, #\page, #\return, #\space, and #\tab,
 -- -- > Erl Scheme recognizes #\bel, #\ls, #\nel, #\nul, #\rubout, and #\vt (or #\vtab).
 -- --
 -- -- Source: https://cisco.github.io/ErlScheme/csug9.5/intro.html#./intro:h1, 6th paragraph
@@ -346,14 +352,12 @@ codegenPrimOp codegenEnv@{ currentModule } = case _ of
       OpIntBitNot -> S.UnaryOp S.BitwiseNot x'
       OpIntNegate -> S.UnaryOp S.Negate x'
       OpNumberNegate -> S.UnaryOp S.Negate x'
-      OpArrayLength -> S.FunCall (Just $ atomLiteral C.array) (atomLiteral C.length) [ x' ]
-      OpIsTag _ -> S.Unimplemented "istag"
-  --       OpArrayLength ->
-  --         S.List [ S.Identifier $ scmPrefixed "vector-length", x' ]
-  --       OpIsTag qi ->
-  --         S.app
-  --           (S.Identifier $ S.recordTypePredicate $ flattenQualified currentModule qi)
-  --           x'
+      OpArrayLength ->
+        S.FunCall (Just $ atomLiteral C.array) (atomLiteral C.length) [ x' ]
+      OpIsTag _ ->
+        S.FunCall (Just $ atomLiteral C.erlang) (atomLiteral C.element)
+          [ S.numberLiteral 1, x' ]
+
   Op2 o x y ->
     let
       x' = codegenExpr codegenEnv x

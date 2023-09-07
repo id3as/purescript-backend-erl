@@ -1,11 +1,40 @@
 -module(snapshot_constructorAccessor).
-?
-?
-?
-?
-?
+'First'() -> 
+  (fun
+    (Value0) -> 
+      {first,Value0}
+  end).
+'Last'() -> 
+  (fun
+    (Value0) -> 
+      {last,Value0}
+  end).
+'NoArgs'() -> 
+  {noArgs}.
+'HasArgs'() -> 
+  (fun
+    (Value0) -> 
+      (fun
+        (Value1) -> 
+          (fun
+            (Value2) -> 
+              {hasArgs,Value0,Value1,Value2}
+          end)
+      end)
+  end).
+'Foo'() -> 
+  (fun
+    (Value0) -> 
+      (fun
+        (Value1) -> 
+          (fun
+            (Value2) -> 
+              {foo,Value0,Value1,Value2}
+          end)
+      end)
+  end).
 z() -> 
-  ?ctor_saturated.
+  {foo,1,1,1}.
 y() -> 
   (((snapshot_constructorAccessor:'Foo'())(1))(1)).
 x() -> 
@@ -15,9 +44,9 @@ test5() ->
     (_@dollar__unused@0) -> 
       (fun
         (V@1) -> 
-          case ?istag of
+          case (erlang:element(1, V@1)) of
             true ->
-              ?GetField;
+              (erlang:element(2, V@1));
             _ ->
               ?fail
           end
@@ -26,13 +55,13 @@ test5() ->
 test4() -> 
   (fun
     (V@0) -> 
-      case ?istag of
+      case (erlang:element(1, V@0)) of
         true ->
-          ?GetField;
+          (erlang:element(2, V@0));
         _ ->
-          case ?istag of
+          case (erlang:element(1, V@0)) of
             true ->
-              ?GetField;
+              (erlang:element(2, V@0));
             _ ->
               ?fail
           end
@@ -41,17 +70,17 @@ test4() ->
 test3() -> 
   (fun
     (V@0) -> 
-      case (?GetField < ?GetField) of
+      case ((erlang:element(2, V@0)) < (erlang:element(4, V@0))) of
         true ->
-          ?GetField;
+          (erlang:element(2, V@0));
         _ ->
-          ?GetField
+          (erlang:element(3, V@0))
       end
   end).
 test2() -> 
   (fun
     (V@0) -> 
-      ?GetField
+      (erlang:element(2, V@0))
   end).
 test1() -> 
   (fun

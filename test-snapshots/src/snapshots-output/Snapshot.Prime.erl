@@ -9,10 +9,20 @@
     (X@0) -> 
       X@0
   end).
-?
-?
-?
-?
+'F1'() -> 
+  {f1}.
+'F2'() -> 
+  {f2}.
+'DCtor'() -> 
+  {dCtor}.
+'Ctor\''() -> 
+  (fun
+    (Value0) -> 
+      (fun
+        (Value1) -> 
+          {'ctor\'',Value0,Value1}
+      end)
+  end).
 useNewtypeType() -> 
   (fun
     (I@0) -> 
@@ -31,7 +41,7 @@ useDataType() ->
 useDataCtor() -> 
   (fun
     (S@0) -> 
-      ?ctor_saturated
+      {'ctor\'',S@0,4}
   end).
 normal() -> 
   (fun
@@ -55,11 +65,11 @@ useNormal() ->
 'instanceName\''() -> 
   #{normal => (fun
     (V@0) -> 
-      case ?istag of
+      case (erlang:element(1, V@0)) of
         true ->
           <<"F1">>;
         _ ->
-          case ?istag of
+          case (erlang:element(1, V@0)) of
             true ->
               <<"F2">>;
             _ ->

@@ -26,6 +26,8 @@ data ErlExpr
   = Literal ErlLiteral
   | Var String
   | List (Array ErlExpr)
+  -- | An erlang tuple { E1, E2, ... }
+  | Tupled (Array ErlExpr)
   -- | A map expression #{ X => E }
   | Map (Array (Tuple String ErlExpr))
   -- | A map update expression M#{ X => E }

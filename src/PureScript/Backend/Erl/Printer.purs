@@ -26,6 +26,9 @@ printParens = printWrap (D.text "(") (D.text ")")
 printBrackets :: Doc Void -> Doc Void
 printBrackets = printWrap (D.text "[") (D.text "]")
 
+printBraces :: Doc Void -> Doc Void
+printBraces = printWrap (D.text "{") (D.text "}")
+
 linesSeparated :: Prim.Array (Doc Void) -> Doc Void
 linesSeparated = Array.intercalate twoLineBreaks
   where
@@ -65,12 +68,13 @@ printExpr = case _ of
   S.Var v -> D.text v
 
   S.List a -> printBrackets $ D.foldWithSeparator (D.text ",") $ printExpr <$> a
+  S.Tupled a -> printBraces $ D.foldWithSeparator (D.text ",") $ printExpr <$> a
   S.Map fields -> D.text "#{" <> D.foldWithSeparator (D.text ",") (printField <$> fields) <> D.text "}"
-  S.MapUpdate e fields -> printExpr e <>  D.text "#{" <> D.foldWithSeparator (D.text ",") (printField <$> fields) <> D.text "}"
+  S.MapUpdate e fields -> D.text "(" <> printExpr e <> D.text ")#{" <> D.foldWithSeparator (D.text ",") (printField <$> fields) <> D.text "}"
 
   S.Match e1 e2 -> printExpr e1 <> D.text " = " <> printExpr e2
 
-  S.Block exprs -> 
+  S.Block exprs ->
     D.text "begin" <> D.break <>
       D.indent (D.foldWithSeparator trailingComma (printExpr <$> exprs)) <> D.break <>
     D.text "end"
@@ -78,12 +82,12 @@ printExpr = case _ of
   S.Fun name heads -> printParens $ do
     let
       printFunHead :: Tuple FunHead ErlExpr -> Doc Void
-      printFunHead (Tuple (FunHead exprs g) e) = 
+      printFunHead (Tuple (FunHead exprs g) e) =
         maybe mempty (\n -> D.text n <> D.space) name <>
           printParens (D.foldWithSeparator (D.text ", ") $ printExpr <$> exprs) <>
           D.text " -> " <> D.break <>
           D.indent (printExpr e) <> D.break
-    
+
     D.text "fun" <> D.break
       <> D.indent (
         D.lines $ printFunHead <$> heads
@@ -93,7 +97,7 @@ printExpr = case _ of
   S.FunCall qualifier function args ->
     printParens $
       maybe mempty (\q -> printExpr q <> D.text ":")  qualifier
-      <> printExpr function 
+      <> printExpr function
       <> printParens (D.foldWithSeparator (D.text ", ") $ printExpr <$> args)
 
   S.If clauses ->
@@ -131,7 +135,7 @@ trailingSemi = flexAlt (D.text "; ") (D.text ";" <> D.break)
 
 escapeAtom :: String -> String
 escapeAtom a =
-  if isValidAtom a 
+  if isValidAtom a
     then a
     else "'" <> (foldMap replaceChar $ String.toCodePointArray a) <> "'"
   where
@@ -224,7 +228,7 @@ printUnaryOp = D.text <<< case _ of
   S.Not ->                  "not"
   S.BitwiseNot ->           "bnot"
   S.Positive ->             "+"
-  S.Negate ->               "-"  
+  S.Negate ->               "-"
 
 printField :: Tuple String ErlExpr -> Doc Void
 printField (Tuple f e) =

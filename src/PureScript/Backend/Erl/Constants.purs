@@ -24,6 +24,12 @@ array = "array"
 get :: String
 get = "get"
 
+erlang :: String
+erlang = "erlang"
+
+element :: String
+element = "element"
+
 true_ :: String
 true_ = "true"
 
