@@ -46,9 +46,7 @@ data ErlExpr
   | BinOp BinaryOperator ErlExpr ErlExpr
   | UnaryOp UnaryOperator ErlExpr
 
-
   | Unimplemented String
-
 
 data FunHead = FunHead (Array ErlExpr) (Maybe Guard)
 data IfClause = IfClause ErlExpr ErlExpr
@@ -210,11 +208,9 @@ curriedFun args e =
         eAcc
     ]
 
--- S.Fun Nothing [
---   Tuple
---   (S.FunHead ((S.Var <<< uncurry toErlVar) <$> a) Nothing)
---   (codegenExpr codegenEnv e)
--- ]
+simpleFun :: Array ErlExpr -> ErlExpr -> ErlExpr
+simpleFun args e =
+  Fun Nothing [ Tuple (FunHead args Nothing) e ]
 
 atomLiteral :: String -> ErlExpr
 atomLiteral = Literal <<< Atom
@@ -227,3 +223,9 @@ numberLiteral = Literal <<< Integer
 
 stringLiteral :: String -> ErlExpr
 stringLiteral = Literal <<< String
+
+thunk :: ErlExpr -> ErlExpr
+thunk = simpleFun []
+
+unthunk :: ErlExpr -> ErlExpr
+unthunk e = FunCall Nothing e []

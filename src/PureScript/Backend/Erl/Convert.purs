@@ -4,6 +4,7 @@ import Prelude
 
 import Data.Array as Array
 import Data.Array.NonEmpty as NEA
+import Data.Bifunctor (lmap)
 import Data.CodePoint.Unicode as StringCP
 import Data.Foldable (foldr)
 import Data.Maybe (Maybe(..))
@@ -59,7 +60,11 @@ toAtomName text = case String.uncons text of
 
 toErlVar :: Maybe Ident -> Level -> String
 toErlVar text (Level lvl) = case text >>= (unwrap >>> String.uncons) of
-  Just { head, tail } -> String.fromCodePointArray (StringCP.toUpper head) <> tail <> "@" <> show
+  Just { head, tail } -> 
+    -- Lazy to include start
+    String.replace (String.Pattern "$") (String.Replacement "_@dollar") $
+  
+     String.fromCodePointArray (StringCP.toUpper head) <> tail <> "@" <> show
     lvl
   Nothing -> "V" <> "@" <> show lvl
 
@@ -129,14 +134,13 @@ codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
           (codegenExpr codegenEnv e)
       ]
   UncurriedEffectApp f p ->
-    S.Unimplemented "uncurried_effect_app"
-  --     S.thunk $ S.runUncurriedFn (codegenExpr codegenEnv f)
-  --       (codegenExpr codegenEnv <$> p)
+    S.thunk $ S.FunCall Nothing (codegenExpr codegenEnv f) (codegenExpr codegenEnv <$> p)
   UncurriedEffectAbs a e ->
-    S.Unimplemented "uncurried_effect_abs"
-  --     S.mkUncurriedFn (uncurry toErlIdent <$> a)
-  --       (codegenChain effectChainMode codegenEnv e)
-
+    S.Fun Nothing
+      [ Tuple
+          (S.FunHead ((S.Var <<< uncurry toErlVar) <$> a) Nothing)
+          (codegenChain effectChainMode codegenEnv e)
+      ]
   Accessor e (GetProp i) ->
     S.FunCall (Just $ atomLiteral C.maps) (atomLiteral C.get)
       [ S.atomLiteral i, codegenExpr codegenEnv e ]
@@ -168,10 +172,11 @@ codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
   --     S.Let true (map (bimap (flip toErlIdent lvl <<< Just) (codegenExpr codegenEnv)) bindings) $
   --       codegenExpr codegenEnv expr
   Let i lvl e e' ->
-    S.Block
-      [ S.Match (S.Var $ toErlVar i lvl) (codegenExpr codegenEnv e)
-      , (codegenExpr codegenEnv e')
-      ]
+    codegenPureChain codegenEnv s
+    -- S.Block
+    --   [ S.Match (S.Var $ toErlVar i lvl) (codegenExpr codegenEnv e)
+    --   , (codegenExpr codegenEnv e')
+    --   ]
 
   Branch b o -> do
     let
@@ -188,12 +193,12 @@ codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
     foldr go (codegenExpr codegenEnv o) (goPair <$> b)
   --     S.Cond (goPair <$> b) (codegenExpr codegenEnv o)
 
-  EffectBind _ _ _ _ -> S.Unimplemented "effect_bind"
-  --     codegenEffectChain codegenEnv s
-  EffectPure _ -> S.Unimplemented "effect_pure"
-  --     codegenEffectChain codegenEnv s
-  EffectDefer _ -> S.Unimplemented "effect_defer"
-  --     codegenEffectChain codegenEnv s
+  EffectBind _ _ _ _ ->
+    codegenEffectChain codegenEnv s
+  EffectPure _ ->
+    codegenEffectChain codegenEnv s
+  EffectDefer _ ->
+    codegenEffectChain codegenEnv s
   PrimEffect _ -> S.Unimplemented "prim_effect"
   --     codegenEffectChain codegenEnv s
 
@@ -276,61 +281,60 @@ codegenLiteral codegenEnv = case _ of
 
 --   padLeft char i s = power char (i - String.length s) <> s
 
--- type ChainMode = { effect :: Boolean }
+type ChainMode = { effect :: Boolean }
 
--- pureChainMode :: ChainMode
--- pureChainMode = { effect: false }
+pureChainMode :: ChainMode
+pureChainMode = { effect: false }
 
--- effectChainMode :: ChainMode
--- effectChainMode = { effect: true }
+effectChainMode :: ChainMode
+effectChainMode = { effect: true }
 
--- codegenPureChain :: CodegenEnv -> NeutralExpr -> ErlExpr
--- codegenPureChain codegenEnv = codegenChain pureChainMode codegenEnv
+codegenPureChain :: CodegenEnv -> NeutralExpr -> ErlExpr
+codegenPureChain codegenEnv = codegenChain pureChainMode codegenEnv
 
--- codegenEffectChain :: CodegenEnv -> NeutralExpr -> ErlExpr
--- codegenEffectChain codegenEnv = S.thunk <<< codegenChain effectChainMode codegenEnv
+codegenEffectChain :: CodegenEnv -> NeutralExpr -> ErlExpr
+codegenEffectChain codegenEnv = S.thunk <<< codegenChain effectChainMode codegenEnv
 
--- codegenChain :: ChainMode -> CodegenEnv -> NeutralExpr -> ErlExpr
--- codegenChain chainMode codegenEnv = collect []
---   where
---   recursive :: Boolean
---   recursive = false
+codegenChain :: ChainMode -> CodegenEnv -> NeutralExpr -> ErlExpr
+codegenChain chainMode codegenEnv = collect []
+  where
+  -- `expression` has type `Effect ..`, so we can confidently unthunk here
+  codegenEffectBind :: NeutralExpr -> ErlExpr
+  codegenEffectBind expression = case unwrap expression of
+    -- PrimEffect e' ->
+    --   codegenPrimEffect codegenEnv e'
+    UncurriedEffectApp f p ->
+      S.FunCall Nothing (codegenExpr codegenEnv f) (codegenExpr codegenEnv <$> p)
+    _ ->
+      S.unthunk $ codegenExpr codegenEnv expression
 
---   -- `expression` has type `Effect ..`, so we can confidently unthunk here
---   codegenEffectBind :: NeutralExpr -> ErlExpr
---   codegenEffectBind expression = case unwrap expression of
---     PrimEffect e' ->
---       codegenPrimEffect codegenEnv e'
---     UncurriedEffectApp f p ->
---       S.runUncurriedFn (codegenExpr codegenEnv f) (codegenExpr codegenEnv <$> p)
---     _ ->
---       S.unthunk $ codegenExpr codegenEnv expression
+  finish :: Boolean -> Array _ -> NeutralExpr -> ErlExpr
+  finish shouldUnthunk bindings expression = do
+    let
+      maybeUnthunk :: ErlExpr -> ErlExpr
+      maybeUnthunk = if shouldUnthunk then S.unthunk else identity
+      res = maybeUnthunk $ codegenExpr codegenEnv expression
+    if Array.null bindings then
+      res
+    else
+      S.Block $ (uncurry S.Match <<< lmap S.Var <$> bindings) `Array.snoc` res
 
---   finish :: Boolean -> Array _ -> NeutralExpr -> ErlExpr
---   finish shouldUnthunk bindings expression = do
---     let
---       maybeUnthunk :: ErlExpr -> ErlExpr
---       maybeUnthunk = if shouldUnthunk then S.unthunk else identity
---     case NEA.fromArray bindings of
---       Nothing -> maybeUnthunk $ codegenExpr codegenEnv expression
---       Just bindings' -> S.Let recursive bindings' $ maybeUnthunk $ codegenExpr codegenEnv expression
-
---   collect :: Array _ -> NeutralExpr -> ErlExpr
---   collect bindings expression = case unwrap expression of
---     Let i l v e' ->
---       collect (Array.snoc bindings $ Tuple (toErlIdent i l) (codegenExpr codegenEnv v)) e'
---     EffectPure e' | chainMode.effect ->
---       finish false bindings e'
---     PrimEffect e' | chainMode.effect ->
---       codegenPrimEffect codegenEnv e'
---     EffectBind i l v e' | chainMode.effect ->
---       collect
---         (Array.snoc bindings $ Tuple (toErlIdent i l) (codegenEffectBind v))
---         e'
---     EffectDefer e' | chainMode.effect ->
---       collect bindings e'
---     _ ->
---       finish chainMode.effect bindings expression
+  collect :: Array _ -> NeutralExpr -> ErlExpr
+  collect bindings expression = case unwrap expression of
+    Let i l v e' ->
+      collect (Array.snoc bindings $ Tuple (toErlVar i l) (codegenExpr codegenEnv v)) e'
+    EffectPure e' | chainMode.effect ->
+      finish false bindings e'
+    -- PrimEffect e' | chainMode.effect ->
+    --   codegenPrimEffect codegenEnv e'
+    EffectBind i l v e' | chainMode.effect ->
+      collect
+        (Array.snoc bindings $ Tuple (toErlVar i l) (codegenEffectBind v))
+        e'
+    EffectDefer e' | chainMode.effect ->
+      collect bindings e'
+    _ ->
+      finish chainMode.effect bindings expression
 
 codegenPrimOp :: CodegenEnv -> BackendOperator NeutralExpr -> ErlExpr
 codegenPrimOp codegenEnv@{ currentModule } = case _ of

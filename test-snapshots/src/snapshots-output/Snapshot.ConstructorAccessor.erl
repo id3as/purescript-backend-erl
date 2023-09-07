@@ -12,7 +12,7 @@ x() ->
   ((snapshot_constructorAccessor:'Foo'())(1)).
 test5() -> 
   (fun
-    ($__unused@0) -> 
+    (_@dollar__unused@0) -> 
       (fun
         (V@1) -> 
           case ?istag of
