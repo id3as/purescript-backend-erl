@@ -1,7 +1,8 @@
--module(snapshot_let).
+-module('Snapshot.Let').
+-compile(export_all).
 letChain() -> 
   (fun
-    (X@0) -> 
+    (X@0) ->
       begin
         A@1 = (X@0 + X@0),
         B@2 = (A@1 + A@1),

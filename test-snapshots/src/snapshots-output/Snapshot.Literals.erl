@@ -1,8 +1,9 @@
--module(snapshot_literals).
+-module('Snapshot.Literals').
+-compile(export_all).
 string() -> 
-  <<"string">>.
+  <<"string"/utf8>>.
 record2() -> 
-  #{foo => <<"bar">>}.
+  #{foo => <<"bar"/utf8>>}.
 record() -> 
   #{}.
 number() -> 

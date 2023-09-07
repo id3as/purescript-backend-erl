@@ -16,11 +16,10 @@ type ErlModule =
 data ErlExport = Export String Int
 
 data ErlDefinition
-  = UnimplementedDefinition
   -- |
   -- Top-level function definition
   --
-  | FunctionDefinition {- (Maybe EType) (Maybe SourceSpan) -}  String (Array String) ErlExpr
+  = FunctionDefinition {- (Maybe EType) (Maybe SourceSpan) -}  String (Array String) ErlExpr
 
 data ErlExpr
   = Literal ErlLiteral

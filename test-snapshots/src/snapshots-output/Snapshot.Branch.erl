@@ -1,9 +1,10 @@
--module(snapshot_branch).
+-module('Snapshot.Branch').
+-compile(export_all).
 i() -> 
   (fun
-    (V@0) -> 
+    (V@0) ->
       (fun
-        (V1@1) -> 
+        (V1@1) ->
           case V@0 of
             true ->
               (not V1@1);
@@ -16,7 +17,7 @@ i() ->
                     true ->
                       false;
                     _ ->
-                      ?fail
+                      fail
                   end
               end
           end
@@ -24,7 +25,7 @@ i() ->
   end).
 g() -> 
   (fun
-    (V@0) -> 
+    (V@0) ->
       case (V@0 =:= 0) of
         true ->
           1;
@@ -44,11 +45,11 @@ g() ->
   end).
 f() -> 
   (fun
-    (X@0) -> 
+    (X@0) ->
       (fun
-        (Y@1) -> 
+        (Y@1) ->
           (fun
-            (Z@2) -> 
+            (Z@2) ->
               case X@0 of
                 true ->
                   case Y@1 of

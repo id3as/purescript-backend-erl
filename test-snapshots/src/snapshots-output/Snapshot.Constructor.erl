@@ -1,13 +1,14 @@
--module(snapshot_constructor).
+-module('Snapshot.Constructor').
+-compile(export_all).
 'Nil'() -> 
   {nil}.
 'Node'() -> 
   (fun
-    (Value0) -> 
+    (Value0) ->
       (fun
-        (Value1) -> 
+        (Value1) ->
           (fun
-            (Value2) -> 
+            (Value2) ->
               {node,Value0,Value1,Value2}
           end)
       end)
@@ -16,19 +17,19 @@
   {stop1}.
 'Continue1'() -> 
   (fun
-    (Value0) -> 
+    (Value0) ->
       {continue1,Value0}
   end).
 'Stop2'() -> 
   {stop2}.
 'Continue2'() -> 
   (fun
-    (Value0) -> 
+    (Value0) ->
       {continue2,Value0}
   end).
 'Just'() -> 
   (fun
-    (Value0) -> 
+    (Value0) ->
       {just,Value0}
   end).
 'Nothing'() -> 

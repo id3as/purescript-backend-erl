@@ -2,18 +2,25 @@ module PureScript.Backend.Erl.Printer where
 
 import Prelude
 
+import Data.Array (foldr)
 import Data.Array as Array
 import Data.CodePoint.Unicode as CodePointU
+import Data.Enum (fromEnum)
 import Data.Foldable (foldMap)
 import Data.Maybe (Maybe(..), maybe)
-import Data.String (CodePoint)
+import Data.String (CodePoint, toCodePointArray)
 import Data.String as CodePoints
 import Data.String as String
 import Data.String.CodeUnits as StringCU
+import Data.String.Regex as Regex
+import Data.String.Regex.Flags as Regex.Flags
+import Data.String.Regex.Unsafe as Regex.Unsafe
 import Data.Tuple (Tuple(..))
+import Data.Tuple.Nested ((/\))
 import Dodo (Doc, flexAlt)
 import Dodo as D
 import Dodo.Common (trailingComma)
+import Partial.Unsafe (unsafePartial)
 import PureScript.Backend.Erl.Syntax (BinaryOperator, CaseClause(..), ErlDefinition, ErlExpr, ErlModule, FunHead(..), IfClause(..), UnaryOperator)
 import PureScript.Backend.Erl.Syntax as S
 
@@ -39,7 +46,8 @@ printModule :: ErlModule -> Doc Void
 printModule lib =
   flip append D.break
     $ D.lines $
-      [ printAttribute "module" (D.text lib.moduleName)
+      [ printAttribute "module" (D.text (escapeAtom lib.moduleName))
+      , printAttribute "compile" (D.text "export_all")
       ]
       <>
       map printDefinition lib.definitions
@@ -50,7 +58,6 @@ printAttribute name a = D.text "-" <> D.text name <> printParens a <> D.text "."
 
 printDefinition :: ErlDefinition -> Doc Void
 printDefinition = case _ of
-  S.UnimplementedDefinition -> D.text "?"
   S.FunctionDefinition name args e ->
     D.text (escapeAtom name) <> printParens (D.foldWithSeparator (D.text ", ") $ D.text <$> args) <> D.text " -> "
       <> D.break <> D.indent (printExpr e)
@@ -61,8 +68,8 @@ printExpr :: ErlExpr -> Doc Void
 printExpr = case _ of
   S.Literal (S.Integer n) -> D.text $ show n
   S.Literal (S.Float f) -> D.text $ show f
-  S.Literal (S.String s) -> D.text $ "<<\"" <> s <> "\">>"
-  S.Literal (S.Char c) -> D.text $ "$" <> StringCU.singleton c
+  S.Literal (S.String s) -> D.text $ "<<\"" <> escapeErlString s <> "\"/utf8>>"
+  S.Literal (S.Char c) -> D.text $ "$" <> escapeNonprinting (escapeErlString (StringCU.singleton c))
   S.Literal (S.Atom a) -> D.text $ escapeAtom a
 
   S.Var v -> D.text v
@@ -85,7 +92,7 @@ printExpr = case _ of
       printFunHead (Tuple (FunHead exprs g) e) =
         maybe mempty (\n -> D.text n <> D.space) name <>
           printParens (D.foldWithSeparator (D.text ", ") $ printExpr <$> exprs) <>
-          D.text " -> " <> D.break <>
+          D.text " ->" <> D.break <>
           D.indent (printExpr e) <> D.break
 
     D.text "fun" <> D.break
@@ -120,7 +127,7 @@ printExpr = case _ of
     printParens $
       printUnaryOp op <> D.space <> printExpr e1
 
-  S.Unimplemented s -> D.text ("?"<>s)
+  S.Unimplemented s -> D.text (escapeAtom s)
 
 printIfClause :: IfClause -> Doc Void
 printIfClause (IfClause guard e) =
@@ -233,3 +240,35 @@ printUnaryOp = D.text <<< case _ of
 printField :: Tuple String ErlExpr -> Doc Void
 printField (Tuple f e) =
   D.text f <> D.text " => " <> printExpr e
+
+erlEscapes :: Array (Tuple CodePoint String)
+erlEscapes = map (\(s /\ r) -> unsafePartial (let [ c ] = toCodePointArray s in c) /\ ("\\" <> r))
+  -- https://www.erlang.org/doc/reference_manual/data_types#escape-sequences
+  [ "\x08" /\ "b"
+  , "\x7F" /\ "d"
+  , "\x1B" /\ "e"
+  , "\x0C" /\ "f"
+  , "\n" /\ "n"
+  , "\r" /\ "r"
+  , " " /\ "s"
+  , "\t" /\ "t"
+  , "\x0B" /\ "v"
+  , "\x0" /\ "x{0}" -- or "^@"
+  , "'" /\ "'"
+  , "\"" /\ "\""
+  , "\\" /\ "\\"
+  ]
+
+escapeErlString :: String -> String
+escapeErlString = foldr (\(c /\ r) -> String.replaceAll (String.Pattern (String.singleton c)) (String.Replacement r)) <@> erlEscapes
+
+escapeNonprinting :: String -> String
+escapeNonprinting = Regex.replace'
+  (Regex.Unsafe.unsafeRegex "[^ -~]" (Regex.Flags.unicode <> Regex.Flags.multiline <> Regex.Flags.global))
+  \s _ -> toHexEscape s
+
+toHexEscape :: String -> String
+toHexEscape s =
+  case toCodePointArray s of
+    [ c ] -> "\\x{" <> show (fromEnum c) <> "}"
+    _ -> s
