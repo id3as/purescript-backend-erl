@@ -1,6 +1,6 @@
 -module(snapshot_effect).
 -compile(export_all).
-dontInlineMe() -> 
+dontInlineMe() ->
   (fun
     (V@0) ->
       (fun
@@ -8,31 +8,31 @@ dontInlineMe() ->
           (data_unit:unit())
       end)
   end).
-lastComponentIsRun() -> 
+lastComponentIsRun() ->
   begin
-    V@0 = ((snapshot_effect:dontInlineMe())(<<"a"/utf8>>)),
+    V@0 = ((snapshot_effect:dontInlineMe())(<<"a">>)),
     (fun
       () ->
         begin
           _@dollar__unused@1 = (V@0()),
-          _@dollar__unused@2 = (((snapshot_effect:dontInlineMe())(<<"b"/utf8>>))()),
-          (((snapshot_effect:dontInlineMe())(<<"c"/utf8>>))())
+          _@dollar__unused@2 = (((snapshot_effect:dontInlineMe())(<<"b">>))()),
+          (((snapshot_effect:dontInlineMe())(<<"c">>))())
         end
     end)
   end.
-lastPureIsUnwrapped() -> 
+lastPureIsUnwrapped() ->
   begin
-    V@0 = ((snapshot_effect:dontInlineMe())(<<"a"/utf8>>)),
+    V@0 = ((snapshot_effect:dontInlineMe())(<<"a">>)),
     (fun
       () ->
         begin
           Value@1 = (V@0()),
-          _@dollar__unused@2 = (((snapshot_effect:dontInlineMe())(<<"b"/utf8>>))()),
+          _@dollar__unused@2 = (((snapshot_effect:dontInlineMe())(<<"b">>))()),
           Value@1
         end
     end)
   end.
-main() -> 
+main() ->
   (fun
     () ->
       begin

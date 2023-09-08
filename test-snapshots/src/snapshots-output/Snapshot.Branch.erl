@@ -1,6 +1,6 @@
 -module(snapshot_branch).
 -compile(export_all).
-i() -> 
+i() ->
   (fun
     (V@0) ->
       (fun
@@ -17,13 +17,13 @@ i() ->
                     true ->
                       false;
                     _ ->
-                      (erlang:throw({fail,<<"Failed pattern match"/utf8>>}))
+                      (erlang:throw({fail,<<"Failed pattern match">>}))
                   end
               end
           end
       end)
   end).
-g() -> 
+g() ->
   (fun
     (V@0) ->
       case (V@0 =:= 0) of
@@ -43,7 +43,7 @@ g() ->
           end
       end
   end).
-f() -> 
+f() ->
   (fun
     (X@0) ->
       (fun

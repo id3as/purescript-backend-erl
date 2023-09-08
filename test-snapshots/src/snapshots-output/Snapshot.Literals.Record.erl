@@ -1,6 +1,6 @@
 -module(snapshot_literals_record).
 -compile(export_all).
-recordAccess() -> 
+recordAccess() ->
   (fun
     (V@0) ->
       (maps:get(fooBarBaz, V@0))

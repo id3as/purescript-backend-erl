@@ -1,6 +1,6 @@
 -module(snapshot_let).
 -compile(export_all).
-letChain() -> 
+letChain() ->
   (fun
     (X@0) ->
       begin

@@ -1,6 +1,6 @@
 -module(snapshot_arrayIndex).
 -compile(export_all).
-testAccessorGetIndex() -> 
+testAccessorGetIndex() ->
   (fun
     (V@0) ->
       case ((array:length(V@0)) =:= 1) of

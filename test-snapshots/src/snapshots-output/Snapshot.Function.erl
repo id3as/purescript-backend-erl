@@ -1,6 +1,6 @@
 -module(snapshot_function).
 -compile(export_all).
-f() -> 
+f() ->
   (fun
     (X@0) ->
       (fun
@@ -8,7 +8,7 @@ f() ->
           (array:from_list([X@0,Y@1,X@0,Y@1,X@0]))
       end)
   end).
-g() -> 
+g() ->
   (fun
     (X@0) ->
       (fun

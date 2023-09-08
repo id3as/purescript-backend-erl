@@ -1,22 +1,22 @@
 -module(snapshot_prime).
 -compile(export_all).
-'NCtor'() -> 
+'NCtor'() ->
   (fun
     (X@0) ->
       X@0
   end).
-'NewtypeCtor\''() -> 
+'NewtypeCtor\''() ->
   (fun
     (X@0) ->
       X@0
   end).
-'F1'() -> 
+'F1'() ->
   {f1}.
-'F2'() -> 
+'F2'() ->
   {f2}.
-'DCtor'() -> 
+'DCtor'() ->
   {dCtor}.
-'Ctor\''() -> 
+'Ctor\''() ->
   (fun
     (Value0) ->
       (fun
@@ -24,32 +24,32 @@
           {'ctor\'',Value0,Value1}
       end)
   end).
-useNewtypeType() -> 
+useNewtypeType() ->
   (fun
     (I@0) ->
       I@0
   end).
-useNewtypeCtor() -> 
+useNewtypeCtor() ->
   (fun
     (I@0) ->
       I@0
   end).
-useDataType() -> 
+useDataType() ->
   (fun
     (V@0) ->
       (snapshot_prime:'DCtor'())
   end).
-useDataCtor() -> 
+useDataCtor() ->
   (fun
     (S@0) ->
       {'ctor\'',S@0,4}
   end).
-normal() -> 
+normal() ->
   (fun
     (Dict@0) ->
       (maps:get(normal, Dict@0))
   end).
-useNormal() -> 
+useNormal() ->
   (fun
     (DictNormal@0) ->
       (fun
@@ -63,53 +63,53 @@ useNormal() ->
           end)
       end)
   end).
-'instanceName\''() -> 
+'instanceName\''() ->
   #{normal => (fun
     (V@0) ->
       case (erlang:element(1, V@0)) of
         true ->
-          <<"F1"/utf8>>;
+          <<"F1">>;
         _ ->
           case (erlang:element(1, V@0)) of
             true ->
-              <<"F2"/utf8>>;
+              <<"F2">>;
             _ ->
-              (erlang:throw({fail,<<"Failed pattern match"/utf8>>}))
+              (erlang:throw({fail,<<"Failed pattern match">>}))
           end
       end
   end)}.
-useInstance() -> 
-  <<"F1F2"/utf8>>.
-ignore() -> 
+useInstance() ->
+  <<"F1F2">>.
+ignore() ->
   (fun
     (Dict@0) ->
       (maps:get(ignore, Dict@0))
   end).
-useClass() -> 
+useClass() ->
   (fun
     (DictClassName_@prime@0) ->
       (maps:get(ignore, DictClassName_@prime@0))
   end).
-'foo\'oo'() -> 
-  <<"foo\'oo"/utf8>>.
-useFooPrime3() -> 
-  <<"foo\'oo"/utf8>>.
-'foo\'\''() -> 
-  <<"foo\'"/utf8>>.
-useFooPrime2() -> 
-  <<"foo\'"/utf8>>.
-'foo\''() -> 
-  <<"foo\'"/utf8>>.
-useFooPrime1() -> 
-  <<"foo\'"/utf8>>.
-foo() -> 
-  <<"foo"/utf8>>.
-'classMember\''() -> 
+'foo\'oo'() ->
+  <<"foo\'oo">>.
+useFooPrime3() ->
+  <<"foo\'oo">>.
+'foo\'\''() ->
+  <<"foo\'">>.
+useFooPrime2() ->
+  <<"foo\'">>.
+'foo\''() ->
+  <<"foo\'">>.
+useFooPrime1() ->
+  <<"foo\'">>.
+foo() ->
+  <<"foo">>.
+'classMember\''() ->
   (fun
     (Dict@0) ->
       (maps:get('classMember\'', Dict@0))
   end).
-useMember() -> 
+useMember() ->
   (fun
     (DictClassMember@0) ->
       (maps:get('classMember\'', DictClassMember@0))

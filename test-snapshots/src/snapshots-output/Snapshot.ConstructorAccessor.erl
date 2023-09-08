@@ -1,18 +1,18 @@
 -module(snapshot_constructorAccessor).
 -compile(export_all).
-'First'() -> 
+'First'() ->
   (fun
     (Value0) ->
       {first,Value0}
   end).
-'Last'() -> 
+'Last'() ->
   (fun
     (Value0) ->
       {last,Value0}
   end).
-'NoArgs'() -> 
+'NoArgs'() ->
   {noArgs}.
-'HasArgs'() -> 
+'HasArgs'() ->
   (fun
     (Value0) ->
       (fun
@@ -23,7 +23,7 @@
           end)
       end)
   end).
-'Foo'() -> 
+'Foo'() ->
   (fun
     (Value0) ->
       (fun
@@ -34,13 +34,13 @@
           end)
       end)
   end).
-z() -> 
+z() ->
   {foo,1,1,1}.
-y() -> 
+y() ->
   (((snapshot_constructorAccessor:'Foo'())(1))(1)).
-x() -> 
+x() ->
   ((snapshot_constructorAccessor:'Foo'())(1)).
-test5() -> 
+test5() ->
   (fun
     (_@dollar__unused@0) ->
       (fun
@@ -49,11 +49,11 @@ test5() ->
             true ->
               (erlang:element(2, V@1));
             _ ->
-              (erlang:throw({fail,<<"Failed pattern match"/utf8>>}))
+              (erlang:throw({fail,<<"Failed pattern match">>}))
           end
       end)
   end).
-test4() -> 
+test4() ->
   (fun
     (V@0) ->
       case (erlang:element(1, V@0)) of
@@ -64,11 +64,11 @@ test4() ->
             true ->
               (erlang:element(2, V@0));
             _ ->
-              (erlang:throw({fail,<<"Failed pattern match"/utf8>>}))
+              (erlang:throw({fail,<<"Failed pattern match">>}))
           end
       end
   end).
-test3() -> 
+test3() ->
   (fun
     (V@0) ->
       case ((erlang:element(2, V@0)) < (erlang:element(4, V@0))) of
@@ -78,12 +78,12 @@ test3() ->
           (erlang:element(3, V@0))
       end
   end).
-test2() -> 
+test2() ->
   (fun
     (V@0) ->
       (erlang:element(2, V@0))
   end).
-test1() -> 
+test1() ->
   (fun
     (V@0) ->
       true

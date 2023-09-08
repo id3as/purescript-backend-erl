@@ -1,11 +1,11 @@
 -module(snapshot_effectRef).
 -compile(export_all).
-positionZero() -> 
+positionZero() ->
   (fun
     () ->
       {}
   end).
-onLet() -> 
+onLet() ->
   (fun
     (X@0) ->
       begin
@@ -17,7 +17,7 @@ onLet() ->
         end)
       end
   end).
-onLetTest() -> 
+onLetTest() ->
   begin
     V@0 = ((snapshot_effectRef:onLet())(1)),
     (fun
@@ -32,7 +32,7 @@ onLetTest() ->
         end
     end)
   end.
-basicTest() -> 
+basicTest() ->
   (fun
     () ->
       begin
@@ -55,7 +55,7 @@ basicTest() ->
         (((test_assert:assert())((V@3 =:= 1)))())
       end
   end).
-main() -> 
+main() ->
   (fun
     () ->
       begin

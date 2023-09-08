@@ -1,4 +1,4 @@
 -module(snapshot_import_impl).
 -compile(export_all).
-fortyTwo() -> 
+fortyTwo() ->
   (((snapshot_import_impl:addImpl())(21))(21)).

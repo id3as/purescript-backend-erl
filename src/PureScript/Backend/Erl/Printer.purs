@@ -2,9 +2,10 @@ module PureScript.Backend.Erl.Printer where
 
 import Prelude
 
-import Data.Array (foldr)
+import Data.Array (all, foldr)
 import Data.Array as Array
 import Data.CodePoint.Unicode as CodePointU
+import Data.CodePoint.Unicode as U
 import Data.Enum (fromEnum)
 import Data.Foldable (foldMap)
 import Data.Maybe (Maybe(..), maybe)
@@ -59,7 +60,7 @@ printAttribute name a = D.text "-" <> D.text name <> printParens a <> D.text "."
 printDefinition :: ErlDefinition -> Doc Void
 printDefinition = case _ of
   S.FunctionDefinition name args e ->
-    D.text (escapeAtom name) <> printParens (D.foldWithSeparator (D.text ", ") $ D.text <$> args) <> D.text " -> "
+    D.text (escapeAtom name) <> printParens (D.foldWithSeparator (D.text ", ") $ D.text <$> args) <> D.text " ->"
       <> D.break <> D.indent (printExpr e)
       <> D.text "."
 
@@ -68,7 +69,9 @@ printExpr :: ErlExpr -> Doc Void
 printExpr = case _ of
   S.Literal (S.Integer n) -> D.text $ show n
   S.Literal (S.Float f) -> D.text $ show f
-  S.Literal (S.String s) -> D.text $ "<<\"" <> escapeErlString s <> "\"/utf8>>"
+  S.Literal (S.String s)
+    | isAscii s -> D.text $ "<<\"" <> escapeErlString s <> "\">>"
+    | otherwise -> D.text $ "<<\"" <> escapeErlString s <> "\"/utf8>>"
   S.Literal (S.Char c) -> D.text $ "$" <> escapeNonprinting (escapeErlString (StringCU.singleton c))
   S.Literal (S.Atom a) -> D.text $ escapeAtom a
 
@@ -240,6 +243,9 @@ printUnaryOp = D.text <<< case _ of
 printField :: Tuple String ErlExpr -> Doc Void
 printField (Tuple f e) =
   D.text (escapeAtom f) <> D.text " => " <> printExpr e
+
+isAscii :: String -> Boolean
+isAscii = toCodePointArray >>> all U.isAscii
 
 erlEscapes :: Array (Tuple CodePoint String)
 erlEscapes = map (\(s /\ r) -> unsafePartial (let [ c ] = toCodePointArray s in c) /\ ("\\" <> r))

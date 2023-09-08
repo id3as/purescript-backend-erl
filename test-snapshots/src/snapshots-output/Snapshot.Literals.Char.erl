@@ -1,46 +1,46 @@
 -module(snapshot_literals_char).
 -compile(export_all).
-vtab() -> 
+vtab() ->
   $\v.
-tab() -> 
+tab() ->
   $\t.
-space() -> 
+space() ->
   $ .
-singleQuote() -> 
+singleQuote() ->
   $\'.
-return() -> 
+return() ->
   $\r.
-page() -> 
+page() ->
   $\f.
-null() -> 
+null() ->
   $\x{0}.
-newline() -> 
+newline() ->
   $\n.
-ls() -> 
+ls() ->
   $\x{8232}.
-latinExtendedB() -> 
+latinExtendedB() ->
   $\x{384}.
-latinExtendedA() -> 
+latinExtendedA() ->
   $\x{257}.
-latin1Supplement() -> 
+latin1Supplement() ->
   $\x{177}.
-lastPrintableChar() -> 
+lastPrintableChar() ->
   $~.
-forallChar() -> 
+forallChar() ->
   $\x{8704}.
-firstPrintableChar() -> 
+firstPrintableChar() ->
   $!.
-escape() -> 
+escape() ->
   $\e.
-doubleQuote() -> 
+doubleQuote() ->
   $\".
-delete() -> 
+delete() ->
   $\d.
-closeToTop() -> 
+closeToTop() ->
   $\x{65049}.
-biggestChar() -> 
+biggestChar() ->
   $\x{65535}.
-backspace() -> 
+backspace() ->
   $\b.
-alarm() -> 
+alarm() ->
   $\x{7}.

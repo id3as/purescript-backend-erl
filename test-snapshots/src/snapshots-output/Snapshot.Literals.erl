@@ -1,22 +1,22 @@
 -module(snapshot_literals).
 -compile(export_all).
-string() -> 
-  <<"string"/utf8>>.
-record2() -> 
-  #{foo => <<"bar"/utf8>>}.
-record() -> 
+string() ->
+  <<"string">>.
+record2() ->
+  #{foo => <<"bar">>}.
+record() ->
   #{}.
-number() -> 
+number() ->
   2.0.
-int() -> 
+int() ->
   1.
-char() -> 
+char() ->
   $a.
-boolean2() -> 
+boolean2() ->
   false.
-boolean1() -> 
+boolean1() ->
   true.
-array2() -> 
+array2() ->
   (array:from_list([1,2,3])).
-array() -> 
+array() ->
   (array:from_list([])).

@@ -1,6 +1,6 @@
 -module(snapshot_comparison).
 -compile(export_all).
-stringComparison() -> 
+stringComparison() ->
   (fun
     (X@0) ->
       (fun
@@ -8,7 +8,7 @@ stringComparison() ->
           (array:from_list([(X@0 =:= Y@1),(X@0 =/= Y@1),(X@0 < Y@1),(X@0 =< Y@1),(X@0 >= Y@1),(X@0 > Y@1)]))
       end)
   end).
-numberComparison() -> 
+numberComparison() ->
   (fun
     (X@0) ->
       (fun
@@ -16,7 +16,7 @@ numberComparison() ->
           (array:from_list([(X@0 =:= Y@1),(X@0 =/= Y@1),(X@0 < Y@1),(X@0 =< Y@1),(X@0 >= Y@1),(X@0 > Y@1)]))
       end)
   end).
-integerComparison() -> 
+integerComparison() ->
   (fun
     (X@0) ->
       (fun
@@ -24,7 +24,7 @@ integerComparison() ->
           (array:from_list([(X@0 =:= Y@1),(X@0 =/= Y@1),(X@0 < Y@1),(X@0 =< Y@1),(X@0 >= Y@1),(X@0 > Y@1)]))
       end)
   end).
-charComparison() -> 
+charComparison() ->
   (fun
     (X@0) ->
       (fun
@@ -32,7 +32,7 @@ charComparison() ->
           (array:from_list([(X@0 =:= Y@1),(X@0 =/= Y@1),(X@0 < Y@1),(X@0 =< Y@1),(X@0 >= Y@1),(X@0 > Y@1)]))
       end)
   end).
-booleanComparison() -> 
+booleanComparison() ->
   (fun
     (X@0) ->
       (fun
