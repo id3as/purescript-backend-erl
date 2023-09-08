@@ -9,16 +9,18 @@ module Test.Utils where
 
 import Prelude
 
+import Control.Alternative (guard)
 import Control.Monad.Except (ExceptT(..), lift, runExceptT)
 import Control.Parallel (parTraverse)
 import Data.Argonaut as Json
+import Data.Array (intercalate)
 import Data.Array as Array
 import Data.Array.NonEmpty as NonEmptyArray
 import Data.Array.NonEmpty.Internal (NonEmptyArray(..))
 import Data.Bifunctor (lmap)
 import Data.Compactable (separate)
 import Data.Either (Either(..))
-import Data.Foldable (foldl)
+import Data.Foldable (foldl, for_)
 import Data.Lazy as Lazy
 import Data.List (List)
 import Data.Maybe (Maybe(..), maybe)
@@ -28,8 +30,8 @@ import Data.Set.NonEmpty as NonEmptySet
 import Data.Tuple (Tuple(..))
 import Effect.Aff (Aff, effectCanceler, error, makeAff, throwError)
 import Effect.Class (liftEffect)
-import Effect.Class.Console (log)
 import Effect.Class.Console as Console
+import Foreign.Object as FO
 import Node.Buffer (Buffer, freeze)
 import Node.Buffer.Immutable as ImmutableBuffer
 import Node.ChildProcess (ExecResult, Exit(..), defaultExecOptions, defaultSpawnOptions, inherit)
@@ -91,19 +93,35 @@ cpr from to = do
 
 loadModuleMain
   :: { libdir :: FilePath
-     , hasMain :: Boolean
+     , hasMain :: Maybe String
      , moduleName :: String
      , modulePath :: String
+     , erlModuleName :: String
+     , cwd :: String
      }
   -> Aff (Either ExecaError ExecaSuccess)
 loadModuleMain options = do
-  let
-    arguments :: Array String
-    arguments = [ "-W0", options.modulePath ]
-  spawned <- execa "erlc" arguments _ { cwd = Just (options.libdir <> "/" <> options.moduleName) }
-  when options.hasMain do
-    spawned.stdin.writeUtf8End ""
-  spawned.result
+  case options.hasMain of
+    Nothing -> pure unit
+    Just script ->
+      FS.writeTextFile UTF8 script $ intercalate "\n"
+        [ "#!/usr/bin/env escript"
+        , "main(_) -> (" <> options.erlModuleName <> ":main())()."
+        ]
+  spawned1 <- execa "erlc" [ "-W0", options.modulePath ]
+    _ { cwd = Just options.cwd }
+  spawned1.result >>= case _, options.hasMain of
+    Left e, _ -> pure (Left e)
+    Right r, Nothing -> pure (Right r)
+    Right _, Just script -> do
+      -- Work around execa bug: https://github.com/JordanMartinez/purescript-node-execa/pull/16
+      e <- liftEffect Process.getEnv
+      spawned2 <- execa "escript" [ script ] _ { env = Just (FO.union (FO.singleton "ERL_FLAGS" $ "-pa " <> options.cwd) e), extendEnv = Just true }
+      r <- spawned2.result
+      for_ r \{ stdout } -> do
+        Console.log options.erlModuleName
+        Console.log stdout
+      pure r
 
 copyFile :: FilePath -> FilePath -> Aff Unit
 copyFile from to = do

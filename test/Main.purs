@@ -11,12 +11,14 @@ import Ansi.Codes (Color(..))
 import Ansi.Output (foreground, withGraphics)
 import ArgParse.Basic (ArgParser)
 import ArgParse.Basic as ArgParser
+import Control.Alternative (guard)
 import Data.Array (findMap)
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Either (Either(..), either)
-import Data.Foldable (for_)
+import Data.Foldable (for_, traverse_)
 import Data.Foldable as Foldable
+import Data.FoldableWithIndex (traverseWithIndex_)
 import Data.Map as Map
 import Data.Maybe (Maybe(..), isJust)
 import Data.Monoid (power)
@@ -54,6 +56,7 @@ import Test.Utils (bufferToUTF8, canRunMain, coreFnModulesFromOutput, cpr, execW
 type TestArgs =
   { accept :: Boolean
   , compile :: Boolean
+  , run :: Boolean
   , filter :: NonEmptyArray String
   }
 
@@ -70,6 +73,11 @@ argParser =
           "Compile generated Erlang with erlc"
           # ArgParser.boolean
           # ArgParser.default false
+    , run:
+        ArgParser.flag [ "--run", "-r" ]
+          "Run generated Erlang main functions with erl (implies --compile)"
+          # ArgParser.boolean
+          # ArgParser.default false
     , filter:
         ArgParser.argument [ "--filter", "-f" ]
           "Filter tests matching a prefix"
@@ -84,10 +92,10 @@ main = do
     Left err ->
       Console.error $ ArgParser.printArgError err
     Right args ->
-      launchAff_ $ runSnapshotTests args
+      launchAff_ $ runSnapshotTests args { compile = args.compile || args.run }
 
 runSnapshotTests :: TestArgs -> Aff Unit
-runSnapshotTests { accept, compile, filter } = do
+runSnapshotTests { accept, compile, run, filter } = do
   currentDirectory <- liftEffect Process.cwd
   let vendorDirectory = Path.concat [ currentDirectory, "vendor", "purs" ]
   liftEffect $ Process.chdir $ Path.concat [ "test-snapshots" ]
@@ -99,9 +107,11 @@ runSnapshotTests { accept, compile, filter } = do
   outputRef <- liftEffect $ Ref.new Map.empty
   let snapshotsOut = Path.concat [ snapshotDir, "src", "snapshots-output" ]
   let testOut = Path.concat [ snapshotDir, "test-out" ]
+  let ebin = Path.concat [ testOut, "ebin" ]
   mkdirp snapshotsOut
   rmrf testOut
   mkdirp testOut
+  mkdirp ebin
   -- RUNTIME
   let runtimePath = Path.concat [ testOut, "purs", "runtime" ]
   mkdirp runtimePath
@@ -140,13 +150,28 @@ runSnapshotTests { accept, compile, filter } = do
             --   let foreignOutputPath = Path.concat [ testFileDir, moduleForeign <> schemeExt ]
             --   copyFile foreignSiblingPath foreignOutputPath
             let snapshotDirFile = Path.concat [ snapshotDir, path ]
-            when (Set.member snapshotDirFile snapshotPaths) do
+            if Set.member snapshotDirFile snapshotPaths then do
               originalFileSourceCode <- FS.readTextFile UTF8 snapshotDirFile
               hasMain <- either unsafeCrashWith pure $
                 canRunMain originalFileSourceCode
               void $ liftEffect $ Ref.modify
                 (Map.insert name ({ formatted, failsWith: hasFails backend, hasMain }))
                 outputRef
+            else when compile do
+              result <- loadModuleMain
+                { libdir: testOut
+                , hasMain: Nothing
+                , modulePath: testFilePath
+                , moduleName: name
+                , erlModuleName: erlModuleName (ModuleName name)
+                , cwd: ebin
+                }
+              case result of
+                Left { message } -> do
+                  Console.log $ withGraphics (foreground Red) "✗" <> " " <> name <> " failed."
+                  Console.log message
+                Right _ -> do
+                  pure unit
         , onPrepareModule: \build coreFnMod@(Module { name }) -> do
             let total = show build.moduleCount
             let index = show (build.moduleIndex + 1)
@@ -161,11 +186,14 @@ runSnapshotTests { accept, compile, filter } = do
           runAcceptedTest
             | compile = do
               erlangFile <- liftEffect $ Path.resolve [ testOut, name ] $ erlModuleName (ModuleName name) <> erlExt
+              erlangScript <- liftEffect $ Path.resolve [ ebin ] $ erlModuleName (ModuleName name) <> ".escript"
               result <- loadModuleMain
                 { libdir: testOut
-                , hasMain
+                , hasMain: erlangScript <$ guard (hasMain && run)
                 , modulePath: erlangFile
                 , moduleName: name
+                , erlModuleName: erlModuleName (ModuleName name)
+                , cwd: ebin
                 }
               case result of
                 Left { message }
