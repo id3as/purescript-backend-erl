@@ -1,4 +1,4 @@
--module(snapshot_comparison).
+-module(snapshot_comparison@ps).
 -compile(export_all).
 stringComparison() ->
   (fun

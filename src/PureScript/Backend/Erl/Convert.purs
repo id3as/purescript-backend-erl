@@ -39,7 +39,7 @@ codegenModule { name, bindings, imports, foreign: foreign_ } =
     exports = Array.concatMap definitionExports definitions
 
   in
-    { moduleName: erlModuleName name
+    { moduleName: erlModuleNamePs name
     , definitions
     , exports
     }
@@ -54,6 +54,12 @@ erlModuleNameCommon name =
   String.joinWith "_"
     $ map toAtomName
     $ String.split (String.Pattern ".") (unwrap name)
+
+erlModuleNamePs :: ModuleName -> String
+erlModuleNamePs name = erlModuleNameCommon name <> "@ps"
+
+erlModuleNameForeign :: ModuleName -> String
+erlModuleNameForeign name = erlModuleNameCommon name <> "@foreign"
 
 toAtomName :: String -> String
 toAtomName text = case String.uncons text of
@@ -109,7 +115,7 @@ codegenTopLevelBinding codegenEnv (Tuple (Ident i) n) =
 codegenExpr :: CodegenEnv -> NeutralExpr -> ErlExpr
 codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
   Var (Qualified (Just mn) (Ident i)) ->
-    S.FunCall (Just (S.atomLiteral $ erlModuleName mn)) (S.atomLiteral i) []
+    S.FunCall (Just (S.atomLiteral $ erlModuleNamePs mn)) (S.atomLiteral i) []
 
   Var (Qualified (Nothing) (Ident i)) ->
     S.Var i

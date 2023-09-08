@@ -1,4 +1,4 @@
--module(snapshot_primUndefined).
+-module(snapshot_primUndefined@ps).
 -compile(export_all).
 testCase() ->
   (fun
@@ -6,4 +6,4 @@ testCase() ->
       (maps:get(add, ((maps:get('Semiring0', DictRing@0))(undefined))))
   end).
 main() ->
-  ((test_assert:assert())((((((snapshot_primUndefined:testCase())((data_ring:ringInt())))(1))(1)) =:= 2))).
+  ((test_assert@ps:assert())((((((snapshot_primUndefined@ps:testCase())((data_ring@ps:ringInt())))(1))(1)) =:= 2))).

@@ -47,6 +47,7 @@ import Node.Library.Execa (ExecaError, ExecaSuccess, execa)
 import Node.Path (FilePath)
 import Node.Process as Process
 import Node.Stream as Stream
+import PureScript.Backend.Erl.Convert (erlModuleNamePs)
 import PureScript.Backend.Optimizer.CoreFn (Ann, Module, ModuleName(..))
 import PureScript.Backend.Optimizer.CoreFn.Json (decodeModule)
 import PureScript.Backend.Optimizer.CoreFn.Sort (emptyPull, pullResult, resumePull, sortModules)
@@ -92,36 +93,30 @@ cpr from to = do
       pure unit
 
 loadModuleMain
-  :: { libdir :: FilePath
-     , hasMain :: Maybe String
-     , moduleName :: String
+  :: { runMain :: Maybe
+       { scriptFile :: String
+       , moduleName :: String
+       }
      , modulePath :: String
-     , erlModuleName :: String
-     , cwd :: String
+     , ebin :: String
      }
   -> Aff (Either ExecaError ExecaSuccess)
-loadModuleMain options = do
-  case options.hasMain of
-    Nothing -> pure unit
-    Just script ->
-      FS.writeTextFile UTF8 script $ intercalate "\n"
-        [ "#!/usr/bin/env escript"
-        , "main(_) -> (" <> options.erlModuleName <> ":main())()."
-        ]
-  spawned1 <- execa "erlc" [ "-W0", options.modulePath ]
-    _ { cwd = Just options.cwd }
-  spawned1.result >>= case _, options.hasMain of
+loadModuleMain { modulePath, ebin, runMain } = do
+  spawned1 <- execa "erlc" [ "-W0", modulePath ]
+    _ { cwd = Just ebin }
+  spawned1.result >>= case _, runMain of
     Left e, _ -> pure (Left e)
     Right r, Nothing -> pure (Right r)
-    Right _, Just script -> do
+    Right _, Just { scriptFile, moduleName } -> do
+      let mod = ModuleName moduleName
+      FS.writeTextFile UTF8 scriptFile $ intercalate "\n"
+        [ "#!/usr/bin/env escript"
+        , "main(_) -> (" <> erlModuleNamePs mod  <> ":main())()."
+        ]
       -- Work around execa bug: https://github.com/JordanMartinez/purescript-node-execa/pull/16
       e <- liftEffect Process.getEnv
-      spawned2 <- execa "escript" [ script ] _ { env = Just (FO.union (FO.singleton "ERL_FLAGS" $ "-pa " <> options.cwd) e), extendEnv = Just true }
-      r <- spawned2.result
-      for_ r \{ stdout } -> do
-        Console.log options.erlModuleName
-        Console.log stdout
-      pure r
+      spawned2 <- execa "escript" [ scriptFile ] _ { env = Just (FO.union (FO.singleton "ERL_FLAGS" $ "-pa " <> ebin) e), extendEnv = Just true }
+      spawned2.result
 
 copyFile :: FilePath -> FilePath -> Aff Unit
 copyFile from to = do

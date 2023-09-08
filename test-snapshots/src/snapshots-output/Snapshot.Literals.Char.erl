@@ -1,4 +1,4 @@
--module(snapshot_literals_char).
+-module(snapshot_literals_char@ps).
 -compile(export_all).
 vtab() ->
   $\v.

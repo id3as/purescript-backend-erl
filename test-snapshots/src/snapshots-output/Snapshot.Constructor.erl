@@ -1,4 +1,4 @@
--module(snapshot_constructor).
+-module(snapshot_constructor@ps).
 -compile(export_all).
 'Nil'() ->
   {nil}.

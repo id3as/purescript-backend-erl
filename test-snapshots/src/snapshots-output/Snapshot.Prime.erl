@@ -1,4 +1,4 @@
--module(snapshot_prime).
+-module(snapshot_prime@ps).
 -compile(export_all).
 'NCtor'() ->
   (fun
@@ -37,7 +37,7 @@ useNewtypeCtor() ->
 useDataType() ->
   (fun
     (V@0) ->
-      (snapshot_prime:'DCtor'())
+      (snapshot_prime@ps:'DCtor'())
   end).
 useDataCtor() ->
   (fun

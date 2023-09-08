@@ -1,18 +1,18 @@
--module(snapshot_effectRef).
+-module(snapshot_effectRef@ps).
 -compile(export_all).
 positionZero() ->
-  ((effect_ref:new())(0)).
+  ((effect_ref@ps:new())(0)).
 onLet() ->
   (fun
     (X@0) ->
       begin
         A@1 = (X@0 + X@0),
-        ((effect_ref:new())((A@1 + (A@1 + X@0))))
+        ((effect_ref@ps:new())((A@1 + (A@1 + X@0))))
       end
   end).
 onLetTest() ->
   begin
-    V@0 = ((snapshot_effectRef:onLet())(1)),
+    V@0 = ((snapshot_effectRef@ps:onLet())(1)),
     (fun
       () ->
         begin
@@ -21,13 +21,13 @@ onLetTest() ->
             () ->
               {}
           end)()),
-          (((test_assert:assert())((V@2 =:= 5)))())
+          (((test_assert@ps:assert())((V@2 =:= 5)))())
         end
     end)
   end.
 basicTest() ->
   begin
-    V@0 = ((effect_ref:new())(0)),
+    V@0 = ((effect_ref@ps:new())(0)),
     (fun
       () ->
         begin
@@ -44,7 +44,7 @@ basicTest() ->
             () ->
               {}
           end)()),
-          (((test_assert:assert())((V@4 =:= 1)))())
+          (((test_assert@ps:assert())((V@4 =:= 1)))())
         end
     end)
   end.
@@ -52,7 +52,7 @@ main() ->
   (fun
     () ->
       begin
-        _@dollar__unused@0 = ((snapshot_effectRef:basicTest())()),
-        ((snapshot_effectRef:onLetTest())())
+        _@dollar__unused@0 = ((snapshot_effectRef@ps:basicTest())()),
+        ((snapshot_effectRef@ps:onLetTest())())
       end
   end).

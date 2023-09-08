@@ -1,4 +1,4 @@
--module(snapshot_branch).
+-module(snapshot_branch@ps).
 -compile(export_all).
 i() ->
   (fun

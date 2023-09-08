@@ -1,4 +1,4 @@
--module(snapshot_literals_string).
+-module(snapshot_literals_string@ps).
 -compile(export_all).
 unicode7() ->
   <<"Foo \b\b\b\b Bar">>.

@@ -20,7 +20,7 @@ import Data.Foldable (for_, traverse_)
 import Data.Foldable as Foldable
 import Data.FoldableWithIndex (traverseWithIndex_)
 import Data.Map as Map
-import Data.Maybe (Maybe(..), isJust)
+import Data.Maybe (Maybe(..), fromMaybe, isJust, maybe)
 import Data.Monoid (power)
 import Data.Newtype (unwrap)
 import Data.Set as Set
@@ -39,11 +39,12 @@ import Effect.Ref as Ref
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff as FS
 import Node.Glob.Basic (expandGlobs)
+import Node.Library.Execa (execa)
 import Node.Path as Path
 import Node.Process as Process
 import Partial.Unsafe (unsafeCrashWith)
 import PureScript.Backend.Erl.Constants (erlExt, moduleLib)
-import PureScript.Backend.Erl.Convert (codegenModule, erlModuleName)
+import PureScript.Backend.Erl.Convert (codegenModule, erlModuleNamePs, erlModuleNameForeign)
 import PureScript.Backend.Erl.Printer as P
 import PureScript.Backend.Optimizer.Builder (buildModules)
 import PureScript.Backend.Optimizer.Convert (BackendModule)
@@ -139,7 +140,8 @@ runSnapshotTests { accept, compile, run, filter } = do
                   $ codegenModule backend
             -- liftEffect $ debugModule backend  -- show backend
             let testFileDir = Path.concat [ testOut, name ]
-            let testFilePath = Path.concat [ testFileDir, erlModuleName (ModuleName name) <> erlExt ]
+            let testFilePath = Path.concat [ testFileDir, erlModuleNamePs (ModuleName name) <> erlExt ]
+            let testFileForeignPath = Path.concat [ testFileDir, erlModuleNameForeign (ModuleName name) <> erlExt ]
             mkdirp testFileDir
             FS.writeTextFile UTF8 testFilePath formatted
             -- unless (Set.isEmpty backend.foreign) do
@@ -150,6 +152,21 @@ runSnapshotTests { accept, compile, run, filter } = do
             --   let foreignOutputPath = Path.concat [ testFileDir, moduleForeign <> schemeExt ]
             --   copyFile foreignSiblingPath foreignOutputPath
             let snapshotDirFile = Path.concat [ snapshotDir, path ]
+            let
+              snapshotDirFileForeign =
+                Path.concat [ snapshotDir, path ]
+                  # (fromMaybe <*> String.stripSuffix (String.Pattern ".purs"))
+                  # (_ <> ".erl")
+            r <- _.result =<< execa "cp" [ snapshotDirFileForeign, testFileForeignPath ] identity
+            case r of
+              Left _ -> pure unit
+              Right _ -> do
+                _ <- loadModuleMain
+                  { ebin
+                  , modulePath: testFileForeignPath
+                  , runMain: Nothing
+                  }
+                pure unit
             if Set.member snapshotDirFile snapshotPaths then do
               originalFileSourceCode <- FS.readTextFile UTF8 snapshotDirFile
               hasMain <- either unsafeCrashWith pure $
@@ -159,16 +176,13 @@ runSnapshotTests { accept, compile, run, filter } = do
                 outputRef
             else when compile do
               result <- loadModuleMain
-                { libdir: testOut
-                , hasMain: Nothing
+                { runMain: Nothing
                 , modulePath: testFilePath
-                , moduleName: name
-                , erlModuleName: erlModuleName (ModuleName name)
-                , cwd: ebin
+                , ebin
                 }
               case result of
                 Left { message } -> do
-                  Console.log $ withGraphics (foreground Red) "✗" <> " " <> name <> " failed."
+                  Console.log $ withGraphics (foreground Red) "✗" <> " " <> name <> " failed to compile."
                   Console.log message
                 Right _ -> do
                   pure unit
@@ -185,15 +199,13 @@ runSnapshotTests { accept, compile, run, filter } = do
           snapshotFilePath = Path.concat [ snapshotsOut, name <> erlExt ]
           runAcceptedTest
             | compile = do
-              erlangFile <- liftEffect $ Path.resolve [ testOut, name ] $ erlModuleName (ModuleName name) <> erlExt
-              erlangScript <- liftEffect $ Path.resolve [ ebin ] $ erlModuleName (ModuleName name) <> ".escript"
+              let mod = erlModuleNamePs (ModuleName name)
+              erlangFile <- liftEffect $ Path.resolve [ testOut, name ] $ mod <> erlExt
+              erlangScript <- liftEffect $ Path.resolve [ ebin ] $ mod <> ".escript"
               result <- loadModuleMain
-                { libdir: testOut
-                , hasMain: erlangScript <$ guard (hasMain && run)
+                { runMain: { scriptFile: erlangScript, moduleName: name } <$ guard (hasMain && run)
                 , modulePath: erlangFile
-                , moduleName: name
-                , erlModuleName: erlModuleName (ModuleName name)
-                , cwd: ebin
+                , ebin
                 }
               case result of
                 Left { message }

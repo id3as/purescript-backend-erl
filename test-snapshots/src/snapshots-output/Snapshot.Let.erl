@@ -1,4 +1,4 @@
--module(snapshot_let).
+-module(snapshot_let@ps).
 -compile(export_all).
 letChain() ->
   (fun

@@ -1,4 +1,4 @@
--module(snapshot_literals).
+-module(snapshot_literals@ps).
 -compile(export_all).
 string() ->
   <<"string">>.
