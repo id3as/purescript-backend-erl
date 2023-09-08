@@ -1,4 +1,4 @@
--module('Snapshot.Function').
+-module(snapshot_function).
 -compile(export_all).
 f() -> 
   (fun
@@ -13,6 +13,6 @@ g() ->
     (X@0) ->
       (fun
         (Y@1) ->
-          ((('Snapshot.Function':f())(X@0))(Y@1))
+          (((snapshot_function:f())(X@0))(Y@1))
       end)
   end).

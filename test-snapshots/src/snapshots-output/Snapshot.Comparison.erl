@@ -1,4 +1,4 @@
--module('Snapshot.Comparison').
+-module(snapshot_comparison).
 -compile(export_all).
 stringComparison() -> 
   (fun

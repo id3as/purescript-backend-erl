@@ -1,4 +1,4 @@
--module('Snapshot.ConstructorAccessor').
+-module(snapshot_constructorAccessor).
 -compile(export_all).
 'First'() -> 
   (fun
@@ -37,9 +37,9 @@
 z() -> 
   {foo,1,1,1}.
 y() -> 
-  ((('Snapshot.ConstructorAccessor':'Foo'())(1))(1)).
+  (((snapshot_constructorAccessor:'Foo'())(1))(1)).
 x() -> 
-  (('Snapshot.ConstructorAccessor':'Foo'())(1)).
+  ((snapshot_constructorAccessor:'Foo'())(1)).
 test5() -> 
   (fun
     (_@dollar__unused@0) ->

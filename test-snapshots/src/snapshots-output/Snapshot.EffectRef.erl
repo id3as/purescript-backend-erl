@@ -1,4 +1,4 @@
--module('Snapshot.EffectRef').
+-module(snapshot_effectRef).
 -compile(export_all).
 positionZero() -> 
   (fun
@@ -19,7 +19,7 @@ onLet() ->
   end).
 onLetTest() -> 
   begin
-    V@0 = (('Snapshot.EffectRef':onLet())(1)),
+    V@0 = ((snapshot_effectRef:onLet())(1)),
     (fun
       () ->
         begin
@@ -28,7 +28,7 @@ onLetTest() ->
             () ->
               {}
           end)()),
-          ((('Test.Assert':assert())((V@2 =:= 5)))())
+          (((test_assert:assert())((V@2 =:= 5)))())
         end
     end)
   end.
@@ -52,14 +52,14 @@ basicTest() ->
           () ->
             {}
         end)()),
-        ((('Test.Assert':assert())((V@3 =:= 1)))())
+        (((test_assert:assert())((V@3 =:= 1)))())
       end
   end).
 main() -> 
   (fun
     () ->
       begin
-        _@dollar__unused@0 = (('Snapshot.EffectRef':basicTest())()),
-        (('Snapshot.EffectRef':onLetTest())())
+        _@dollar__unused@0 = ((snapshot_effectRef:basicTest())()),
+        ((snapshot_effectRef:onLetTest())())
       end
   end).

@@ -1,4 +1,4 @@
--module('Snapshot.Literals.Record').
+-module(snapshot_literals_record).
 -compile(export_all).
 recordAccess() -> 
   (fun

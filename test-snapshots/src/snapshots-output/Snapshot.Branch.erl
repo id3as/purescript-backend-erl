@@ -1,4 +1,4 @@
--module('Snapshot.Branch').
+-module(snapshot_branch).
 -compile(export_all).
 i() -> 
   (fun

@@ -1,4 +1,4 @@
--module('Snapshot.Import').
+-module(snapshot_import).
 -compile(export_all).
 fortyThree() -> 
-  ((('Snapshot.Import.Impl':addImpl())(21))(22)).
+  (((snapshot_import_impl:addImpl())(21))(22)).

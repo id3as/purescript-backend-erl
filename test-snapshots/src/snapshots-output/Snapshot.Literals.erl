@@ -1,4 +1,4 @@
--module('Snapshot.Literals').
+-module(snapshot_literals).
 -compile(export_all).
 string() -> 
   <<"string"/utf8>>.

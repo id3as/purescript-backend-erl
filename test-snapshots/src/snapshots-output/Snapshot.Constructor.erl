@@ -1,4 +1,4 @@
--module('Snapshot.Constructor').
+-module(snapshot_constructor).
 -compile(export_all).
 'Nil'() -> 
   {nil}.

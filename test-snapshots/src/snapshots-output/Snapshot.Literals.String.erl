@@ -1,4 +1,4 @@
--module('Snapshot.Literals.String').
+-module(snapshot_literals_string).
 -compile(export_all).
 unicode7() -> 
   <<"Foo \b\b\b\b Bar"/utf8>>.

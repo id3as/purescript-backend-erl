@@ -50,7 +50,6 @@ definitionExports = case _ of
   _ -> []
 
 erlModuleName :: ModuleName -> String
-erlModuleName name = unwrap name
 erlModuleName name =
   String.joinWith "_"
     $ map toAtomName
