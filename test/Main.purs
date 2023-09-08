@@ -1,4 +1,4 @@
--- A majority of the code below was copied from 
+-- A majority of the code below was copied from
 -- https://github.com/aristanetworks/purescript-backend-optimizer/blob/main/backend-es/test/Main.purs
 -- To fullfill copyright requirements...
 --    Copyright © 2022 Arista Networks, Inc.
@@ -14,11 +14,11 @@ import ArgParse.Basic as ArgParser
 import Data.Array (findMap)
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
-import Data.Either (Either(..), either, isRight)
+import Data.Either (Either(..), either)
 import Data.Foldable (for_)
 import Data.Foldable as Foldable
 import Data.Map as Map
-import Data.Maybe (Maybe(..), fromMaybe, isJust)
+import Data.Maybe (Maybe(..), isJust)
 import Data.Monoid (power)
 import Data.Newtype (unwrap)
 import Data.Set as Set
@@ -27,7 +27,6 @@ import Data.String as String
 import Data.String.CodeUnits as SCU
 import Data.TraversableWithIndex (forWithIndex)
 import Data.Tuple (Tuple(..))
-import Debug (traceM)
 import Dodo (plainText)
 import Dodo as Dodo
 import Effect (Effect)
@@ -38,12 +37,11 @@ import Effect.Ref as Ref
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff as FS
 import Node.Glob.Basic (expandGlobs)
-import Node.Library.Execa.Which (defaultWhichOptions, which)
 import Node.Path as Path
 import Node.Process as Process
 import Partial.Unsafe (unsafeCrashWith)
-import PureScript.Backend.Erl.Constants (erlExt, moduleForeign, moduleLib)
-import PureScript.Backend.Erl.Convert (codegenModule)
+import PureScript.Backend.Erl.Constants (erlExt, moduleLib)
+import PureScript.Backend.Erl.Convert (codegenModule, erlModuleName)
 import PureScript.Backend.Erl.Printer as P
 import PureScript.Backend.Optimizer.Builder (buildModules)
 import PureScript.Backend.Optimizer.Convert (BackendModule)
@@ -51,10 +49,11 @@ import PureScript.Backend.Optimizer.CoreFn (Comment(..), Module(..), ModuleName(
 import PureScript.Backend.Optimizer.Directives (parseDirectiveFile)
 import PureScript.Backend.Optimizer.Directives.Defaults (defaultDirectives)
 import PureScript.Backend.Optimizer.Semantics.Foreign (coreForeignSemantics)
-import Test.Utils (bufferToUTF8, canRunMain, copyFile, coreFnModulesFromOutput, cpr, execWithStdin, loadModuleMain, mkdirp, spawnFromParent)
+import Test.Utils (bufferToUTF8, canRunMain, coreFnModulesFromOutput, cpr, execWithStdin, loadModuleMain, mkdirp, rmrf, spawnFromParent)
 
 type TestArgs =
   { accept :: Boolean
+  , compile :: Boolean
   , filter :: NonEmptyArray String
   }
 
@@ -64,6 +63,11 @@ argParser =
     { accept:
         ArgParser.flag [ "--accept", "-a" ]
           "Accepts snapshot output"
+          # ArgParser.boolean
+          # ArgParser.default false
+    , compile:
+        ArgParser.flag [ "--compile", "-c" ]
+          "Compile generated Erlang with erlc"
           # ArgParser.boolean
           # ArgParser.default false
     , filter:
@@ -83,7 +87,7 @@ main = do
       launchAff_ $ runSnapshotTests args
 
 runSnapshotTests :: TestArgs -> Aff Unit
-runSnapshotTests { accept, filter } = do
+runSnapshotTests { accept, compile, filter } = do
   currentDirectory <- liftEffect Process.cwd
   let vendorDirectory = Path.concat [ currentDirectory, "vendor", "purs" ]
   liftEffect $ Process.chdir $ Path.concat [ "test-snapshots" ]
@@ -96,6 +100,7 @@ runSnapshotTests { accept, filter } = do
   let snapshotsOut = Path.concat [ snapshotDir, "src", "snapshots-output" ]
   let testOut = Path.concat [ snapshotDir, "test-out" ]
   mkdirp snapshotsOut
+  rmrf testOut
   mkdirp testOut
   -- RUNTIME
   let runtimePath = Path.concat [ testOut, "purs", "runtime" ]
@@ -124,7 +129,7 @@ runSnapshotTests { accept, filter } = do
                   $ codegenModule backend
             -- liftEffect $ debugModule backend  -- show backend
             let testFileDir = Path.concat [ testOut, name ]
-            let testFilePath = Path.concat [ testFileDir, moduleLib <> erlExt ]
+            let testFilePath = Path.concat [ testFileDir, erlModuleName (ModuleName name) <> erlExt ]
             mkdirp testFileDir
             FS.writeTextFile UTF8 testFilePath formatted
             -- unless (Set.isEmpty backend.foreign) do
@@ -153,30 +158,31 @@ runSnapshotTests { accept, filter } = do
       results <- forWithIndex outputModules \name ({ formatted, failsWith, hasMain }) -> do
         let
           snapshotFilePath = Path.concat [ snapshotsOut, name <> erlExt ]
-          -- runAcceptedTest = do
-          --   schemeFile <- liftEffect $ Path.resolve [ testOut, name ] $ moduleLib <> erlExt
-          --   result <- loadModuleMain
-          --     { libdir: testOut
-          --     , scheme: schemeBin
-          --     , hasMain
-          --     , modulePath: schemeFile
-          --     , moduleName: name
-          --     }
-          --   case result of
-          --     Left { message }
-          --       | matchesFail message failsWith ->
-          --           pure true
-          --       | otherwise -> do
-          --           Console.log $ withGraphics (foreground Red) "✗" <> " " <> name <> " failed."
-          --           Console.log message
-          --           pure false
-          --     Right _
-          --       | isJust failsWith -> do
-          --           Console.log $ withGraphics (foreground Red) "✗" <> " " <> name <>
-          --             " succeeded when it should have failed."
-          --           pure false
-          --       | otherwise ->
-          --           pure true
+          runAcceptedTest
+            | compile = do
+              erlangFile <- liftEffect $ Path.resolve [ testOut, name ] $ erlModuleName (ModuleName name) <> erlExt
+              result <- loadModuleMain
+                { libdir: testOut
+                , hasMain
+                , modulePath: erlangFile
+                , moduleName: name
+                }
+              case result of
+                Left { message }
+                  | matchesFail message failsWith ->
+                      pure true
+                  | otherwise -> do
+                      Console.log $ withGraphics (foreground Red) "✗" <> " " <> name <> " failed."
+                      Console.log message
+                      pure false
+                Right _
+                  | isJust failsWith -> do
+                      Console.log $ withGraphics (foreground Red) "✗" <> " " <> name <>
+                        " succeeded when it should have failed."
+                      pure false
+                  | otherwise ->
+                      pure true
+            | otherwise = pure true
         attempt (FS.readTextFile UTF8 snapshotFilePath) >>= case _ of
           Left _ -> do
             Console.log $ withGraphics (foreground Yellow) "✓" <> " " <> name <> " saved."
@@ -184,13 +190,11 @@ runSnapshotTests { accept, filter } = do
             pure true
           Right prevOutput
             | formatted == prevOutput ->
-                -- runAcceptedTest
-                pure true
+                runAcceptedTest
             | accept -> do
                 Console.log $ withGraphics (foreground Yellow) "✓" <> " " <> name <> " accepted."
                 FS.writeTextFile UTF8 snapshotFilePath formatted
-                -- runAcceptedTest
-                pure true
+                runAcceptedTest
             | otherwise -> do
                 Console.log $ withGraphics (foreground Red) "✗" <> " " <> name <> " failed."
                 diff <- bufferToUTF8 <<< _.stdout =<< execWithStdin
@@ -217,15 +221,3 @@ matchesFail errMsg = case _ of
     String.contains (Pattern msg) errMsg
   Nothing ->
     false
-
-getSchemeBinary :: Aff String
-getSchemeBinary = do
-  useScheme <- isRight <$> which "scheme" defaultWhichOptions
-  if useScheme then do
-    pure "scheme"
-  else do
-    useChez <- isRight <$> which "chez" defaultWhichOptions
-    if useChez then
-      pure "chez"
-    else do
-      unsafeCrashWith "Could not find scheme binary"

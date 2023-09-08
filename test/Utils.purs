@@ -1,4 +1,4 @@
--- A majority of the code below was copied from 
+-- A majority of the code below was copied from
 -- https://github.com/aristanetworks/purescript-backend-optimizer/blob/main/backend-es/test/Utils.purs
 -- https://github.com/aristanetworks/purescript-backend-optimizer/blob/main/backend-es/src/Main.purs
 --
@@ -21,13 +21,14 @@ import Data.Either (Either(..))
 import Data.Foldable (foldl)
 import Data.Lazy as Lazy
 import Data.List (List)
-import Data.Maybe (maybe)
+import Data.Maybe (Maybe(..), maybe)
 import Data.Posix.Signal (Signal(..))
 import Data.Set as Set
 import Data.Set.NonEmpty as NonEmptySet
 import Data.Tuple (Tuple(..))
 import Effect.Aff (Aff, effectCanceler, error, makeAff, throwError)
 import Effect.Class (liftEffect)
+import Effect.Class.Console (log)
 import Effect.Class.Console as Console
 import Node.Buffer (Buffer, freeze)
 import Node.Buffer.Immutable as ImmutableBuffer
@@ -76,6 +77,9 @@ bufferToUTF8 = liftEffect <<< map (ImmutableBuffer.toString UTF8) <<< freeze
 mkdirp :: FilePath -> Aff Unit
 mkdirp path = FS.mkdir' path { recursive: true, mode: mkPerms Perms.all Perms.all Perms.all }
 
+rmrf :: FilePath -> Aff Unit
+rmrf path = FS.rm' path { recursive: true, force: true, maxRetries: 0, retryDelay: 0 }
+
 cpr :: FilePath -> FilePath -> Aff Unit
 cpr from to = do
   spawned <- execa "cp" [ "-r", from, to ] identity
@@ -87,7 +91,6 @@ cpr from to = do
 
 loadModuleMain
   :: { libdir :: FilePath
-     , scheme :: String
      , hasMain :: Boolean
      , moduleName :: String
      , modulePath :: String
@@ -96,18 +99,10 @@ loadModuleMain
 loadModuleMain options = do
   let
     arguments :: Array String
-    arguments = [ "-q", "--libdirs", options.libdir <> ":" ] <>
-      if not options.hasMain then
-        [ "--script", options.modulePath ]
-      else
-        []
-  spawned <- execa options.scheme arguments identity
+    arguments = [ "-W0", options.modulePath ]
+  spawned <- execa "erlc" arguments _ { cwd = Just (options.libdir <> "/" <> options.moduleName) }
   when options.hasMain do
-    spawned.stdin.writeUtf8End $ Array.fold
-      [ "(import ("
-      , options.moduleName
-      , " lib)) (with-exception-handler (lambda (e) (display-condition e (console-error-port)) (newline (console-error-port)) (exit -1)) (lambda () (main)))"
-      ]
+    spawned.stdin.writeUtf8End ""
   spawned.result
 
 copyFile :: FilePath -> FilePath -> Aff Unit

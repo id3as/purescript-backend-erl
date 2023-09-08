@@ -239,7 +239,7 @@ printUnaryOp = D.text <<< case _ of
 
 printField :: Tuple String ErlExpr -> Doc Void
 printField (Tuple f e) =
-  D.text f <> D.text " => " <> printExpr e
+  D.text (escapeAtom f) <> D.text " => " <> printExpr e
 
 erlEscapes :: Array (Tuple CodePoint String)
 erlEscapes = map (\(s /\ r) -> unsafePartial (let [ c ] = toCodePointArray s in c) /\ ("\\" <> r))

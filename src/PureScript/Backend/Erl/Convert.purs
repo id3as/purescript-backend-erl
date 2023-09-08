@@ -191,7 +191,7 @@ codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
   PrimUndefined ->
     S.atomLiteral C.undefined
 
-  Fail i -> 
+  Fail i ->
     S.FunCall (Just $ atomLiteral C.erlang) (atomLiteral C.throw) [
       S.Tupled [ S.atomLiteral "fail", S.stringLiteral i ]
     ]
