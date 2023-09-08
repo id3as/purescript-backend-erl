@@ -17,7 +17,7 @@ i() ->
                     true ->
                       false;
                     _ ->
-                      fail
+                      (erlang:throw({fail,<<"Failed pattern match"/utf8>>}))
                   end
               end
           end

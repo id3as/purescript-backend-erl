@@ -50,3 +50,6 @@ length = "length"
 
 from_list :: String
 from_list = "from_list"
+
+throw :: String
+throw = "throw"

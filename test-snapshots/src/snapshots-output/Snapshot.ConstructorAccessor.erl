@@ -49,7 +49,7 @@ test5() ->
             true ->
               (erlang:element(2, V@1));
             _ ->
-              fail
+              (erlang:throw({fail,<<"Failed pattern match"/utf8>>}))
           end
       end)
   end).
@@ -64,7 +64,7 @@ test4() ->
             true ->
               (erlang:element(2, V@0));
             _ ->
-              fail
+              (erlang:throw({fail,<<"Failed pattern match"/utf8>>}))
           end
       end
   end).

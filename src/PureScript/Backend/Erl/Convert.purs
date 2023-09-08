@@ -11,6 +11,7 @@ import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (unwrap)
 import Data.String as String
 import Data.Tuple (Tuple(..), snd, uncurry)
+import Partial.Unsafe (unsafeCrashWith)
 import PureScript.Backend.Erl.Constants as C
 import PureScript.Backend.Erl.Syntax (ErlDefinition(..), ErlExport(..), ErlExpr, ErlModule, atomLiteral)
 import PureScript.Backend.Erl.Syntax as S
@@ -101,25 +102,6 @@ codegenTopLevelBinding codegenEnv (Tuple (Ident i) n) =
           S.curriedFun vars $
             S.Tupled $ [ tagAtom tag ] <> vars
       ]
-    -- CtorDef _ _ _ ss ->
-    --   case NonEmptyArray.fromArray ss of
-    --     Nothing ->
-    --       [
-    --         Define i (S.quote $ S.Identifier i)
-    --       , Define (S.recordTypePredicate i)
-    --           $ S.mkUncurriedFn [ "v" ]
-    --           $ S.eqQ (S.quote $ S.Identifier i) (S.Identifier "v")
-    --       ]
-    --     Just xs
-    --       | NEA.length xs == 1 ->
-    --           [ DefineRecordType i ss ]
-    --       | otherwise ->
-    --           [ DefineRecordType i ss
-    --           , Define i $ S.mkCurriedFn xs
-    --               $ S.runUncurriedFn
-    --                   (S.Identifier $ S.recordTypeUncurriedConstructor i)
-    --                   (map S.Identifier ss)
-    --           ]
     _ ->
       [ FunctionDefinition i [] $ codegenExpr codegenEnv n ]
 
@@ -173,18 +155,13 @@ codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
       S.Tupled $ [ tagAtom ] <> map (codegenExpr codegenEnv <<< snd) xs
 
   CtorDef _ _ _ _ ->
-    S.Unimplemented "ctor_def"
-  --     unsafeCrashWith "codegenExpr:CtorDef - handled by codegenTopLevelBinding!"
+    unsafeCrashWith "codegenExpr:CtorDef - handled by codegenTopLevelBinding!"
   LetRec lvl bindings expr ->
     S.Unimplemented "letrec"
   --     S.Let true (map (bimap (flip toErlIdent lvl <<< Just) (codegenExpr codegenEnv)) bindings) $
   --       codegenExpr codegenEnv expr
   Let i lvl e e' ->
     codegenPureChain codegenEnv s
-    -- S.Block
-    --   [ S.Match (S.Var $ toErlVar i lvl) (codegenExpr codegenEnv e)
-    --   , (codegenExpr codegenEnv e')
-    --   ]
 
   Branch b o -> do
     let
@@ -199,7 +176,6 @@ codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
           )
 
     foldr go (codegenExpr codegenEnv o) (goPair <$> b)
-  --     S.Cond (goPair <$> b) (codegenExpr codegenEnv o)
 
   EffectBind _ _ _ _ ->
     codegenEffectChain codegenEnv s
@@ -214,25 +190,11 @@ codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
     codegenPrimOp codegenEnv o
   PrimUndefined ->
     S.atomLiteral C.undefined
-  --     S.app (S.Identifier $ scmPrefixed "gensym")
-  --       (S.StringExpr $ Json.stringify $ Json.fromString undefinedSymbol)
 
-  Fail i -> S.Unimplemented "fail"
-
---     -- Note: This can be improved by using `error`, but it requires
---     -- that we track where exactly this `Fail` is defined. We can
---     -- make use of the `codegenEnv` for this.
---     S.List
---       [ S.Identifier $ scmPrefixed "raise"
---       , S.List
---           [ S.Identifier $ scmPrefixed "condition"
---           , S.List [ S.Identifier $ scmPrefixed "make-error" ]
---           , S.List
---               [ S.Identifier $ scmPrefixed "make-message-condition"
---               , S.StringExpr $ Json.stringify $ Json.fromString i
---               ]
---           ]
---       ]
+  Fail i -> 
+    S.FunCall (Just $ atomLiteral C.erlang) (atomLiteral C.throw) [
+      S.Tupled [ S.atomLiteral "fail", S.stringLiteral i ]
+    ]
 
 codegenLiteral :: CodegenEnv -> Literal NeutralExpr -> ErlExpr
 codegenLiteral codegenEnv = case _ of
@@ -410,7 +372,6 @@ codegenPrimOp codegenEnv@{ currentModule } = case _ of
           )
           x'
           y'
-        -- S.List [ opFixNum o', x', y' ]
         OpIntOrd o' -> opOrd o' x' y'
         OpNumberNum o' -> S.BinOp
           ( case o' of

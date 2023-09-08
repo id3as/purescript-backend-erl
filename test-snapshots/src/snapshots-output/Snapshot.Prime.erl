@@ -74,7 +74,7 @@ useNormal() ->
             true ->
               <<"F2"/utf8>>;
             _ ->
-              fail
+              (erlang:throw({fail,<<"Failed pattern match"/utf8>>}))
           end
       end
   end)}.

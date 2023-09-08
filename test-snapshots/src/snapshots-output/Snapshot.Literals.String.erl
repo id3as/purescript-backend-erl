@@ -1,11 +1,11 @@
 -module('Snapshot.Literals.String').
 -compile(export_all).
 unicode7() -> 
-  <<"Foo\s\b\b\b\b\sBar"/utf8>>.
+  <<"Foo \b\b\b\b Bar"/utf8>>.
 unicode6() -> 
   <<"2342✓"/utf8>>.
 unicode5() -> 
-  <<"Foo\s✓\sBar\s✓\s\n\sBaz\s✓"/utf8>>.
+  <<"Foo ✓ Bar ✓ \n Baz ✓"/utf8>>.
 unicode4() -> 
   <<"✓"/utf8>>.
 unicode3() -> 

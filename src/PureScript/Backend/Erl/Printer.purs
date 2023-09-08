@@ -250,7 +250,8 @@ erlEscapes = map (\(s /\ r) -> unsafePartial (let [ c ] = toCodePointArray s in 
   , "\x0C" /\ "f"
   , "\n" /\ "n"
   , "\r" /\ "r"
-  , " " /\ "s"
+  -- Can we not
+  -- , " " /\ "s"
   , "\t" /\ "t"
   , "\x0B" /\ "v"
   , "\x0" /\ "x{0}" -- or "^@"

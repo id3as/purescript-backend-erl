@@ -5,7 +5,7 @@ vtab() ->
 tab() -> 
   $\t.
 space() -> 
-  $\s.
+  $ .
 singleQuote() -> 
   $\'.
 return() -> 
