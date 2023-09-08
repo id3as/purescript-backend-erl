@@ -49,8 +49,8 @@ definitionExports = case _ of
   FunctionDefinition f a _ -> [ Export f (Array.length a) ]
   _ -> []
 
-erlModuleName :: ModuleName -> String
-erlModuleName name =
+erlModuleNameCommon :: ModuleName -> String
+erlModuleNameCommon name =
   String.joinWith "_"
     $ map toAtomName
     $ String.split (String.Pattern ".") (unwrap name)
@@ -148,10 +148,7 @@ codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
     S.MapUpdate (codegenExpr codegenEnv e) ((\(Prop name p) -> Tuple name (codegenExpr codegenEnv p)) <$> props)
 
   CtorSaturated _ _ _ tagName xs ->
-    let
-      tagAtom = S.Literal $ S.Atom $ toAtomName $ unwrap tagName
-    in
-      S.Tupled $ [ tagAtom ] <> map (codegenExpr codegenEnv <<< snd) xs
+    S.Tupled $ [ tagAtom tagName ] <> map (codegenExpr codegenEnv <<< snd) xs
 
   CtorDef _ _ _ _ ->
     unsafeCrashWith "codegenExpr:CtorDef - handled by codegenTopLevelBinding!"
