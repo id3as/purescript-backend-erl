@@ -1,5 +1,5 @@
 -module(snapshot_literals@ps).
--compile(export_all).
+-export([string/0, record2/0, record/0, number/0, int/0, char/0, boolean2/0, boolean1/0, array2/0, array/0]).
 string() ->
   <<"string">>.
 record2() ->

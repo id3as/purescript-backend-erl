@@ -1,5 +1,5 @@
 -module(snapshot_literals_char@ps).
--compile(export_all).
+-export([vtab/0, tab/0, space/0, singleQuote/0, return/0, page/0, null/0, newline/0, ls/0, latinExtendedB/0, latinExtendedA/0, latin1Supplement/0, lastPrintableChar/0, forallChar/0, firstPrintableChar/0, escape/0, doubleQuote/0, delete/0, closeToTop/0, biggestChar/0, backspace/0, alarm/0]).
 vtab() ->
   $\v.
 tab() ->

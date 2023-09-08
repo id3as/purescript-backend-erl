@@ -1,5 +1,5 @@
 -module(snapshot_constructorAccessor@ps).
--compile(export_all).
+-export(['First'/0, 'Last'/0, 'NoArgs'/0, 'HasArgs'/0, 'Foo'/0, z/0, y/0, x/0, test5/0, test4/0, test3/0, test2/0, test1/0]).
 'First'() ->
   (fun
     (Value0) ->

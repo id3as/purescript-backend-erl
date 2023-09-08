@@ -1,5 +1,5 @@
 -module(snapshot_primOps@ps).
--compile(export_all).
+-export([stringOps/0, numberOps/0, intOps/0, booleanOps/0]).
 stringOps() ->
   (fun
     (X@0) ->

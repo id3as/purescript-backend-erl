@@ -1,5 +1,5 @@
 -module(snapshot_let@ps).
--compile(export_all).
+-export([letChain/0]).
 letChain() ->
   (fun
     (X@0) ->

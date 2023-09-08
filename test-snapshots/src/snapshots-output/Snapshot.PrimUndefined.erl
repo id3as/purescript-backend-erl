@@ -1,5 +1,5 @@
 -module(snapshot_primUndefined@ps).
--compile(export_all).
+-export([testCase/0, main/0]).
 testCase() ->
   (fun
     (DictRing@0) ->

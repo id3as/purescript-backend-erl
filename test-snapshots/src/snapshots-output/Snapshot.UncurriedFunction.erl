@@ -1,5 +1,5 @@
 -module(snapshot_uncurriedFunction@ps).
--compile(export_all).
+-export([test4a/0, test4b/0, test3a/0, test3b/0, test2a/0, test2b/0, test1a/0, test1b/0, main/0]).
 test4a() ->
   (fun
     (A@0) ->

@@ -22,7 +22,7 @@ import Dodo (Doc, flexAlt)
 import Dodo as D
 import Dodo.Common (trailingComma)
 import Partial.Unsafe (unsafePartial)
-import PureScript.Backend.Erl.Syntax (BinaryOperator, CaseClause(..), ErlDefinition, ErlExpr, ErlModule, FunHead(..), IfClause(..), UnaryOperator)
+import PureScript.Backend.Erl.Syntax (BinaryOperator, CaseClause(..), ErlDefinition, ErlExport(..), ErlExpr, ErlModule, FunHead(..), IfClause(..), UnaryOperator)
 import PureScript.Backend.Erl.Syntax as S
 
 printWrap :: Doc Void -> Doc Void -> Doc Void -> Doc Void
@@ -48,7 +48,8 @@ printModule lib =
   flip append D.break
     $ D.lines $
       [ printAttribute "module" (D.text (escapeAtom lib.moduleName))
-      , printAttribute "compile" (D.text "export_all")
+      , printAttribute "export" $ printBrackets $
+          D.foldWithSeparator (D.text ", ") $ (\(Export name arity) -> D.text (escapeAtom name) <> D.text "/" <> D.text (show arity)) <$> lib.exports
       ]
       <>
       map printDefinition lib.definitions

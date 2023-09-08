@@ -1,5 +1,5 @@
 -module(snapshot_branch@ps).
--compile(export_all).
+-export([i/0, g/0, f/0]).
 i() ->
   (fun
     (V@0) ->

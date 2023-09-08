@@ -1,5 +1,5 @@
 -module(snapshot_prime@ps).
--compile(export_all).
+-export(['NCtor'/0, 'NewtypeCtor\''/0, 'F1'/0, 'F2'/0, 'DCtor'/0, 'Ctor\''/0, useNewtypeType/0, useNewtypeCtor/0, useDataType/0, useDataCtor/0, normal/0, useNormal/0, 'instanceName\''/0, useInstance/0, ignore/0, useClass/0, 'foo\'oo'/0, useFooPrime3/0, 'foo\'\''/0, useFooPrime2/0, 'foo\''/0, useFooPrime1/0, foo/0, 'classMember\''/0, useMember/0]).
 'NCtor'() ->
   (fun
     (X@0) ->

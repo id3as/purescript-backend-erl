@@ -1,5 +1,5 @@
 -module(snapshot_arrayIndex@ps).
--compile(export_all).
+-export([testAccessorGetIndex/0]).
 testAccessorGetIndex() ->
   (fun
     (V@0) ->

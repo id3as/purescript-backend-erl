@@ -1,5 +1,5 @@
 -module(snapshot_effect@ps).
--compile(export_all).
+-export([dontInlineMe/0, lastComponentIsRun/0, lastPureIsUnwrapped/0, main/0]).
 dontInlineMe() ->
   (fun
     (V@0) ->

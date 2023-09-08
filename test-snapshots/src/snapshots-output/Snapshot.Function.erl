@@ -1,5 +1,5 @@
 -module(snapshot_function@ps).
--compile(export_all).
+-export([f/0, g/0]).
 f() ->
   (fun
     (X@0) ->

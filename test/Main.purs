@@ -15,6 +15,7 @@ import Control.Alternative (guard)
 import Data.Array (findMap)
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
+import Data.Bitraversable (ltraverse)
 import Data.Either (Either(..), either)
 import Data.Foldable (for_, traverse_)
 import Data.Foldable as Foldable
@@ -32,7 +33,8 @@ import Data.Tuple (Tuple(..))
 import Dodo (plainText)
 import Dodo as Dodo
 import Effect (Effect)
-import Effect.Aff (Aff, attempt, launchAff_)
+import Effect.Aff (Aff, attempt, launchAff_, throwError, try)
+import Effect.Aff as Aff
 import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
 import Effect.Ref as Ref
@@ -42,9 +44,11 @@ import Node.Glob.Basic (expandGlobs)
 import Node.Library.Execa (execa)
 import Node.Path as Path
 import Node.Process as Process
+import Parsing (parseErrorMessage)
 import Partial.Unsafe (unsafeCrashWith)
 import PureScript.Backend.Erl.Constants (erlExt, moduleLib)
 import PureScript.Backend.Erl.Convert (codegenModule, erlModuleNamePs, erlModuleNameForeign)
+import PureScript.Backend.Erl.Parser (parseFile)
 import PureScript.Backend.Erl.Printer as P
 import PureScript.Backend.Optimizer.Builder (buildModules)
 import PureScript.Backend.Optimizer.Convert (BackendModule)
@@ -133,15 +137,24 @@ runSnapshotTests { accept, compile, run, filter } = do
         { directives
         , foreignSemantics: coreForeignSemantics -- no chez scheme specific foreign semantics yet
         , onCodegenModule: \_ (Module { name: ModuleName name, path }) (backend) -> do
+            let testFileDir = Path.concat [ testOut, name ]
+            let testFilePath = Path.concat [ testFileDir, erlModuleNamePs (ModuleName name) <> erlExt ]
+            let testFileForeignPath = Path.concat [ testFileDir, erlModuleNameForeign (ModuleName name) <> erlExt ]
+            let snapshotDirFile = Path.concat [ snapshotDir, path ]
+            let
+              snapshotDirFileForeign =
+                Path.concat [ snapshotDir, path ]
+                  # (fromMaybe <*> String.stripSuffix (String.Pattern ".purs"))
+                  # (_ <> ".erl")
+            foreignFile <- try $ FS.readTextFile UTF8 snapshotDirFileForeign
+            let foreignsE = either (Right <<< mempty) parseFile foreignFile
+            foreigns <- either (throwError <<< Aff.error <<< parseErrorMessage) pure foreignsE
             let
               formatted =
                 Dodo.print plainText Dodo.twoSpaces
                   $ P.printModule
-                  $ codegenModule backend
+                  $ codegenModule backend foreigns
             -- liftEffect $ debugModule backend  -- show backend
-            let testFileDir = Path.concat [ testOut, name ]
-            let testFilePath = Path.concat [ testFileDir, erlModuleNamePs (ModuleName name) <> erlExt ]
-            let testFileForeignPath = Path.concat [ testFileDir, erlModuleNameForeign (ModuleName name) <> erlExt ]
             mkdirp testFileDir
             FS.writeTextFile UTF8 testFilePath formatted
             -- unless (Set.isEmpty backend.foreign) do
@@ -151,12 +164,6 @@ runSnapshotTests { accept, compile, run, filter } = do
             --         schemeExt
             --   let foreignOutputPath = Path.concat [ testFileDir, moduleForeign <> schemeExt ]
             --   copyFile foreignSiblingPath foreignOutputPath
-            let snapshotDirFile = Path.concat [ snapshotDir, path ]
-            let
-              snapshotDirFileForeign =
-                Path.concat [ snapshotDir, path ]
-                  # (fromMaybe <*> String.stripSuffix (String.Pattern ".purs"))
-                  # (_ <> ".erl")
             r <- _.result =<< execa "cp" [ snapshotDirFileForeign, testFileForeignPath ] identity
             case r of
               Left _ -> pure unit

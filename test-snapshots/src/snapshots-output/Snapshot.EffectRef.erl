@@ -1,5 +1,5 @@
 -module(snapshot_effectRef@ps).
--compile(export_all).
+-export([positionZero/0, onLet/0, onLetTest/0, basicTest/0, main/0]).
 positionZero() ->
   ((effect_ref@ps:new())(0)).
 onLet() ->

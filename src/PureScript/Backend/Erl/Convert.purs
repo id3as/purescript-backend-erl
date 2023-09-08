@@ -7,12 +7,14 @@ import Data.Array.NonEmpty as NEA
 import Data.Bifunctor (lmap)
 import Data.CodePoint.Unicode as StringCP
 import Data.Foldable (foldr)
+import Data.FunctorWithIndex (mapWithIndex)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (unwrap)
 import Data.String as String
 import Data.Tuple (Tuple(..), snd, uncurry)
 import Partial.Unsafe (unsafeCrashWith)
 import PureScript.Backend.Erl.Constants as C
+import PureScript.Backend.Erl.Parser (ForeignDecls)
 import PureScript.Backend.Erl.Syntax (ErlDefinition(..), ErlExport(..), ErlExpr, ErlModule, atomLiteral)
 import PureScript.Backend.Erl.Syntax as S
 import PureScript.Backend.Optimizer.Convert (BackendModule, BackendBindingGroup)
@@ -24,17 +26,31 @@ type CodegenEnv =
   { currentModule :: ModuleName
   }
 
-codegenModule :: BackendModule -> ErlModule
-codegenModule { name, bindings, imports, foreign: foreign_ } =
+codegenModule :: BackendModule -> ForeignDecls -> ErlModule
+codegenModule { name, bindings, imports, foreign: foreign_ } foreigns =
   let
     codegenEnv :: CodegenEnv
     codegenEnv = { currentModule: name }
 
     definitions :: Array ErlDefinition
-    definitions = Array.concat $
-      codegenTopLevelBindingGroup codegenEnv <$> bindings
+    definitions = Array.concat
+      [ codegenTopLevelBindingGroup codegenEnv =<< bindings
+      , reexports
+      ]
 
-    -- TODO and foreigns
+    reexports :: Array ErlDefinition
+    reexports = foreigns.exported <#> \(Tuple decl arity) -> do
+      let
+        vars =
+          Array.replicate arity unit
+            # mapWithIndex \i _ ->
+              toErlVarExpr (Tuple Nothing (Level i))
+      -- Uhh this is definitely wrong, at least in some cases
+      -- (EffectFn?)
+      FunctionDefinition decl [] $
+        S.curriedFun vars $
+          S.FunCall (Just (S.atomLiteral (erlModuleNameForeign name))) (S.atomLiteral decl) vars
+
     exports :: Array ErlExport
     exports = Array.concatMap definitionExports definitions
 
