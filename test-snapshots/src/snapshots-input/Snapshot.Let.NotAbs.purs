@@ -1,4 +1,4 @@
--- @expected {tuple, "fib", 8}
+-- @expected {tuple, <<"fib">>, 8}
 module Snapshot.Let.NotAbs where
 
 import Data.Functor (map)

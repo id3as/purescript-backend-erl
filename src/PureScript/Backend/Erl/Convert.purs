@@ -3,6 +3,7 @@ module PureScript.Backend.Erl.Convert where
 import Prelude
 
 import Data.Array as Array
+import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NEA
 import Data.CodePoint.Unicode as StringCP
 import Data.Foldable (foldMap, foldr)
@@ -20,7 +21,7 @@ import PureScript.Backend.Erl.Syntax (ErlDefinition(..), ErlExport(..), ErlExpr,
 import PureScript.Backend.Erl.Syntax as S
 import PureScript.Backend.Optimizer.Convert (BackendModule, BackendBindingGroup)
 import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal(..), ModuleName, Prop(..), Qualified(..))
-import PureScript.Backend.Optimizer.Semantics (NeutralExpr)
+import PureScript.Backend.Optimizer.Semantics (NeutralExpr(..))
 import PureScript.Backend.Optimizer.Syntax (BackendAccessor(..), BackendOperator(..), BackendOperator1(..), BackendOperator2(..), BackendOperatorNum(..), BackendOperatorOrd(..), BackendSyntax(..), Level(..), Pair(..))
 
 type CodegenEnv =
@@ -184,52 +185,8 @@ codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
 
   CtorDef _ _ _ _ ->
     unsafeCrashWith "codegenExpr:CtorDef - handled by codegenTopLevelBinding!"
-  LetRec lvl bindings expr | [ Tuple name directValue ] <- NEA.toArray bindings ->
-    let
-      { vars, value, recName, recCall } = case unwrap directValue of
-        Abs vars value ->
-          let recName = toErlVar (Just name) lvl in
-          { vars: toErlVarExpr <$> NEA.toArray vars
-          , value
-          , recName
-          , recCall: S.Var recName
-          }
-        _ ->
-          let recName = toErlVarWith "Rec" (Just name) lvl in
-          { vars: []
-          , value: directValue
-          , recName
-          , recCall: S.unthunk (S.Var recName)
-          }
-      renamed = codegenEnv { substitutions = Map.insert (Tuple (Just name) lvl) recCall codegenEnv.substitutions }
-    in
-      S.assignments
-        [ Tuple recName $ S.Fun (Just recName)
-          [ Tuple (S.FunHead vars Nothing) $ codegenExpr renamed value ]
-        ] (codegenExpr renamed expr)
-  LetRec lvl bindings expr ->
-    let
-      normal i = toErlVar (Just i) lvl
-      local i = toErlVarWith "Local" (Just i) lvl
-      mutual i = toErlVarWith "Mutual" (Just i) lvl
-
-      names = fst <$> NEA.toArray bindings
-      bundled scheme = S.Var <<< scheme <$> names
-
-      substitutions = Map.fromFoldable $ names <#>
-        \i -> Tuple (Tuple (Just i) lvl) $
-          S.FunCall Nothing (S.Var (local i)) (bundled local)
-      renamed = codegenEnv { substitutions = substitutions `Map.union` codegenEnv.substitutions }
-    in
-      flip S.assignments (codegenExpr codegenEnv expr) $ foldMap (map <<< uncurry)
-        [ \i value ->
-            Tuple (mutual i) $
-              S.simpleFun (bundled local) $
-                codegenExpr renamed value
-        , \i _ ->
-            Tuple (normal i) $
-              S.FunCall Nothing (S.Var (mutual i)) (bundled mutual)
-        ] $ NEA.toArray bindings
+  LetRec _lvl _bindings _e ->
+    codegenPureChain codegenEnv s
   Let _i _lvl _e _e' ->
     codegenPureChain codegenEnv s
 
@@ -336,41 +293,111 @@ codegenEffectChain :: CodegenEnv -> NeutralExpr -> ErlExpr
 codegenEffectChain codegenEnv = S.thunk <<< codegenChain effectChainMode codegenEnv
 
 codegenChain :: ChainMode -> CodegenEnv -> NeutralExpr -> ErlExpr
-codegenChain chainMode codegenEnv = collect []
+codegenChain chainMode codegenEnv0 = collect [] codegenEnv0.substitutions
   where
-  -- `expression` has type `Effect ..`, so we can confidently unthunk here
-  codegenEffectBind :: NeutralExpr -> ErlExpr
-  codegenEffectBind expression = case unwrap expression of
-    -- PrimEffect e' ->
-    --   codegenPrimEffect codegenEnv e'
-    UncurriedEffectApp f p ->
-      S.FunCall Nothing (codegenExpr codegenEnv f) (codegenExpr codegenEnv <$> p)
-    _ ->
-      S.unthunk $ codegenExpr codegenEnv expression
+  codegenEnv = codegenEnv0 { substitutions = _ }
 
-  finish :: Boolean -> Array _ -> NeutralExpr -> ErlExpr
-  finish shouldUnthunk bindings expression = do
+  -- `expression` has type `Effect ..`, so we can confidently unthunk here
+  codegenEffectBind :: Map _ ErlExpr -> NeutralExpr -> ErlExpr
+  codegenEffectBind substitutions expression =
+    case unwrap expression of
+      -- PrimEffect e' ->
+      --   codegenPrimEffect (codegenEnv substitutions) e'
+      UncurriedEffectApp f p ->
+        S.FunCall Nothing (codegenExpr (codegenEnv substitutions) f) (codegenExpr (codegenEnv substitutions) <$> p)
+      _ ->
+        S.unthunk $ codegenExpr (codegenEnv substitutions) expression
+
+  finish :: Boolean -> Array _ -> Map _ ErlExpr -> NeutralExpr -> ErlExpr
+  finish shouldUnthunk bindings substitutions expression = do
     let
       maybeUnthunk :: ErlExpr -> ErlExpr
       maybeUnthunk = if shouldUnthunk then S.unthunk else identity
-    S.assignments bindings $ maybeUnthunk $ codegenExpr codegenEnv expression
+    S.assignments bindings $ maybeUnthunk $ codegenExpr (codegenEnv substitutions) expression
 
-  collect :: Array _ -> NeutralExpr -> ErlExpr
-  collect bindings expression = case unwrap expression of
+  collect :: Array _ -> Map _ ErlExpr -> NeutralExpr -> ErlExpr
+  collect bindings substitutions expression = case unwrap expression of
     Let i l v e' ->
-      collect (Array.snoc bindings $ Tuple (toErlVar i l) (codegenExpr codegenEnv v)) e'
+      collect (Array.snoc bindings $ Tuple (toErlVar i l) (codegenExpr (codegenEnv substitutions) v)) substitutions e'
+    LetRec lvl recBindings e' ->
+      let
+        { bindings: moreBindings
+        , substitutions: nextSubstitutions
+        } = codegenLetRec (codegenEnv substitutions) { lvl, bindings: recBindings }
+      in collect (bindings <> moreBindings) nextSubstitutions e'
     EffectPure e' | chainMode.effect ->
-      finish false bindings e'
+      finish false bindings substitutions e'
     -- PrimEffect e' | chainMode.effect ->
     --   codegenPrimEffect codegenEnv e'
     EffectBind i l v e' | chainMode.effect ->
       collect
-        (Array.snoc bindings $ Tuple (toErlVar i l) (codegenEffectBind v))
+        (Array.snoc bindings $ Tuple (toErlVar i l) (codegenEffectBind substitutions v))
+        substitutions
         e'
     EffectDefer e' | chainMode.effect ->
-      collect bindings e'
+      collect bindings substitutions e'
     _ ->
-      finish chainMode.effect bindings expression
+      finish chainMode.effect bindings substitutions expression
+
+codegenLetRec ::
+  CodegenEnv ->
+  { lvl :: Level
+  , bindings :: NonEmptyArray (Tuple Ident NeutralExpr)
+  } ->
+  { bindings :: Array (Tuple String ErlExpr)
+  , substitutions :: Map (Tuple (Maybe Ident) Level) ErlExpr
+  }
+codegenLetRec codegenEnv { lvl, bindings }
+  | [ Tuple name directValue ] <- NEA.toArray bindings =
+    let
+      { vars, value, recName, recCall } = case unwrap directValue of
+        Abs vars value ->
+          let recName = toErlVar (Just name) lvl in
+          { vars: toErlVarExpr <$> NEA.toArray vars
+          , value
+          , recName
+          , recCall: S.Var recName
+          }
+        _ ->
+          let recName = toErlVarWith "Rec" (Just name) lvl in
+          { vars: []
+          , value: directValue
+          , recName
+          , recCall: S.unthunk (S.Var recName)
+          }
+      renamed = codegenEnv { substitutions = Map.insert (Tuple (Just name) lvl) recCall codegenEnv.substitutions }
+    in
+      { bindings:
+        [ Tuple recName $ S.Fun (Just recName)
+          [ Tuple (S.FunHead vars Nothing) $ codegenExpr renamed value ]
+        ]
+      , substitutions: renamed.substitutions
+      }
+  | otherwise =
+    let
+      normal i = toErlVar (Just i) lvl
+      local i = toErlVarWith "Local" (Just i) lvl
+      mutual i = toErlVarWith "Mutual" (Just i) lvl
+
+      names = fst <$> NEA.toArray bindings
+      bundled scheme = S.Var <<< scheme <$> names
+
+      substitutions = Map.fromFoldable $ names <#>
+        \i -> Tuple (Tuple (Just i) lvl) $
+          S.FunCall Nothing (S.Var (local i)) (bundled local)
+      renamed = codegenEnv { substitutions = substitutions `Map.union` codegenEnv.substitutions }
+    in
+      { bindings: foldMap (map <<< uncurry)
+        [ \i value ->
+            Tuple (mutual i) $
+              S.simpleFun (bundled local) $
+                codegenExpr renamed value
+        , \i _ ->
+            Tuple (normal i) $
+              S.FunCall Nothing (S.Var (mutual i)) (bundled mutual)
+        ] $ NEA.toArray bindings
+      , substitutions: codegenEnv.substitutions
+      }
 
 codegenPrimOp :: CodegenEnv -> BackendOperator NeutralExpr -> ErlExpr
 codegenPrimOp codegenEnv@{ currentModule } = case _ of
