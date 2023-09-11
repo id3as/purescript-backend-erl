@@ -4,9 +4,8 @@ import Prelude
 
 import Data.Array as Array
 import Data.Array.NonEmpty as NEA
-import Data.Bifunctor (lmap)
 import Data.CodePoint.Unicode as StringCP
-import Data.Foldable (fold, foldMap, foldr)
+import Data.Foldable (foldMap, foldr)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.Map (Map)
 import Data.Map as Map
@@ -26,14 +25,16 @@ import PureScript.Backend.Optimizer.Syntax (BackendAccessor(..), BackendOperator
 
 type CodegenEnv =
   { currentModule :: ModuleName
-  , renamings :: Map (Tuple (Maybe Ident) Level) ErlExpr
+  -- A local identifier can be replaced with an expression. This is used in
+  -- the generation of LetRec, where recursive calls need to be modified
+  , substitutions :: Map (Tuple (Maybe Ident) Level) ErlExpr
   }
 
 codegenModule :: BackendModule -> ForeignDecls -> ErlModule
 codegenModule { name, bindings, imports, foreign: foreign_ } foreigns =
   let
     codegenEnv :: CodegenEnv
-    codegenEnv = { currentModule: name, renamings: Map.empty }
+    codegenEnv = { currentModule: name, substitutions: Map.empty }
 
     definitions :: Array ErlDefinition
     definitions = Array.concat
@@ -143,7 +144,7 @@ codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
   Var (Qualified (Nothing) (Ident i)) ->
     S.Var i
 
-  Local i l | Just replacement <- Map.lookup (Tuple i l) codegenEnv.renamings ->
+  Local i l | Just replacement <- Map.lookup (Tuple i l) codegenEnv.substitutions ->
     replacement
   Local i l ->
     S.Var $ toErlVar i l
@@ -183,13 +184,29 @@ codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
 
   CtorDef _ _ _ _ ->
     unsafeCrashWith "codegenExpr:CtorDef - handled by codegenTopLevelBinding!"
-  -- LetRec lvl bindings expr | [ Tuple name value ] <- NEA.toArray bindings ->
-  --   -- codegenPureChain codegenEnv s
-  --   S.Block
-  --     [ S.Match (S.Var (toErlVarWith "Rec" (Just name) lvl))
-  --       (?help)
-  --     , codegenExpr codegenEnv expr
-  --     ]
+  LetRec lvl bindings expr | [ Tuple name directValue ] <- NEA.toArray bindings ->
+    let
+      { vars, value, recName, recCall } = case unwrap directValue of
+        Abs vars value ->
+          let recName = toErlVar (Just name) lvl in
+          { vars: toErlVarExpr <$> NEA.toArray vars
+          , value
+          , recName
+          , recCall: S.Var recName
+          }
+        _ ->
+          let recName = toErlVarWith "Rec" (Just name) lvl in
+          { vars: []
+          , value: directValue
+          , recName
+          , recCall: S.unthunk (S.Var recName)
+          }
+      renamed = codegenEnv { substitutions = Map.insert (Tuple (Just name) lvl) recCall codegenEnv.substitutions }
+    in
+      S.assignments
+        [ Tuple recName $ S.Fun (Just recName)
+          [ Tuple (S.FunHead vars Nothing) $ codegenExpr renamed value ]
+        ] (codegenExpr renamed expr)
   LetRec lvl bindings expr ->
     let
       normal i = toErlVar (Just i) lvl
@@ -199,10 +216,10 @@ codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
       names = fst <$> NEA.toArray bindings
       bundled scheme = S.Var <<< scheme <$> names
 
-      renamings = Map.fromFoldable $ names <#>
+      substitutions = Map.fromFoldable $ names <#>
         \i -> Tuple (Tuple (Just i) lvl) $
           S.FunCall Nothing (S.Var (local i)) (bundled local)
-      renamed = codegenEnv { renamings = renamings `Map.union` codegenEnv.renamings }
+      renamed = codegenEnv { substitutions = substitutions `Map.union` codegenEnv.substitutions }
     in
       flip S.assignments (codegenExpr codegenEnv expr) $ foldMap (map <<< uncurry)
         [ \i value ->
