@@ -2,10 +2,12 @@ module PureScript.Backend.Erl.Syntax where
 
 import Prelude
 
+import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
+import Data.Bifunctor (lmap)
 import Data.Foldable (class Foldable, foldl, foldr)
 import Data.Maybe (Maybe(..))
-import Data.Tuple (Tuple(..))
+import Data.Tuple (Tuple(..), uncurry)
 
 type ErlModule =
   { moduleName :: String
@@ -212,6 +214,11 @@ curriedFun args e =
 simpleFun :: Array ErlExpr -> ErlExpr -> ErlExpr
 simpleFun args e =
   Fun Nothing [ Tuple (FunHead args Nothing) e ]
+
+assignments :: Array (Tuple String ErlExpr) -> ErlExpr -> ErlExpr
+assignments [] res = res
+assignments bindings res =
+  Block $ (uncurry Match <<< lmap Var <$> bindings) `Array.snoc` res
 
 atomLiteral :: String -> ErlExpr
 atomLiteral = Literal <<< Atom

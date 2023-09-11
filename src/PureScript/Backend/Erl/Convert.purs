@@ -6,12 +6,14 @@ import Data.Array as Array
 import Data.Array.NonEmpty as NEA
 import Data.Bifunctor (lmap)
 import Data.CodePoint.Unicode as StringCP
-import Data.Foldable (foldr)
+import Data.Foldable (fold, foldMap, foldr)
 import Data.FunctorWithIndex (mapWithIndex)
+import Data.Map (Map)
+import Data.Map as Map
 import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (unwrap)
 import Data.String as String
-import Data.Tuple (Tuple(..), snd, uncurry)
+import Data.Tuple (Tuple(..), fst, snd, uncurry)
 import Partial.Unsafe (unsafeCrashWith)
 import PureScript.Backend.Erl.Constants as C
 import PureScript.Backend.Erl.Parser (ForeignDecls)
@@ -24,13 +26,14 @@ import PureScript.Backend.Optimizer.Syntax (BackendAccessor(..), BackendOperator
 
 type CodegenEnv =
   { currentModule :: ModuleName
+  , renamings :: Map (Tuple (Maybe Ident) Level) ErlExpr
   }
 
 codegenModule :: BackendModule -> ForeignDecls -> ErlModule
 codegenModule { name, bindings, imports, foreign: foreign_ } foreigns =
   let
     codegenEnv :: CodegenEnv
-    codegenEnv = { currentModule: name }
+    codegenEnv = { currentModule: name, renamings: Map.empty }
 
     definitions :: Array ErlDefinition
     definitions = Array.concat
@@ -86,6 +89,10 @@ toErlVar :: Maybe Ident -> Level -> String
 toErlVar text (Level lvl) =
   maybe "V" (toErlVarName <<< unwrap) text <> "@" <> show lvl
 
+toErlVarWith :: String -> Maybe Ident -> Level -> String
+toErlVarWith suffix text (Level lvl) =
+  maybe "V" (toErlVarName <<< unwrap) text <> "@" <> suffix <> "@" <> show lvl
+
 -- String.replace (String.Pattern ".") (String.Replacement "_") (unwrap name)
 --   T.intercalate "_" (toAtomName <$> T.splitOn "." name)
 
@@ -136,6 +143,8 @@ codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
   Var (Qualified (Nothing) (Ident i)) ->
     S.Var i
 
+  Local i l | Just replacement <- Map.lookup (Tuple i l) codegenEnv.renamings ->
+    replacement
   Local i l ->
     S.Var $ toErlVar i l
   Lit l ->
@@ -174,13 +183,37 @@ codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
 
   CtorDef _ _ _ _ ->
     unsafeCrashWith "codegenExpr:CtorDef - handled by codegenTopLevelBinding!"
-  LetRec lvl bindings expr | [ binding ] <- NEA.toArray bindings ->
-    S.Unimplemented "letrec1"
+  -- LetRec lvl bindings expr | [ Tuple name value ] <- NEA.toArray bindings ->
+  --   -- codegenPureChain codegenEnv s
+  --   S.Block
+  --     [ S.Match (S.Var (toErlVarWith "Rec" (Just name) lvl))
+  --       (?help)
+  --     , codegenExpr codegenEnv expr
+  --     ]
   LetRec lvl bindings expr ->
-    S.Unimplemented "letrec"
-  --     S.Let true (map (bimap (flip toErlIdent lvl <<< Just) (codegenExpr codegenEnv)) bindings) $
-  --       codegenExpr codegenEnv expr
-  Let i lvl e e' ->
+    let
+      normal i = toErlVar (Just i) lvl
+      local i = toErlVarWith "Local" (Just i) lvl
+      mutual i = toErlVarWith "Mutual" (Just i) lvl
+
+      names = fst <$> NEA.toArray bindings
+      bundled scheme = S.Var <<< scheme <$> names
+
+      renamings = Map.fromFoldable $ names <#>
+        \i -> Tuple (Tuple (Just i) lvl) $
+          S.FunCall Nothing (S.Var (local i)) (bundled local)
+      renamed = codegenEnv { renamings = renamings `Map.union` codegenEnv.renamings }
+    in
+      flip S.assignments (codegenExpr codegenEnv expr) $ foldMap (map <<< uncurry)
+        [ \i value ->
+            Tuple (mutual i) $
+              S.simpleFun (bundled local) $
+                codegenExpr renamed value
+        , \i _ ->
+            Tuple (normal i) $
+              S.FunCall Nothing (S.Var (mutual i)) (bundled mutual)
+        ] $ NEA.toArray bindings
+  Let _i _lvl _e _e' ->
     codegenPureChain codegenEnv s
 
   Branch b o -> do
@@ -303,11 +336,7 @@ codegenChain chainMode codegenEnv = collect []
     let
       maybeUnthunk :: ErlExpr -> ErlExpr
       maybeUnthunk = if shouldUnthunk then S.unthunk else identity
-      res = maybeUnthunk $ codegenExpr codegenEnv expression
-    if Array.null bindings then
-      res
-    else
-      S.Block $ (uncurry S.Match <<< lmap S.Var <$> bindings) `Array.snoc` res
+    S.assignments bindings $ maybeUnthunk $ codegenExpr codegenEnv expression
 
   collect :: Array _ -> NeutralExpr -> ErlExpr
   collect bindings expression = case unwrap expression of
