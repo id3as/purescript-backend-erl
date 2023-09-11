@@ -174,6 +174,8 @@ codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
 
   CtorDef _ _ _ _ ->
     unsafeCrashWith "codegenExpr:CtorDef - handled by codegenTopLevelBinding!"
+  LetRec lvl bindings expr | [ binding ] <- NEA.toArray bindings ->
+    S.Unimplemented "letrec1"
   LetRec lvl bindings expr ->
     S.Unimplemented "letrec"
   --     S.Let true (map (bimap (flip toErlIdent lvl <<< Just) (codegenExpr codegenEnv)) bindings) $

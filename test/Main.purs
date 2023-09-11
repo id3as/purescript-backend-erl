@@ -11,13 +11,13 @@ import Ansi.Codes (Color(..))
 import Ansi.Output (foreground, withGraphics)
 import ArgParse.Basic (ArgParser)
 import ArgParse.Basic as ArgParser
-import Control.Alternative (guard)
+import Control.Alternative (guard, (<|>))
 import Data.Array (findMap)
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Bitraversable (ltraverse)
 import Data.Either (Either(..), either)
-import Data.Foldable (for_, traverse_)
+import Data.Foldable (elem, for_, traverse_)
 import Data.Foldable as Foldable
 import Data.FoldableWithIndex (traverseWithIndex_)
 import Data.Map as Map
@@ -52,7 +52,7 @@ import PureScript.Backend.Erl.Parser (parseFile)
 import PureScript.Backend.Erl.Printer as P
 import PureScript.Backend.Optimizer.Builder (buildModules)
 import PureScript.Backend.Optimizer.Convert (BackendModule)
-import PureScript.Backend.Optimizer.CoreFn (Comment(..), Module(..), ModuleName(..))
+import PureScript.Backend.Optimizer.CoreFn (Comment(..), Ident(..), Module(..), ModuleName(..))
 import PureScript.Backend.Optimizer.Directives (parseDirectiveFile)
 import PureScript.Backend.Optimizer.Directives.Defaults (defaultDirectives)
 import PureScript.Backend.Optimizer.Semantics.Foreign (coreForeignSemantics)
@@ -104,7 +104,7 @@ runSnapshotTests { accept, compile, run, filter } = do
   currentDirectory <- liftEffect Process.cwd
   let vendorDirectory = Path.concat [ currentDirectory, "vendor", "purs" ]
   liftEffect $ Process.chdir $ Path.concat [ "test-snapshots" ]
-  spawnFromParent "spago" [ "build", "--purs-args", "-g corefn" ]
+  spawnFromParent "spago" [ "build" ]
   snapshotDir <- liftEffect Process.cwd
   snapshotPaths <- expandGlobs (Path.concat [ snapshotDir, "src", "snapshots-input" ])
     [ "Snapshot.*.purs" ]
@@ -136,7 +136,7 @@ runSnapshotTests { accept, compile, run, filter } = do
       coreFnModules # buildModules
         { directives
         , foreignSemantics: coreForeignSemantics -- no chez scheme specific foreign semantics yet
-        , onCodegenModule: \_ (Module { name: ModuleName name, path }) (backend) -> do
+        , onCodegenModule: \_ (Module { name: ModuleName name, path, exports }) (backend) -> do
             let testFileDir = Path.concat [ testOut, name ]
             let testFilePath = Path.concat [ testFileDir, erlModuleNamePs (ModuleName name) <> erlExt ]
             let testFileForeignPath = Path.concat [ testFileDir, erlModuleNameForeign (ModuleName name) <> erlExt ]
@@ -175,9 +175,11 @@ runSnapshotTests { accept, compile, run, filter } = do
                   }
                 pure unit
             if Set.member snapshotDirFile snapshotPaths then do
-              originalFileSourceCode <- FS.readTextFile UTF8 snapshotDirFile
-              hasMain <- either unsafeCrashWith pure $
-                canRunMain originalFileSourceCode
+              -- originalFileSourceCode <- FS.readTextFile UTF8 snapshotDirFile
+              let
+                hasMain =
+                  Nothing <$ guard (Ident "main" `elem` exports)
+                    <|> Just <$> hasExpected backend
               void $ liftEffect $ Ref.modify
                 (Map.insert name ({ formatted, failsWith: hasFails backend, hasMain }))
                 outputRef
@@ -210,7 +212,7 @@ runSnapshotTests { accept, compile, run, filter } = do
               erlangFile <- liftEffect $ Path.resolve [ testOut, name ] $ mod <> erlExt
               erlangScript <- liftEffect $ Path.resolve [ ebin ] $ mod <> ".escript"
               result <- loadModuleMain
-                { runMain: { scriptFile: erlangScript, moduleName: name } <$ guard (hasMain && run)
+                { runMain: { scriptFile: erlangScript, moduleName: name, expected: _ } <$> hasMain <* guard run
                 , modulePath: erlangFile
                 , ebin
                 }
@@ -259,6 +261,15 @@ hasFails = findMap go <<< _.comments
   go = case _ of
     LineComment comm ->
       String.stripPrefix (Pattern "@fails ") (String.trim comm)
+    _ ->
+      Nothing
+
+hasExpected :: BackendModule -> Maybe String
+hasExpected = findMap go <<< _.comments
+  where
+  go = case _ of
+    LineComment comm ->
+      String.stripPrefix (Pattern "@expected ") (String.trim comm)
     _ ->
       Nothing
 

@@ -96,6 +96,7 @@ loadModuleMain
   :: { runMain :: Maybe
        { scriptFile :: String
        , moduleName :: String
+       , expected :: Maybe String
        }
      , modulePath :: String
      , ebin :: String
@@ -107,11 +108,19 @@ loadModuleMain { modulePath, ebin, runMain } = do
   spawned1.result >>= case _, runMain of
     Left e, _ -> pure (Left e)
     Right r, Nothing -> pure (Right r)
-    Right _, Just { scriptFile, moduleName } -> do
+    Right _, Just { scriptFile, moduleName, expected } -> do
       let mod = ModuleName moduleName
+      let init x = "(" <> erlModuleNamePs mod <> ":" <> x <> "())"
       FS.writeTextFile UTF8 scriptFile $ intercalate "\n"
         [ "#!/usr/bin/env escript"
-        , "main(_) -> (" <> erlModuleNamePs mod  <> ":main())()."
+        , case expected of
+            Nothing -> "main(_) -> (" <> init "main" <> ")()."
+            Just value ->
+              "main(_) -> assertEq(" <> init "result" <> ", (" <> value <> "))." <>
+              """
+              assertEq(X, Y) when X =:= Y -> unit;
+              assertEq(X, Y) -> erlang:error({{actual, X}, {expected, Y}}).
+              """
         ]
       -- Work around execa bug: https://github.com/JordanMartinez/purescript-node-execa/pull/16
       e <- liftEffect Process.getEnv
