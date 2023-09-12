@@ -66,11 +66,11 @@ useNormal() ->
 'instanceName\''() ->
   #{normal => (fun
     (V@0) ->
-      case (erlang:element(1, V@0)) of
+      case (f1 =:= (erlang:element(1, V@0))) of
         true ->
           <<"F1">>;
         _ ->
-          case (erlang:element(1, V@0)) of
+          case (f2 =:= (erlang:element(1, V@0))) of
             true ->
               <<"F2">>;
             _ ->

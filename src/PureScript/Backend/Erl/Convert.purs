@@ -21,7 +21,7 @@ import PureScript.Backend.Erl.Syntax (ErlDefinition(..), ErlExport(..), ErlExpr,
 import PureScript.Backend.Erl.Syntax as S
 import PureScript.Backend.Optimizer.Convert (BackendModule, BackendBindingGroup)
 import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal(..), ModuleName, Prop(..), Qualified(..))
-import PureScript.Backend.Optimizer.Semantics (NeutralExpr(..))
+import PureScript.Backend.Optimizer.Semantics (NeutralExpr)
 import PureScript.Backend.Optimizer.Syntax (BackendAccessor(..), BackendOperator(..), BackendOperator1(..), BackendOperator2(..), BackendOperatorNum(..), BackendOperatorOrd(..), BackendSyntax(..), Level(..), Pair(..))
 
 type CodegenEnv =
@@ -135,8 +135,6 @@ codegenTopLevelBinding codegenEnv (Tuple (Ident i) n) =
     _ ->
       [ FunctionDefinition i [] $ codegenExpr codegenEnv n ]
 
--- [ Define i $ codegenExpr codegenEnv n ]
-
 codegenExpr :: CodegenEnv -> NeutralExpr -> ErlExpr
 codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
   Var (Qualified (Just mn) (Ident i)) ->
@@ -210,8 +208,8 @@ codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
     codegenEffectChain codegenEnv s
   EffectDefer _ ->
     codegenEffectChain codegenEnv s
-  PrimEffect _ -> S.Fun Nothing [ Tuple (S.FunHead [] Nothing) (S.Tupled []) ] -- S.Unimplemented "prim_effect"
-  --     codegenEffectChain codegenEnv s
+  PrimEffect _ ->
+    unsafeCrashWith "codegenExpr:PrimEffect - should have been filtered out"
 
   PrimOp o ->
     codegenPrimOp codegenEnv o
@@ -301,8 +299,6 @@ codegenChain chainMode codegenEnv0 = collect [] codegenEnv0.substitutions
   codegenEffectBind :: Map _ ErlExpr -> NeutralExpr -> ErlExpr
   codegenEffectBind substitutions expression =
     case unwrap expression of
-      -- PrimEffect e' ->
-      --   codegenPrimEffect (codegenEnv substitutions) e'
       UncurriedEffectApp f p ->
         S.FunCall Nothing (codegenExpr (codegenEnv substitutions) f) (codegenExpr (codegenEnv substitutions) <$> p)
       _ ->
@@ -327,8 +323,6 @@ codegenChain chainMode codegenEnv0 = collect [] codegenEnv0.substitutions
       in collect (bindings <> moreBindings) nextSubstitutions e'
     EffectPure e' | chainMode.effect ->
       finish false bindings substitutions e'
-    -- PrimEffect e' | chainMode.effect ->
-    --   codegenPrimEffect codegenEnv e'
     EffectBind i l v e' | chainMode.effect ->
       collect
         (Array.snoc bindings $ Tuple (toErlVar i l) (codegenEffectBind substitutions v))
@@ -410,10 +404,11 @@ codegenPrimOp codegenEnv@{ currentModule } = case _ of
       OpIntNegate -> S.UnaryOp S.Negate x'
       OpNumberNegate -> S.UnaryOp S.Negate x'
       OpArrayLength ->
-        S.FunCall (Just $ atomLiteral C.array) (atomLiteral C.length) [ x' ]
-      OpIsTag _ ->
-        S.FunCall (Just $ atomLiteral C.erlang) (atomLiteral C.element)
-          [ S.numberLiteral 1, x' ]
+        S.FunCall (Just $ atomLiteral C.array) (atomLiteral C.size) [ x' ]
+      OpIsTag (Qualified _ (Ident constructor)) ->
+        S.BinOp S.IdenticalTo (S.atomLiteral (toAtomName constructor)) $
+          S.FunCall (Just $ atomLiteral C.erlang) (atomLiteral C.element)
+            [ S.numberLiteral 1, x' ]
 
   Op2 o x y ->
     let
@@ -482,13 +477,3 @@ codegenPrimOp codegenEnv@{ currentModule } = case _ of
             , S.atomLiteral C.utf8
             ]
         OpStringOrd o' -> opOrd o' x' y'
-
--- codegenPrimEffect :: CodegenEnv -> BackendEffect NeutralExpr -> ErlExpr
--- codegenPrimEffect codegenEnv = case _ of
---   EffectRefNew v ->
---     S.app (S.Identifier $ scmPrefixed "box") (codegenExpr codegenEnv v)
---   EffectRefRead r ->
---     S.app (S.Identifier $ scmPrefixed "unbox") (codegenExpr codegenEnv r)
---   EffectRefWrite r v ->
---     S.List
---       [ S.Identifier $ scmPrefixed "set-box!", codegenExpr codegenEnv r, codegenExpr codegenEnv v ]

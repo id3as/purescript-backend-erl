@@ -103,6 +103,7 @@ loadModuleMain
      }
   -> Aff (Either ExecaError ExecaSuccess)
 loadModuleMain { modulePath, ebin, runMain } = do
+  -- Console.log $ "compile " <> modulePath
   spawned1 <- execa "erlc" [ "-W0", modulePath ]
     _ { cwd = Just ebin }
   spawned1.result >>= case _, runMain of
@@ -111,6 +112,7 @@ loadModuleMain { modulePath, ebin, runMain } = do
     Right _, Just { scriptFile, moduleName, expected } -> do
       let mod = ModuleName moduleName
       let init x = "(" <> erlModuleNamePs mod <> ":" <> x <> "())"
+      -- Console.log $ "run " <> modulePath
       FS.writeTextFile UTF8 scriptFile $ intercalate "\n"
         [ "#!/usr/bin/env escript"
         , case expected of

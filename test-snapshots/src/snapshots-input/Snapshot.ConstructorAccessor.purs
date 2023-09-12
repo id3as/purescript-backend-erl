@@ -1,11 +1,14 @@
+-- @expected #{test1 => true, test2 => 2, test3 => 3, test4 => 4, test5 => 5}
 module Snapshot.ConstructorAccessor where
 
 import Prelude
 
+import Partial.Unsafe (unsafePartial)
+
 data Foo = Foo Int Int Int
 
 -- A constructor that is partially applied to its arguments.
-x :: Int -> Int -> Foo 
+x :: Int -> Int -> Foo
 x = Foo 1
 
 y :: Int -> Foo
@@ -29,7 +32,7 @@ test2 = case _ of
 
 test3 :: HasArgs -> Int
 test3 = case _ of
-  HasArgs i1 i2 i3 
+  HasArgs i1 i2 i3
     | i1 < i3 -> i1
     | otherwise -> i2
 
@@ -45,3 +48,18 @@ test4 = case _ of
 test5 :: Partial => SumWithArgs -> Int
 test5 = case _ of
   First i -> i
+
+result ::
+  { test1 :: Boolean
+  , test2 :: Int
+  , test3 :: Int
+  , test4 :: Int
+  , test5 :: Int
+  }
+result = unsafePartial
+  { test1: test1 NoArgs
+  , test2: test2 (HasArgs 2 1 0)
+  , test3: test3 (HasArgs 5 3 1)
+  , test4: test4 (Last 4)
+  , test5: test5 (First 5)
+  }

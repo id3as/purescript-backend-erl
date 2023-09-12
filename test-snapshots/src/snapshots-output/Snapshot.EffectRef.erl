@@ -17,10 +17,7 @@ onLetTest() ->
       () ->
         begin
           N@1 = (V@0()),
-          V@2 = ((fun
-            () ->
-              {}
-          end)()),
+          V@2 = (((effect_ref@ps:read())(N@1))()),
           (((test_assert@ps:assert())((V@2 =:= 5)))())
         end
     end)
@@ -32,19 +29,12 @@ basicTest() ->
       () ->
         begin
           N@1 = (V@0()),
-          V@2 = ((fun
-            () ->
-              {}
-          end)()),
-          A_@prime@3 = ((fun
-            () ->
-              {}
-          end)()),
-          V@4 = ((fun
-            () ->
-              {}
-          end)()),
-          (((test_assert@ps:assert())((V@4 =:= 1)))())
+          _@dollar__unused@2 = ((((effect_ref@ps:modify_())((fun
+            (V@2) ->
+              (V@2 + 1)
+          end)))(N@1))()),
+          V@3 = (((effect_ref@ps:read())(N@1))()),
+          (((test_assert@ps:assert())((V@3 =:= 1)))())
         end
     end)
   end.

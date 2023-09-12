@@ -45,6 +45,9 @@ characters_to_binary = "characters_to_binary"
 utf8 :: String
 utf8 = "utf8"
 
+size :: String
+size = "size"
+
 length :: String
 length = "length"
 

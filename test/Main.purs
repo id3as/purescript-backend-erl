@@ -15,20 +15,18 @@ import Control.Alternative (guard, (<|>))
 import Data.Array (findMap)
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
-import Data.Bitraversable (ltraverse)
 import Data.Either (Either(..), either)
-import Data.Foldable (elem, for_, traverse_)
+import Data.Foldable (elem, for_)
 import Data.Foldable as Foldable
-import Data.FoldableWithIndex (traverseWithIndex_)
 import Data.Map as Map
-import Data.Maybe (Maybe(..), fromMaybe, isJust, maybe)
+import Data.Maybe (Maybe(..), fromMaybe, isJust)
 import Data.Monoid (power)
 import Data.Newtype (unwrap)
 import Data.Set as Set
 import Data.String (Pattern(..))
 import Data.String as String
 import Data.String.CodeUnits as SCU
-import Data.TraversableWithIndex (forWithIndex)
+import Data.Traversable (for)
 import Data.Tuple (Tuple(..))
 import Dodo (plainText)
 import Dodo as Dodo
@@ -45,18 +43,17 @@ import Node.Library.Execa (execa)
 import Node.Path as Path
 import Node.Process as Process
 import Parsing (parseErrorMessage)
-import Partial.Unsafe (unsafeCrashWith)
 import PureScript.Backend.Erl.Constants (erlExt, moduleLib)
 import PureScript.Backend.Erl.Convert (codegenModule, erlModuleNamePs, erlModuleNameForeign)
 import PureScript.Backend.Erl.Parser (parseFile)
 import PureScript.Backend.Erl.Printer as P
 import PureScript.Backend.Optimizer.Builder (buildModules)
 import PureScript.Backend.Optimizer.Convert (BackendModule)
-import PureScript.Backend.Optimizer.CoreFn (Comment(..), Ident(..), Module(..), ModuleName(..))
+import PureScript.Backend.Optimizer.CoreFn (Comment(..), Ident(..), Module(..), ModuleName(..), Qualified(..))
 import PureScript.Backend.Optimizer.Directives (parseDirectiveFile)
 import PureScript.Backend.Optimizer.Directives.Defaults (defaultDirectives)
-import PureScript.Backend.Optimizer.Semantics.Foreign (coreForeignSemantics)
-import Test.Utils (bufferToUTF8, canRunMain, coreFnModulesFromOutput, cpr, execWithStdin, loadModuleMain, mkdirp, rmrf, spawnFromParent)
+import PureScript.Backend.Optimizer.Semantics.Foreign (ForeignEval, coreForeignSemantics)
+import Test.Utils (bufferToUTF8, coreFnModulesFromOutput, cpr, execWithStdin, loadModuleMain, mkdirp, rmrf, spawnFromParent)
 
 type TestArgs =
   { accept :: Boolean
@@ -99,6 +96,11 @@ main = do
     Right args ->
       launchAff_ $ runSnapshotTests args { compile = args.compile || args.run }
 
+foreignSemantics :: Map.Map (Qualified Ident) ForeignEval
+foreignSemantics =
+  coreForeignSemantics # Map.filterKeys
+    \(Qualified mod _) -> mod /= Just (ModuleName "Effect.Ref")
+
 runSnapshotTests :: TestArgs -> Aff Unit
 runSnapshotTests { accept, compile, run, filter } = do
   currentDirectory <- liftEffect Process.cwd
@@ -108,8 +110,7 @@ runSnapshotTests { accept, compile, run, filter } = do
   snapshotDir <- liftEffect Process.cwd
   snapshotPaths <- expandGlobs (Path.concat [ snapshotDir, "src", "snapshots-input" ])
     [ "Snapshot.*.purs" ]
-  -- schemeBin <- getSchemeBinary
-  outputRef <- liftEffect $ Ref.new Map.empty
+  outputRef <- liftEffect $ Ref.new []
   let snapshotsOut = Path.concat [ snapshotDir, "src", "snapshots-output" ]
   let testOut = Path.concat [ snapshotDir, "test-out" ]
   let ebin = Path.concat [ testOut, "ebin" ]
@@ -135,7 +136,7 @@ runSnapshotTests { accept, compile, run, filter } = do
       -- copyFile (Path.concat [ "..", "..", "runtime.js" ]) (Path.concat [ testOut, "runtime.js" ])
       coreFnModules # buildModules
         { directives
-        , foreignSemantics: coreForeignSemantics -- no chez scheme specific foreign semantics yet
+        , foreignSemantics
         , onCodegenModule: \_ (Module { name: ModuleName name, path, exports }) (backend) -> do
             let testFileDir = Path.concat [ testOut, name ]
             let testFilePath = Path.concat [ testFileDir, erlModuleNamePs (ModuleName name) <> erlExt ]
@@ -157,13 +158,6 @@ runSnapshotTests { accept, compile, run, filter } = do
             -- liftEffect $ debugModule backend  -- show backend
             mkdirp testFileDir
             FS.writeTextFile UTF8 testFilePath formatted
-            -- unless (Set.isEmpty backend.foreign) do
-            --   let
-            --     foreignSiblingPath =
-            --       fromMaybe path (String.stripSuffix (Pattern (Path.extname path)) path) <>
-            --         schemeExt
-            --   let foreignOutputPath = Path.concat [ testFileDir, moduleForeign <> schemeExt ]
-            --   copyFile foreignSiblingPath foreignOutputPath
             r <- _.result =<< execa "cp" [ snapshotDirFileForeign, testFileForeignPath ] identity
             case r of
               Left _ -> pure unit
@@ -181,7 +175,7 @@ runSnapshotTests { accept, compile, run, filter } = do
                   Nothing <$ guard (Ident "main" `elem` exports)
                     <|> Just <$> hasExpected backend
               void $ liftEffect $ Ref.modify
-                (Map.insert name ({ formatted, failsWith: hasFails backend, hasMain }))
+                (_ <> [Tuple name ({ formatted, failsWith: hasFails backend, hasMain })])
                 outputRef
             else when compile do
               result <- loadModuleMain
@@ -203,7 +197,7 @@ runSnapshotTests { accept, compile, run, filter } = do
             pure coreFnMod
         }
       outputModules <- liftEffect $ Ref.read outputRef
-      results <- forWithIndex outputModules \name ({ formatted, failsWith, hasMain }) -> do
+      results <- for outputModules \(Tuple name { formatted, failsWith, hasMain }) -> do
         let
           snapshotFilePath = Path.concat [ snapshotsOut, name <> erlExt ]
           runAcceptedTest

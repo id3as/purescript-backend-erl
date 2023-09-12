@@ -1,5 +1,5 @@
 -module(snapshot_constructorAccessor@ps).
--export(['First'/0, 'Last'/0, 'NoArgs'/0, 'HasArgs'/0, 'Foo'/0, z/0, y/0, x/0, test5/0, test4/0, test3/0, test2/0, test1/0]).
+-export(['First'/0, 'Last'/0, 'NoArgs'/0, 'HasArgs'/0, 'Foo'/0, z/0, y/0, x/0, test5/0, test4/0, test3/0, test2/0, test1/0, result/0]).
 'First'() ->
   (fun
     (Value0) ->
@@ -45,7 +45,7 @@ test5() ->
     (_@dollar__unused@0) ->
       (fun
         (V@1) ->
-          case (erlang:element(1, V@1)) of
+          case (first =:= (erlang:element(1, V@1))) of
             true ->
               (erlang:element(2, V@1));
             _ ->
@@ -56,11 +56,11 @@ test5() ->
 test4() ->
   (fun
     (V@0) ->
-      case (erlang:element(1, V@0)) of
+      case (first =:= (erlang:element(1, V@0))) of
         true ->
           (erlang:element(2, V@0));
         _ ->
-          case (erlang:element(1, V@0)) of
+          case (last =:= (erlang:element(1, V@0))) of
             true ->
               (erlang:element(2, V@0));
             _ ->
@@ -88,3 +88,5 @@ test1() ->
     (V@0) ->
       true
   end).
+result() ->
+  #{test1 => true,test2 => 2,test3 => 3,test4 => 4,test5 => 5}.
