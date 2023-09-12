@@ -1,5 +1,5 @@
 -module(snapshot_constructorAccessor@ps).
--export(['First'/0, 'Last'/0, 'NoArgs'/0, 'HasArgs'/0, 'Foo'/0, z/0, y/0, x/0, test5/0, test51/0, test4/0, test3/0, test2/0, test1/0, dontInlineMe/0, result/0]).
+-export(['First'/0, 'Last'/0, 'NoArgs'/0, 'HasArgs'/0, 'Foo'/0, z/0, y/0, x/0, test5/0, test51/0, test4/0, test3/0, test2/0, test1/0, 'don\'tInlineMeMe'/0, result/0]).
 'First'() ->
   (fun
     (Value0) ->
@@ -98,14 +98,14 @@ test1() ->
     (V@0) ->
       true
   end).
-dontInlineMe() ->
+'don\'tInlineMeMe'() ->
   (fun
     (A@0) ->
       A@0
   end).
 result() ->
-  #{test1 => (((dontInlineMe())((test1())))(('NoArgs'()))),
-  test2 => (((dontInlineMe())((test2())))({hasArgs,2,1,0})),
-  test3 => (((dontInlineMe())((test3())))({hasArgs,5,3,1})),
-  test4 => (((dontInlineMe())((test4())))({last,4})),
-  test5 => (((dontInlineMe())((test51())))({first,5}))}.
+  #{test1 => ((('don\'tInlineMeMe'())((test1())))(('NoArgs'()))),
+  test2 => ((('don\'tInlineMeMe'())((test2())))({hasArgs,2,1,0})),
+  test3 => ((('don\'tInlineMeMe'())((test3())))({hasArgs,5,3,1})),
+  test4 => ((('don\'tInlineMeMe'())((test4())))({last,4})),
+  test5 => ((('don\'tInlineMeMe'())((test51())))({first,5}))}.

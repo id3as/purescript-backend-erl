@@ -1,4 +1,4 @@
--- @inline Snapshot.ConstructorAccessor.dontInlineMe never
+-- @inline Snapshot.ConstructorAccessor.don'tInlineMeMe never
 -- @expected #{test1 => true, test2 => 2, test3 => 3, test4 => 4, test5 => 5}
 module Snapshot.ConstructorAccessor where
 
@@ -6,8 +6,8 @@ import Prelude
 
 import Partial.Unsafe (unsafePartial)
 
-dontInlineMe :: forall a. a -> a
-dontInlineMe a = a
+don'tInlineMeMe :: forall a. a -> a
+don'tInlineMeMe a = a
 
 data Foo = Foo Int Int Int
 
@@ -61,9 +61,9 @@ result ::
   , test5 :: Int
   }
 result = unsafePartial
-  { test1: dontInlineMe test1 NoArgs
-  , test2: dontInlineMe test2 (HasArgs 2 1 0)
-  , test3: dontInlineMe test3 (HasArgs 5 3 1)
-  , test4: dontInlineMe test4 (Last 4)
-  , test5: dontInlineMe test5 (First 5)
+  { test1: don'tInlineMeMe test1 NoArgs
+  , test2: don'tInlineMeMe test2 (HasArgs 2 1 0)
+  , test3: don'tInlineMeMe test3 (HasArgs 5 3 1)
+  , test4: don'tInlineMeMe test4 (Last 4)
+  , test5: don'tInlineMeMe test5 (First 5)
   }

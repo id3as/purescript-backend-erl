@@ -1,23 +1,23 @@
--- @inline Snapshot.Effect.dontInlineMe never
+-- @inline Snapshot.Effect.don'tInlineMeMe never
 module Snapshot.Effect where
 
 import Prelude
 
 import Effect (Effect)
 
-dontInlineMe :: forall a. a -> Effect Unit
-dontInlineMe _ = pure unit
+don'tInlineMeMe :: forall a. a -> Effect Unit
+don'tInlineMeMe _ = pure unit
 
 lastComponentIsRun :: Effect Unit
 lastComponentIsRun = do
-  dontInlineMe "a"
-  dontInlineMe "b"
-  dontInlineMe "c"
+  don'tInlineMeMe "a"
+  don'tInlineMeMe "b"
+  don'tInlineMeMe "c"
 
 lastPureIsUnwrapped :: Effect Unit
 lastPureIsUnwrapped = do
-  value <- dontInlineMe "a"
-  dontInlineMe "b"
+  value <- don'tInlineMeMe "a"
+  don'tInlineMeMe "b"
   pure value
 
 main :: Effect Unit
