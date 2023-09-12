@@ -1,5 +1,5 @@
 -module(snapshot_constructorAccessor@ps).
--export(['First'/0, 'Last'/0, 'NoArgs'/0, 'HasArgs'/0, 'Foo'/0, z/0, y/0, x/0, test5/0, test4/0, test3/0, test2/0, test1/0, result/0]).
+-export(['First'/0, 'Last'/0, 'NoArgs'/0, 'HasArgs'/0, 'Foo'/0, z/0, y/0, x/0, test5/0, test51/0, test4/0, test3/0, test2/0, test1/0, dontInlineMe/0, result/0]).
 'First'() ->
   (fun
     (Value0) ->
@@ -37,9 +37,9 @@
 z() ->
   {foo,1,1,1}.
 y() ->
-  (((snapshot_constructorAccessor@ps:'Foo'())(1))(1)).
+  ((('Foo'())(1))(1)).
 x() ->
-  ((snapshot_constructorAccessor@ps:'Foo'())(1)).
+  (('Foo'())(1)).
 test5() ->
   (fun
     (_@dollar__unused@0) ->
@@ -52,6 +52,16 @@ test5() ->
               (erlang:throw({fail,<<"Failed pattern match">>}))
           end
       end)
+  end).
+test51() ->
+  (fun
+    (V@0) ->
+      case (first =:= (erlang:element(1, V@0))) of
+        true ->
+          (erlang:element(2, V@0));
+        _ ->
+          (erlang:throw({fail,<<"Failed pattern match">>}))
+      end
   end).
 test4() ->
   (fun
@@ -88,5 +98,14 @@ test1() ->
     (V@0) ->
       true
   end).
+dontInlineMe() ->
+  (fun
+    (A@0) ->
+      A@0
+  end).
 result() ->
-  #{test1 => true,test2 => 2,test3 => 3,test4 => 4,test5 => 5}.
+  #{test1 => (((dontInlineMe())((test1())))(('NoArgs'()))),
+  test2 => (((dontInlineMe())((test2())))({hasArgs,2,1,0})),
+  test3 => (((dontInlineMe())((test3())))({hasArgs,5,3,1})),
+  test4 => (((dontInlineMe())((test4())))({last,4})),
+  test5 => (((dontInlineMe())((test51())))({first,5}))}.

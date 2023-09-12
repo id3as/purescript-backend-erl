@@ -9,7 +9,6 @@ module Test.Utils where
 
 import Prelude
 
-import Control.Alternative (guard)
 import Control.Monad.Except (ExceptT(..), lift, runExceptT)
 import Control.Parallel (parTraverse)
 import Data.Argonaut as Json
@@ -20,7 +19,7 @@ import Data.Array.NonEmpty.Internal (NonEmptyArray(..))
 import Data.Bifunctor (lmap)
 import Data.Compactable (separate)
 import Data.Either (Either(..))
-import Data.Foldable (foldl, for_)
+import Data.Foldable (foldl)
 import Data.Lazy as Lazy
 import Data.List (List)
 import Data.Maybe (Maybe(..), maybe)

@@ -80,8 +80,8 @@ printExpr = case _ of
 
   S.List a -> printBrackets $ D.foldWithSeparator (D.text ",") $ printExpr <$> a
   S.Tupled a -> printBraces $ D.foldWithSeparator (D.text ",") $ printExpr <$> a
-  S.Map fields -> D.text "#{" <> D.foldWithSeparator (D.text ",") (printField <$> fields) <> D.text "}"
-  S.MapUpdate e fields -> D.text "(" <> printExpr e <> D.text ")#{" <> D.foldWithSeparator (D.text ",") (printField <$> fields) <> D.text "}"
+  S.Map fields -> D.text "#{" <> D.foldWithSeparator (D.text "," <> D.spaceBreak) (printField <$> fields) <> D.text "}"
+  S.MapUpdate e fields -> D.text "(" <> printExpr e <> D.text ")#{" <> D.foldWithSeparator (D.text "," <> D.spaceBreak) (printField <$> fields) <> D.text "}"
 
   S.Match e1 e2 -> printExpr e1 <> D.text " = " <> printExpr e2
 

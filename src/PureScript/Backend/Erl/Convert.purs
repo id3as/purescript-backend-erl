@@ -137,11 +137,11 @@ codegenTopLevelBinding codegenEnv (Tuple (Ident i) n) =
 
 codegenExpr :: CodegenEnv -> NeutralExpr -> ErlExpr
 codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
-  Var (Qualified (Just mn) (Ident i)) ->
+  Var (Qualified (Just mn) (Ident i)) | mn /= currentModule ->
     S.FunCall (Just (S.atomLiteral $ erlModuleNamePs mn)) (S.atomLiteral i) []
 
-  Var (Qualified (Nothing) (Ident i)) ->
-    S.Var i
+  Var (Qualified _ (Ident i)) ->
+    S.FunCall Nothing (S.atomLiteral i) []
 
   Local i l | Just replacement <- Map.lookup (Tuple i l) codegenEnv.substitutions ->
     replacement

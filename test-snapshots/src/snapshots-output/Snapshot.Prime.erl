@@ -37,7 +37,7 @@ useNewtypeCtor() ->
 useDataType() ->
   (fun
     (V@0) ->
-      (snapshot_prime@ps:'DCtor'())
+      ('DCtor'())
   end).
 useDataCtor() ->
   (fun
