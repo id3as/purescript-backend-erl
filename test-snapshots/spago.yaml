@@ -4,6 +4,8 @@ package:
     - assert
     - console
     - effect
+    - erl-atom
+    - erl-lists
     - functions
     - integers
     - partial
