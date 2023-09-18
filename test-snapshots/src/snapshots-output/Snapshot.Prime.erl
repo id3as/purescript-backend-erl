@@ -1,5 +1,5 @@
 -module(snapshot_prime@ps).
--export(['NCtor'/0, 'NewtypeCtor\''/0, 'F1'/0, 'F2'/0, 'DCtor'/0, 'Ctor\''/0, useNewtypeType/0, useNewtypeCtor/0, useDataType/0, useDataCtor/0, normal/0, useNormal/0, 'instanceName\''/0, useInstance/0, ignore/0, useClass/0, 'foo\'oo'/0, useFooPrime3/0, 'foo\'\''/0, useFooPrime2/0, 'foo\''/0, useFooPrime1/0, foo/0, 'classMember\''/0, useMember/0]).
+-export(['NCtor'/0, 'NewtypeCtor\''/0, 'F1'/0, 'F2'/0, 'DCtor'/0, 'Ctor\''/0, useNewtypeType/0, useNewtypeCtor/0, useDataType/0, useDataCtor/0, normal/0, useNormal/0, 'instanceName\''/0, useNormal1/0, useInstance/0, ignore/0, useClass/0, 'foo\'oo'/0, useFooPrime3/0, 'foo\'\''/0, useFooPrime2/0, 'foo\''/0, useFooPrime1/0, result/0, foo/0, 'classMember\''/0, useMember/0]).
 'NCtor'() ->
   (fun
     (X@0) ->
@@ -52,16 +52,22 @@ normal() ->
 useNormal() ->
   (fun
     (DictNormal@0) ->
-      (fun
-        (DictNormal1@1) ->
-          (fun
-            (A@2) ->
+      begin
+        Normal1@1 = ((normal())(DictNormal@0)),
+        (fun
+          (DictNormal1@2) ->
+            begin
+              Normal2@3 = ((normal())(DictNormal1@2)),
               (fun
-                (B@3) ->
-                  (unicode:characters_to_binary([((maps:get(normal, DictNormal@0))(A@2)),((maps:get(normal, DictNormal1@1))(B@3))], utf8))
+                (A@4) ->
+                  (fun
+                    (B@5) ->
+                      (unicode:characters_to_binary([(Normal1@1(A@4)),(Normal2@3(B@5))], utf8))
+                  end)
               end)
-          end)
-      end)
+            end
+        end)
+      end
   end).
 'instanceName\''() ->
   #{normal => (fun
@@ -78,8 +84,10 @@ useNormal() ->
           end
       end
   end)}.
+useNormal1() ->
+  (((useNormal())(('instanceName\''())))(('instanceName\''()))).
 useInstance() ->
-  <<"F1F2">>.
+  (((useNormal1())(('F1'())))(('F2'()))).
 ignore() ->
   (fun
     (Dict@0) ->
@@ -88,20 +96,25 @@ ignore() ->
 useClass() ->
   (fun
     (DictClassName_@prime@0) ->
-      (maps:get(ignore, DictClassName_@prime@0))
+      ((ignore())(DictClassName_@prime@0))
   end).
 'foo\'oo'() ->
   <<"foo\'oo">>.
 useFooPrime3() ->
-  <<"foo\'oo">>.
+  ('foo\'oo'()).
 'foo\'\''() ->
-  <<"foo\'">>.
+  <<"foo\'\'">>.
 useFooPrime2() ->
-  <<"foo\'">>.
+  ('foo\'\''()).
 'foo\''() ->
   <<"foo\'">>.
 useFooPrime1() ->
-  <<"foo\'">>.
+  ('foo\''()).
+result() ->
+  #{test1 => (('foo\''()) =:= ('foo\''())),
+  test2 => (('foo\'\''()) =:= ('foo\'\''())),
+  test3 => (('foo\'oo'()) =:= ('foo\'oo'())),
+  useInstance => (((useNormal1())(('F1'())))(('F2'())))}.
 foo() ->
   <<"foo">>.
 'classMember\''() ->
@@ -112,5 +125,5 @@ foo() ->
 useMember() ->
   (fun
     (DictClassMember@0) ->
-      (maps:get('classMember\'', DictClassMember@0))
+      (('classMember\''())(DictClassMember@0))
   end).

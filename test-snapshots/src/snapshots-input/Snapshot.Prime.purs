@@ -1,5 +1,14 @@
+-- @inline Snapshot.Prime.foo never
+-- @inline Snapshot.Prime.foo' never
+-- @inline Snapshot.Prime.foo'' never
+-- @inline Snapshot.Prime.foo'oo never
+-- @inline Snapshot.Prime.ignore never
+-- @inline Snapshot.Prime.classMember' never
+-- @inline Snapshot.Prime.normal never
+-- @expected #{test1=>true, test2=>true, test3=>true, useInstance=><<"F1F2">>}
 module Snapshot.Prime where
 
+import Data.Eq ((==))
 import Data.Semigroup ((<>))
 
 foo :: String
@@ -11,7 +20,7 @@ foo' = "foo'"
 
 -- declarations ending in prime shouldn't cause issues
 foo'' :: String
-foo'' = "foo'"
+foo'' = "foo''"
 
 foo'oo :: String
 foo'oo = "foo'oo"
@@ -74,3 +83,11 @@ useNormal a b = normal a <> normal b
 
 useInstance :: String
 useInstance = useNormal F1 F2
+
+result :: { test1 :: Boolean, test2 :: Boolean, test3 :: Boolean, useInstance :: String }
+result =
+  { test1: useFooPrime1 == foo'
+  , test2: useFooPrime2 == foo''
+  , test3: useFooPrime3 == foo'oo
+  , useInstance: useNormal F1 F2
+  }
