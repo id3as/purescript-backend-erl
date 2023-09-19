@@ -17,6 +17,7 @@
 /examples/**/out
 /test-snapshots/.spago
 /test-snapshots/output
+/test-snapshots/output-es
 /test-snapshots/**/.purs*
 /test-snapshots/**/.psc*
 /test-snapshots/generated-docs

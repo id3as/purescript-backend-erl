@@ -12,6 +12,7 @@ package:
     - partial
     - prelude
     - refs
+    - transformers
     - tuples
 workspace:
   package_set:
