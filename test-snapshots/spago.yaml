@@ -3,6 +3,7 @@ package:
   dependencies:
     - assert
     - console
+    - datetime
     - effect
     - erl-atom
     - erl-lists

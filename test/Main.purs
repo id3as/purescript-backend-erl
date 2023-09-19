@@ -177,7 +177,7 @@ runSnapshotTests { accept, compile, run, filter } = do
               void $ liftEffect $ Ref.modify
                 (_ <> [Tuple name ({ formatted, failsWith: hasFails backend, hasMain })])
                 outputRef
-            else when compile do
+            else when run do
               result <- loadModuleMain
                 { runMain: Nothing
                 , modulePath: testFilePath
