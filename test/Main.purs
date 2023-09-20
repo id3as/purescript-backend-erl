@@ -45,6 +45,7 @@ import Node.Process as Process
 import Parsing (parseErrorMessage)
 import PureScript.Backend.Erl.Constants (erlExt, moduleLib)
 import PureScript.Backend.Erl.Convert (codegenModule, erlModuleNamePs, erlModuleNameForeign)
+import PureScript.Backend.Erl.Foreign (erlForeignSemantics)
 import PureScript.Backend.Erl.Parser (parseFile)
 import PureScript.Backend.Erl.Printer as P
 import PureScript.Backend.Optimizer.Builder (buildModules)
@@ -97,7 +98,7 @@ main = do
       launchAff_ $ runSnapshotTests args { compile = args.compile || args.run }
 
 foreignSemantics :: Map.Map (Qualified Ident) ForeignEval
-foreignSemantics =
+foreignSemantics = Map.union erlForeignSemantics $
   coreForeignSemantics # Map.filterKeys
     \(Qualified mod _) -> mod /= Just (ModuleName "Effect.Ref")
 

@@ -418,25 +418,28 @@ codegenList :: CodegenEnv -> NeutralExpr -> Maybe ErlExpr
 codegenList codegenEnv = gather [] <@> finish where
   typesMod = "Erl.Data.List.Types"
   listPrim = helper typesMod
+  gen = codegenExpr codegenEnv
+
   finish = { lit: finishLit, cons: finishCons }
   finishLit acc =
-    Just (S.List (codegenExpr codegenEnv <$> acc))
+    Just (S.List (gen <$> acc))
   finishCons [] _ =
     Nothing
   finishCons acc s' =
     Just (finishCons' acc s')
-  finishCons' [] s' = codegenExpr codegenEnv s'
+  finishCons' [] s' = gen s'
   finishCons' acc s' =
-    S.ListCons (codegenExpr codegenEnv <$> acc) (codegenExpr codegenEnv s')
+    S.ListCons (gen <$> acc) (gen s')
+
   gather acc s end = case unit of
     _ | Just [head, tail] <- listPrim "cons" 2 s ->
       gather (acc <> [head]) tail end
-    _ | Just [l, r] <- listPrim "appendImpl" 2 s ->
-      gather acc l
-        { lit: \acc' -> gather acc' r finish
-        , cons: \acc' l' ->
-            Just (S.BinOp S.ListConcat (finishCons' acc' l') $ fromMaybe' (\_ -> codegenExpr codegenEnv r) (gather [] r finish))
-        }
+    -- _ | Just [l, r] <- listPrim "appendImpl" 2 s ->
+    --   gather acc l
+    --     { lit: \acc' -> gather acc' r finish
+    --     , cons: \acc' l' ->
+    --         Just (S.BinOp S.ListConcat (finishCons' acc' l') $ fromMaybe' (\_ -> gen r) (gather [] r finish))
+    --     }
     -- TODO: use NeutStop to choose a different normal form for this?
     _ | Just [cons, nil, ls] <- helper "Data.Foldable" "foldrArray" 3 s
       , Just [] <- listPrim "cons" 0 cons

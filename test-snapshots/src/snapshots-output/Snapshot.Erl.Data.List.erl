@@ -1,5 +1,5 @@
 -module(snapshot_erl_data_list@ps).
--export([n/0, lit2/0, lit1/0, hd/0, concat/0, result/0]).
+-export([n/0, lit2/0, lit1/0, hd/0, concatLR/0, concatL/0, concat/0, result/0]).
 n() ->
   [].
 lit2() ->
@@ -16,8 +16,16 @@ hd() ->
         (data_maybe@ps:'Nothing'())
     end
   end.
+concatLR() ->
+  [1,2,3,4].
+concatL() ->
+  (fun
+    (L@0) ->
+      [1,2,3|L@0]
+  end).
 concat() ->
-  ((lit1()) ++ (lit2())).
+  (((erl_data_list_types@ps:appendImpl())((lit1())))((lit2()))).
 result() ->
   #{hd => (hd()),
-  concat => (concat())}.
+  concat => (concat()),
+  concatLR => (concatLR())}.
