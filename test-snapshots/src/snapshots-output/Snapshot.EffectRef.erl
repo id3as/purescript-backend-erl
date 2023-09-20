@@ -7,7 +7,7 @@ onLet() ->
     (X@0) ->
       begin
         A@1 = (X@0 + X@0),
-        ((effect_ref@ps:new())((A@1 + (A@1 + X@0))))
+        ((effect_ref@ps:new())(((A@1 + A@1) + X@0)))
       end
   end).
 onLetTest() ->

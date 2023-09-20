@@ -138,7 +138,8 @@ runSnapshotTests { accept, compile, run, filter } = do
       coreFnModules # buildModules
         { directives
         , foreignSemantics
-        , onCodegenModule: \_ (Module { name: ModuleName name, path: reportedPath, exports }) (backend) -> do
+        , traceIdents: mempty
+        , onCodegenModule: \_ (Module { name: ModuleName name, path: reportedPath, exports }) (backend) _ -> do
             -- Sorry, working around a weird VSCode bug
             let path = fromMaybe <*> String.stripPrefix (String.Pattern snapshotDir) $ reportedPath
             let testFileDir = Path.concat [ testOut, name ]
@@ -177,7 +178,7 @@ runSnapshotTests { accept, compile, run, filter } = do
                 hasMain =
                   Nothing <$ guard (Ident "main" `elem` exports)
                     <|> Just <$> hasExpected backend
-              void $ liftEffect $ Ref.modify
+              liftEffect $ Ref.modify_
                 (_ <> [Tuple name ({ formatted, failsWith: hasFails backend, hasMain })])
                 outputRef
             else when run do

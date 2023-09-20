@@ -118,7 +118,7 @@ inlineBinary() ->
                 (S@3) ->
                   (fun
                     (C@4) ->
-                      #{divInt => (((data_euclideanRing@ps:intDiv())(I@0))(I@0)),
+                      #{divInt => (I@0 div I@0),
                       divNum => (N@1 / N@1),
                       andBool => (B@2 andalso B@2),
                       orBool => (B@2 orelse B@2),

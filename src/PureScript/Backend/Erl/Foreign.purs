@@ -12,7 +12,7 @@ import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Tuple (Tuple(..))
 import Debug (spy, spyWith)
 import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal(..), ModuleName(..), Qualified(..))
-import PureScript.Backend.Optimizer.Semantics (BackendSemantics(..), ExternSpine(..), SemConditional(..), evalApp, evalPrimOp, liftInt, makeLet)
+import PureScript.Backend.Optimizer.Semantics (BackendSemantics(..), EvalRef(..), ExternSpine(..), SemConditional(..), evalApp, evalPrimOp, liftInt, makeLet)
 import PureScript.Backend.Optimizer.Semantics.Foreign (ForeignEval, ForeignSemantics, qualified)
 import PureScript.Backend.Optimizer.Syntax (BackendOperator(..), BackendOperator1(..), BackendOperator2(..), BackendOperatorOrd(..))
 
@@ -33,7 +33,7 @@ helper' shouldForce moduleName ident = case _, _ of
   0, NeutStop (Qualified (Just (ModuleName mn)) (Ident id))
     | mn == moduleName, ident == id ->
       Just []
-  0, SemExtern (Qualified (Just (ModuleName mn)) (Ident id)) [] _
+  0, SemRef (EvalExtern (Qualified (Just (ModuleName mn)) (Ident id))) [] _
     | mn == moduleName, ident == id ->
       Just []
   arity, NeutApp fn args
@@ -41,12 +41,12 @@ helper' shouldForce moduleName ident = case _, _ of
       if Array.length args >= arity
         then Just args
         else Nothing
-  arity, SemExtern (Qualified (Just (ModuleName mn)) (Ident id)) [ ExternApp args ] _
+  arity, SemRef (EvalExtern (Qualified (Just (ModuleName mn)) (Ident id))) [ ExternApp args ] _
     | mn == moduleName, ident == id ->
       if Array.length args >= arity
         then Just args
         else Nothing
-  arity, SemExtern _ _ value | shouldForce ->
+  arity, SemRef (EvalExtern _) _ value | shouldForce ->
     helper' false moduleName ident arity (spy "forced" (force value))
   _, _ -> Nothing
 

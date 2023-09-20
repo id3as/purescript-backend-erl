@@ -21,24 +21,9 @@ zipWith4() ->
                                   V1@12 = ((erl_data_list_types@ps:uncons())(Cs1@9)),
                                   V2@13 = ((erl_data_list_types@ps:uncons())(Bs1@8)),
                                   V3@14 = ((erl_data_list_types@ps:uncons())(As1@7)),
-                                  case (just =:= (erlang:element(1, V3@14))) of
+                                  case ((just =:= (erlang:element(1, V3@14))) andalso ((just =:= (erlang:element(1, V2@13))) andalso ((just =:= (erlang:element(1, V1@12))) andalso (just =:= (erlang:element(1, V@11)))))) of
                                     true ->
-                                      case (just =:= (erlang:element(1, V2@13))) of
-                                        true ->
-                                          case (just =:= (erlang:element(1, V1@12))) of
-                                            true ->
-                                              case (just =:= (erlang:element(1, V@11))) of
-                                                true ->
-                                                  ((Go@Rec@5())([((((F@0((maps:get(head, (erlang:element(2, V3@14))))))((maps:get(head, (erlang:element(2, V2@13))))))((maps:get(head, (erlang:element(2, V1@12))))))((maps:get(head, (erlang:element(2, V@11))))))|Acc@6], (maps:get(tail, (erlang:element(2, V3@14)))), (maps:get(tail, (erlang:element(2, V2@13)))), (maps:get(tail, (erlang:element(2, V1@12)))), (maps:get(tail, (erlang:element(2, V@11))))));
-                                                _ ->
-                                                  ((erl_data_list@ps:reverse())(Acc@6))
-                                              end;
-                                            _ ->
-                                              ((erl_data_list@ps:reverse())(Acc@6))
-                                          end;
-                                        _ ->
-                                          ((erl_data_list@ps:reverse())(Acc@6))
-                                      end;
+                                      ((Go@Rec@5())([((((F@0((maps:get(head, (erlang:element(2, V3@14))))))((maps:get(head, (erlang:element(2, V2@13))))))((maps:get(head, (erlang:element(2, V1@12))))))((maps:get(head, (erlang:element(2, V@11))))))|Acc@6], (maps:get(tail, (erlang:element(2, V3@14)))), (maps:get(tail, (erlang:element(2, V2@13)))), (maps:get(tail, (erlang:element(2, V1@12)))), (maps:get(tail, (erlang:element(2, V@11))))));
                                     _ ->
                                       ((erl_data_list@ps:reverse())(Acc@6))
                                   end

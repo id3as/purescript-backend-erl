@@ -48,12 +48,11 @@ workspace:
   extra_packages:
     backend-optimizer:
       git: https://github.com/aristanetworks/purescript-backend-optimizer
-      ref: c11f1e9f411ebbb4045734f7429578972836d60c
+      ref: cd03c12e82ec80be45fbb0810e3fb9a312752512
       dependencies:
         - aff
         - ansi
         - argonaut
-        - argonaut-codecs
         - argparse-basic
         - arrays
         - bifunctors
@@ -73,21 +72,15 @@ workspace:
         - lists
         - maybe
         - newtype
-        - node-buffer
-        - node-child-process
-        - node-fs
-        - node-fs-aff
-        - node-glob-basic
-        - node-path
-        - node-process
-        - node-streams
         - ordered-collections
+        - orders
         - parallel
         - partial
         - posix-types
         - prelude
         - refs
         - safe-coerce
+        - st
         - strings
         - transformers
         - tuples
