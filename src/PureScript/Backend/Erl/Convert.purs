@@ -10,7 +10,7 @@ import Data.Foldable (foldMap, foldr)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.Map (Map)
 import Data.Map as Map
-import Data.Maybe (Maybe(..), maybe)
+import Data.Maybe (Maybe(..), fromMaybe, fromMaybe', maybe)
 import Data.Newtype (unwrap)
 import Data.String as String
 import Data.Tuple (Tuple(..), fst, snd, uncurry)
@@ -20,8 +20,8 @@ import PureScript.Backend.Erl.Parser (ForeignDecls)
 import PureScript.Backend.Erl.Syntax (ErlDefinition(..), ErlExport(..), ErlExpr, ErlModule, atomLiteral)
 import PureScript.Backend.Erl.Syntax as S
 import PureScript.Backend.Optimizer.Convert (BackendModule, BackendBindingGroup)
-import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal(..), ModuleName, Prop(..), Qualified(..))
-import PureScript.Backend.Optimizer.Semantics (NeutralExpr)
+import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal(..), ModuleName(..), Prop(..), Qualified(..))
+import PureScript.Backend.Optimizer.Semantics (NeutralExpr(..))
 import PureScript.Backend.Optimizer.Syntax (BackendAccessor(..), BackendOperator(..), BackendOperator1(..), BackendOperator2(..), BackendOperatorNum(..), BackendOperatorOrd(..), BackendSyntax(..), Level(..), Pair(..))
 
 type CodegenEnv =
@@ -135,8 +135,29 @@ codegenTopLevelBinding codegenEnv (Tuple (Ident i) n) =
     _ ->
       [ FunctionDefinition i [] $ codegenExpr codegenEnv n ]
 
+helper :: String -> String -> Int -> NeutralExpr -> Maybe (Array NeutralExpr)
+helper moduleName ident = case _, _ of
+  0, NeutralExpr (Var (Qualified (Just (ModuleName mn)) (Ident id)))
+    | mn == moduleName, ident == id ->
+      Just []
+  arity, NeutralExpr (App (NeutralExpr (Var (Qualified (Just (ModuleName mn)) (Ident id)))) args)
+    | mn == moduleName, ident == id ->
+      if NEA.length args >= arity
+        then Just (NEA.toArray args)
+        else Nothing
+  _, _ -> Nothing
+
 codegenExpr :: CodegenEnv -> NeutralExpr -> ErlExpr
 codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
+  _ | Just result <- codegenList codegenEnv s ->
+    result
+
+  _ | Just [NeutralExpr (Lit (LitString value))] <- helper "Erl.Atom" "atom" 1 s ->
+    S.Literal (S.Atom value)
+
+  _ | Just [] <- helper "Data.Unit" "unit" 0 s ->
+    S.Literal (S.Atom "unit")
+
   Var (Qualified (Just mn) (Ident i)) | mn /= currentModule ->
     S.FunCall (Just (S.atomLiteral $ erlModuleNamePs mn)) (S.atomLiteral i) []
 
@@ -392,6 +413,41 @@ codegenLetRec codegenEnv { lvl, bindings }
         ] $ NEA.toArray bindings
       , substitutions: codegenEnv.substitutions
       }
+
+codegenList :: CodegenEnv -> NeutralExpr -> Maybe ErlExpr
+codegenList codegenEnv = gather [] <@> finish where
+  typesMod = "Erl.Data.List.Types"
+  listPrim = helper typesMod
+  finish = { lit: finishLit, cons: finishCons }
+  finishLit acc =
+    Just (S.List (codegenExpr codegenEnv <$> acc))
+  finishCons [] _ =
+    Nothing
+  finishCons acc s' =
+    Just (finishCons' acc s')
+  finishCons' [] s' = codegenExpr codegenEnv s'
+  finishCons' acc s' =
+    S.ListCons (codegenExpr codegenEnv <$> acc) (codegenExpr codegenEnv s')
+  gather acc s end = case unit of
+    _ | Just [head, tail] <- listPrim "cons" 2 s ->
+      gather (acc <> [head]) tail end
+    _ | Just [l, r] <- listPrim "appendImpl" 2 s ->
+      gather acc l
+        { lit: \acc' -> gather acc' r finish
+        , cons: \acc' l' ->
+            Just (S.BinOp S.ListConcat (finishCons' acc' l') $ fromMaybe' (\_ -> codegenExpr codegenEnv r) (gather [] r finish))
+        }
+    -- TODO: use NeutStop to choose a different normal form for this?
+    _ | Just [cons, nil, ls] <- helper "Data.Foldable" "foldrArray" 3 s
+      , Just [] <- listPrim "cons" 0 cons
+      , Just [] <- listPrim "nil" 0 nil
+      , Lit (LitArray acc') <- unwrap ls ->
+      end.lit (acc <> acc')
+    _ | Just [] <- listPrim "nil" 0 s ->
+      end.lit acc
+    _ ->
+      end.cons acc s
+
 
 codegenPrimOp :: CodegenEnv -> BackendOperator NeutralExpr -> ErlExpr
 codegenPrimOp codegenEnv@{ currentModule } = case _ of

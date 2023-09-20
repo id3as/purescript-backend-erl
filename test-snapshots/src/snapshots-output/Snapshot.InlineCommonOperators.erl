@@ -67,7 +67,7 @@ inlineWrap() ->
 inlineVoid() ->
   (fun
     () ->
-      (data_unit@ps:unit())
+      unit
   end).
 inlineUnwrap() ->
   1.
@@ -94,13 +94,13 @@ inlineOver() ->
       (V@0 + 1)
   end).
 inlineListSingleton() ->
-  (((erl_data_list_types@ps:cons())(1))((erl_data_list_types@ps:nil()))).
+  [1].
 inlineListCons() ->
   (fun
     (X@0) ->
       (fun
         (V@1) ->
-          (((erl_data_list_types@ps:cons())(X@0))(V@1))
+          [X@0|V@1]
       end)
   end).
 inlineIntToNumber() ->
@@ -126,7 +126,7 @@ inlineBinary() ->
                         (V@5) ->
                           (fun
                             (L2@6) ->
-                              (((erl_data_list_types@ps:appendImpl())(V@5))(L2@6))
+                              (V@5 ++ L2@6)
                           end)
                       end),
                       addInt => (I@0 + I@0),
@@ -157,4 +157,4 @@ inlineBinary() ->
       end)
   end).
 inlineAtom() ->
-  ((erl_atom@ps:atom())(<<"an_atom">>)).
+  an_atom.

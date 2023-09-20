@@ -27,6 +27,7 @@ data ErlExpr
   = Literal ErlLiteral
   | Var String
   | List (Array ErlExpr)
+  | ListCons (Array ErlExpr) ErlExpr
   -- | An erlang tuple { E1, E2, ... }
   | Tupled (Array ErlExpr)
   -- | A map expression #{ X => E }

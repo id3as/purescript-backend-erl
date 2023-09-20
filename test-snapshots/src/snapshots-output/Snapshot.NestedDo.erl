@@ -4,7 +4,7 @@ pure_() ->
   (effect@ps:pureE()).
 renamed() ->
   begin
-    V@0 = ((pure_())((data_unit@ps:unit()))),
+    V@0 = ((pure_())(unit)),
     (fun
       () ->
         begin
@@ -17,7 +17,7 @@ renamed() ->
   end.
 renamed0() ->
   begin
-    V@0 = ((pure_())((data_unit@ps:unit()))),
+    V@0 = ((pure_())(unit)),
     (fun
       () ->
         begin
@@ -30,7 +30,7 @@ renamed0() ->
   end.
 renamed1() ->
   begin
-    V@0 = ((pure_())((data_unit@ps:unit()))),
+    V@0 = ((pure_())(unit)),
     (fun
       () ->
         begin
@@ -43,7 +43,7 @@ renamed1() ->
   end.
 renamed2() ->
   begin
-    V@0 = ((pure_())((data_unit@ps:unit()))),
+    V@0 = ((pure_())(unit)),
     (fun
       () ->
         begin
@@ -56,7 +56,7 @@ renamed2() ->
   end.
 do1() ->
   begin
-    V@0 = ((pure_())((data_unit@ps:unit()))),
+    V@0 = ((pure_())(unit)),
     (fun
       () ->
         begin
@@ -68,7 +68,7 @@ do1() ->
   end.
 do0() ->
   begin
-    V@0 = ((pure_())((data_unit@ps:unit()))),
+    V@0 = ((pure_())(unit)),
     (fun
       () ->
         begin
@@ -79,7 +79,7 @@ do0() ->
   end.
 bug26() ->
   begin
-    V@0 = ((pure_())((data_unit@ps:unit()))),
+    V@0 = ((pure_())(unit)),
     (fun
       () ->
         begin

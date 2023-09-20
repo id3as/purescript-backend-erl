@@ -3,7 +3,7 @@
 -- @inline Control.Monad.State.Trans.applicativeStateT(..).pure arity=1
 -- @inline Control.Monad.State.Trans.functorStateT(..).map arity=2
 -- @inline Control.Monad.State.Trans.monadStateStateT(..).state arity=1
--- @inline Control.Monad.State.Trans.monadTransStateT.lift arity=1
+-- @inline Control.Monad.State.Trans.monadTransStateT.lift arity=3
 -- @inline Control.Monad.State.Trans.monadEffectState(..).liftEffect arity=1
 module Snapshot.State.Log where
 

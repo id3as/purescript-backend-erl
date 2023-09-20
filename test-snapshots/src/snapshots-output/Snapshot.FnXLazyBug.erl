@@ -29,7 +29,7 @@ zipWith4() ->
                                             true ->
                                               case (just =:= (erlang:element(1, V@11))) of
                                                 true ->
-                                                  ((Go@Rec@5())((((erl_data_list_types@ps:cons())(((((F@0((maps:get(head, (erlang:element(2, V3@14))))))((maps:get(head, (erlang:element(2, V2@13))))))((maps:get(head, (erlang:element(2, V1@12))))))((maps:get(head, (erlang:element(2, V@11))))))))(Acc@6)), (maps:get(tail, (erlang:element(2, V3@14)))), (maps:get(tail, (erlang:element(2, V2@13)))), (maps:get(tail, (erlang:element(2, V1@12)))), (maps:get(tail, (erlang:element(2, V@11))))));
+                                                  ((Go@Rec@5())([((((F@0((maps:get(head, (erlang:element(2, V3@14))))))((maps:get(head, (erlang:element(2, V2@13))))))((maps:get(head, (erlang:element(2, V1@12))))))((maps:get(head, (erlang:element(2, V@11))))))|Acc@6], (maps:get(tail, (erlang:element(2, V3@14)))), (maps:get(tail, (erlang:element(2, V2@13)))), (maps:get(tail, (erlang:element(2, V1@12)))), (maps:get(tail, (erlang:element(2, V@11))))));
                                                 _ ->
                                                   ((erl_data_list@ps:reverse())(Acc@6))
                                               end;
@@ -45,7 +45,7 @@ zipWith4() ->
                                 end
                             end)
                         end),
-                        ((Go@Rec@5())((erl_data_list_types@ps:nil()), As@1, Bs@2, Cs@3, Ds@4))
+                        ((Go@Rec@5())([], As@1, Bs@2, Cs@3, Ds@4))
                       end
                   end)
               end)
@@ -65,4 +65,4 @@ result() ->
               end)
           end)
       end)
-  end)))((((erl_data_list_types@ps:cons())(1))((((erl_data_list_types@ps:cons())(2))((((erl_data_list_types@ps:cons())(9))((erl_data_list_types@ps:nil())))))))))((((erl_data_list_types@ps:cons())(0))((((erl_data_list_types@ps:cons())(1))((erl_data_list_types@ps:nil())))))))((((erl_data_list_types@ps:cons())(3))((((erl_data_list_types@ps:cons())(4))((erl_data_list_types@ps:nil())))))))((((erl_data_list_types@ps:cons())(5))((((erl_data_list_types@ps:cons())(6))((((erl_data_list_types@ps:cons())(7))((((erl_data_list_types@ps:cons())(8))((erl_data_list_types@ps:nil()))))))))))).
+  end)))([1,2,9]))([0,1]))([3,4]))([5,6,7,8])).

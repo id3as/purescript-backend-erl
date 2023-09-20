@@ -7,7 +7,7 @@ import Data.Array as Array
 import Data.CodePoint.Unicode as CodePointU
 import Data.CodePoint.Unicode as U
 import Data.Enum (fromEnum)
-import Data.Foldable (foldMap)
+import Data.Foldable (fold, foldMap)
 import Data.Maybe (Maybe(..), maybe)
 import Data.String (CodePoint, toCodePointArray)
 import Data.String as CodePoints
@@ -79,6 +79,11 @@ printExpr = case _ of
   S.Var v -> D.text v
 
   S.List a -> printBrackets $ D.foldWithSeparator (D.text ",") $ printExpr <$> a
+  S.ListCons a rest -> printBrackets $ fold
+    [ D.foldWithSeparator (D.text ",") $ printExpr <$> a
+    , D.text "|"
+    , printExpr rest
+    ]
   S.Tupled a -> printBraces $ D.foldWithSeparator (D.text ",") $ printExpr <$> a
   S.Map fields -> D.text "#{" <> D.foldWithSeparator (D.text "," <> D.spaceBreak) (printField <$> fields) <> D.text "}"
   S.MapUpdate e fields -> D.text "(" <> printExpr e <> D.text ")#{" <> D.foldWithSeparator (D.text "," <> D.spaceBreak) (printField <$> fields) <> D.text "}"

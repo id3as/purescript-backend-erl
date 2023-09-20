@@ -137,7 +137,9 @@ runSnapshotTests { accept, compile, run, filter } = do
       coreFnModules # buildModules
         { directives
         , foreignSemantics
-        , onCodegenModule: \_ (Module { name: ModuleName name, path, exports }) (backend) -> do
+        , onCodegenModule: \_ (Module { name: ModuleName name, path: reportedPath, exports }) (backend) -> do
+            -- Sorry, working around a weird VSCode bug
+            let path = fromMaybe <*> String.stripPrefix (String.Pattern snapshotDir) $ reportedPath
             let testFileDir = Path.concat [ testOut, name ]
             let testFilePath = Path.concat [ testFileDir, erlModuleNamePs (ModuleName name) <> erlExt ]
             let testFileForeignPath = Path.concat [ testFileDir, erlModuleNameForeign (ModuleName name) <> erlExt ]
@@ -160,14 +162,14 @@ runSnapshotTests { accept, compile, run, filter } = do
             FS.writeTextFile UTF8 testFilePath formatted
             r <- _.result =<< execa "cp" [ snapshotDirFileForeign, testFileForeignPath ] identity
             case r of
-              Left _ -> pure unit
-              Right _ -> do
+              Right _ | run -> do
                 _ <- loadModuleMain
                   { ebin
                   , modulePath: testFileForeignPath
                   , runMain: Nothing
                   }
                 pure unit
+              _ -> pure unit
             if Set.member snapshotDirFile snapshotPaths then do
               -- originalFileSourceCode <- FS.readTextFile UTF8 snapshotDirFile
               let

@@ -5,7 +5,7 @@
     (V@0) ->
       (fun
         () ->
-          (data_unit@ps:unit())
+          unit
       end)
   end).
 lastComponentIsRun() ->
