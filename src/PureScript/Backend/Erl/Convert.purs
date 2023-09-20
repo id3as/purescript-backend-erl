@@ -10,7 +10,7 @@ import Data.Foldable (foldMap, foldr)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.Map (Map)
 import Data.Map as Map
-import Data.Maybe (Maybe(..), fromMaybe, fromMaybe', maybe)
+import Data.Maybe (Maybe(..), fromMaybe', maybe)
 import Data.Newtype (unwrap)
 import Data.String as String
 import Data.Tuple (Tuple(..), fst, snd, uncurry)
@@ -434,13 +434,13 @@ codegenList codegenEnv = gather [] <@> finish where
   gather acc s end = case unit of
     _ | Just [head, tail] <- listPrim "cons" 2 s ->
       gather (acc <> [head]) tail end
-    -- _ | Just [l, r] <- listPrim "appendImpl" 2 s ->
-    --   gather acc l
-    --     { lit: \acc' -> gather acc' r finish
-    --     , cons: \acc' l' ->
-    --         Just (S.BinOp S.ListConcat (finishCons' acc' l') $ fromMaybe' (\_ -> gen r) (gather [] r finish))
-    --     }
-    -- TODO: use NeutStop to choose a different normal form for this?
+    _ | Just [l, r] <- listPrim "appendImpl" 2 s ->
+      gather acc l
+        { lit: \acc' -> gather acc' r end
+        , cons: \acc' l' ->
+            Just (S.BinOp S.ListConcat (finishCons' acc' l') $ fromMaybe' (\_ -> gen r) (gather [] r finish))
+        }
+    -- TODO: use NeutStop to choose a different normal form for this Array ~> List?
     _ | Just [cons, nil, ls] <- helper "Data.Foldable" "foldrArray" 3 s
       , Just [] <- listPrim "cons" 0 cons
       , Just [] <- listPrim "nil" 0 nil

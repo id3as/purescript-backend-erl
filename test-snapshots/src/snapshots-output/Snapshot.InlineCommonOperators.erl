@@ -126,7 +126,7 @@ inlineBinary() ->
                         (V@5) ->
                           (fun
                             (L2@6) ->
-                              (((erl_data_list_types@ps:appendImpl())(V@5))(L2@6))
+                              (V@5 ++ L2@6)
                           end)
                       end),
                       addInt => (I@0 + I@0),
