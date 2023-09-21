@@ -46,7 +46,7 @@ import Node.Library.Execa (ExecaError, ExecaSuccess, execa)
 import Node.Path (FilePath)
 import Node.Process as Process
 import Node.Stream as Stream
-import PureScript.Backend.Erl.Convert (erlModuleNamePs)
+import PureScript.Backend.Erl.Convert.Common (erlModuleNamePs)
 import PureScript.Backend.Optimizer.CoreFn (Ann, Module, ModuleName(..))
 import PureScript.Backend.Optimizer.CoreFn.Json (decodeModule)
 import PureScript.Backend.Optimizer.CoreFn.Sort (emptyPull, pullResult, resumePull, sortModules)

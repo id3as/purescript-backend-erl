@@ -62,7 +62,7 @@ useNormal() ->
                 (A@4) ->
                   (fun
                     (B@5) ->
-                      (unicode:characters_to_binary([(Normal1@1(A@4)),(Normal2@3(B@5))], utf8))
+                      <<(Normal1@1(A@4))/binary, (Normal2@3(B@5))/binary>>
                   end)
               end)
             end

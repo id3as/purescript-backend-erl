@@ -5,7 +5,7 @@ stringOps() ->
     (X@0) ->
       (fun
         (Y@1) ->
-          (array:from_list([(unicode:characters_to_binary([X@0,Y@1], utf8))]))
+          (array:from_list([<<X@0/binary, Y@1/binary>>]))
       end)
   end).
 numberOps() ->

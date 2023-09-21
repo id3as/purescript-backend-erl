@@ -44,7 +44,8 @@ import Node.Path as Path
 import Node.Process as Process
 import Parsing (parseErrorMessage)
 import PureScript.Backend.Erl.Constants (erlExt, moduleLib)
-import PureScript.Backend.Erl.Convert (codegenModule, erlModuleNamePs, erlModuleNameForeign)
+import PureScript.Backend.Erl.Convert.Common (erlModuleNamePs, erlModuleNameForeign)
+import PureScript.Backend.Erl.Convert (codegenModule)
 import PureScript.Backend.Erl.Foreign (erlForeignSemantics)
 import PureScript.Backend.Erl.Parser (parseFile)
 import PureScript.Backend.Erl.Printer as P

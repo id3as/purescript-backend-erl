@@ -11,19 +11,19 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Tuple (Tuple(..))
-import Debug (spy)
 import PureScript.Backend.Optimizer.CoreFn (ConstructorType(..), Ident(..), Literal(..), ModuleName(..), Prop(..), ProperName(..), Qualified(..))
-import PureScript.Backend.Optimizer.Debug (spyWhen, traceWhen)
 import PureScript.Backend.Optimizer.Semantics (BackendSemantics(..), EvalRef(..), ExternSpine(..), SemConditional(..), evalApp, evalPrimOp, liftInt, makeLet)
 import PureScript.Backend.Optimizer.Semantics.Foreign (ForeignEval, ForeignSemantics, qualified)
 import PureScript.Backend.Optimizer.Syntax (BackendOperator(..), BackendOperator1(..), BackendOperator2(..), BackendOperatorOrd(..))
 
 erlForeignSemantics :: Map (Qualified Ident) ForeignEval
-erlForeignSemantics = Map.fromFoldable
+erlForeignSemantics = Map.fromFoldable $
   [ data_array_indexImpl
   , erl_data_list_types_appendImpl
-  , erl_data_list_types_unconsImpl
-  ]
+  , erl_data_list_types_uncons
+  , erl_data_tuple_fst
+  , erl_data_tuple_snd
+  ] <> erl_data_tuple
 
 helper :: String -> String -> Int -> BackendSemantics -> Maybe (Array BackendSemantics)
 helper = helper' true
@@ -50,7 +50,7 @@ helper' shouldForce moduleName ident = case _, _ of
         then Just args
         else Nothing
   arity, SemRef (EvalExtern _) _ value | shouldForce ->
-    helper' false moduleName ident arity (traceWhen true ({forced:force value}) (force value))
+    helper' false moduleName ident arity (force value)
   _, _ -> Nothing
 
 data_array_indexImpl :: ForeignSemantics
@@ -152,8 +152,8 @@ mkJust = ctor SumType "Data.Maybe" "Maybe" "Just" <<< pure
 mkNothing :: BackendSemantics
 mkNothing = ctor SumType "Data.Maybe" "Maybe" "Nothing" []
 
-erl_data_list_types_unconsImpl :: ForeignSemantics
-erl_data_list_types_unconsImpl = Tuple (qualified "Erl.Data.List.Types" "uncons")
+erl_data_list_types_uncons :: ForeignSemantics
+erl_data_list_types_uncons = Tuple (qualified "Erl.Data.List.Types" "uncons")
   let mkResult head tail = NeutLit (LitRecord [Prop "head" head, Prop "tail" tail]) in
   \_env _qual -> case _ of
     [ ExternApp [ list ] ]
@@ -165,6 +165,30 @@ erl_data_list_types_unconsImpl = Tuple (qualified "Erl.Data.List.Types" "uncons"
         Just case Array.uncons items of
           Nothing -> mkNothing
           Just { head, tail } -> mkJust (mkResult head (mkList tail))
-      | otherwise -> traceWhen true list Nothing
+      | otherwise -> Nothing
     _ ->
       Nothing
+
+erl_data_tuple :: Array ForeignSemantics
+erl_data_tuple = [1,2,3,4,5,6,7,8,9,10] <#> \n -> Tuple (qualified "Erl.Data.Tuple" ("uncurry" <> show n))
+  \env _qual -> case _ of
+    [ ExternApp [ fn, tuple ] ]
+      | Just tupled <- helper "Erl.Data.Tuple" ("tuple" <> show n) n tuple ->
+        Just (evalApp env fn tupled)
+    _ -> Nothing
+
+erl_data_tuple_fst :: ForeignSemantics
+erl_data_tuple_fst = Tuple (qualified "Erl.Data.Tuple" "fst")
+  \_env _qual -> case _ of
+    [ ExternApp [ tuple ] ]
+      | Just [l, _r] <- helper "Erl.Data.Tuple" "tuple2" 2 tuple ->
+        Just l
+    _ -> Nothing
+
+erl_data_tuple_snd :: ForeignSemantics
+erl_data_tuple_snd = Tuple (qualified "Erl.Data.Tuple" "snd")
+  \_env _qual -> case _ of
+    [ ExternApp [ tuple ] ]
+      | Just [_l, r] <- helper "Erl.Data.Tuple" "tuple2" 2 tuple ->
+        Just r
+    _ -> Nothing

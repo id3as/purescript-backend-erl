@@ -5,17 +5,17 @@ import Prelude
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NEA
-import Data.CodePoint.Unicode as StringCP
 import Data.Foldable (foldMap, foldr)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.Map (Map)
 import Data.Map as Map
-import Data.Maybe (Maybe(..), fromMaybe', maybe)
+import Data.Maybe (Maybe(..))
 import Data.Newtype (unwrap)
-import Data.String as String
 import Data.Tuple (Tuple(..), fst, snd, uncurry)
 import Partial.Unsafe (unsafeCrashWith)
 import PureScript.Backend.Erl.Constants as C
+import PureScript.Backend.Erl.Convert.Common (erlModuleNameForeign, erlModuleNamePs, tagAtom, toAtomName, toErlVar, toErlVarExpr, toErlVarName, toErlVarWith)
+import PureScript.Backend.Erl.Convert.Foreign (codegenForeign)
 import PureScript.Backend.Erl.Parser (ForeignDecls)
 import PureScript.Backend.Erl.Syntax (ErlDefinition(..), ErlExport(..), ErlExpr, ErlModule, atomLiteral)
 import PureScript.Backend.Erl.Syntax as S
@@ -70,50 +70,6 @@ definitionExports = case _ of
   FunctionDefinition f a _ -> [ Export f (Array.length a) ]
   _ -> []
 
-erlModuleNameCommon :: ModuleName -> String
-erlModuleNameCommon name =
-  String.joinWith "_"
-    $ map toAtomName
-    $ String.split (String.Pattern ".") (unwrap name)
-
-erlModuleNamePs :: ModuleName -> String
-erlModuleNamePs name = erlModuleNameCommon name <> "@ps"
-
-erlModuleNameForeign :: ModuleName -> String
-erlModuleNameForeign name = erlModuleNameCommon name <> "@foreign"
-
-toAtomName :: String -> String
-toAtomName text = case String.uncons text of
-  Just { head, tail } -> String.fromCodePointArray (StringCP.toLower head) <> tail
-  Nothing -> text
-
-toErlVar :: Maybe Ident -> Level -> String
-toErlVar text (Level lvl) =
-  maybe "V" (toErlVarName <<< unwrap) text <> "@" <> show lvl
-
-toErlVarWith :: String -> Maybe Ident -> Level -> String
-toErlVarWith suffix text (Level lvl) =
-  maybe "V" (toErlVarName <<< unwrap) text <> "@" <> suffix <> "@" <> show lvl
-
--- String.replace (String.Pattern ".") (String.Replacement "_") (unwrap name)
---   T.intercalate "_" (toAtomName <$> T.splitOn "." name)
-
-toErlVarName :: String -> String
-toErlVarName text = case String.uncons text of
-  Just { head, tail } ->
-    -- Lazy to include start
-    String.replace (String.Pattern "'") (String.Replacement "_@prime") $
-    String.replace (String.Pattern "$") (String.Replacement "_@dollar") $
-
-     String.fromCodePointArray (StringCP.toUpper head) <> tail
-  Nothing -> "V"
-
-toErlVarExpr :: Tuple (Maybe Ident) Level -> ErlExpr
-toErlVarExpr = S.Var <<< uncurry toErlVar
-
-tagAtom :: Ident -> ErlExpr
-tagAtom tagName = S.Literal $ S.Atom $ toAtomName $ unwrap tagName
-
 codegenTopLevelBindingGroup
   :: CodegenEnv
   -> BackendBindingGroup Ident NeutralExpr
@@ -149,14 +105,8 @@ helper moduleName ident = case _, _ of
 
 codegenExpr :: CodegenEnv -> NeutralExpr -> ErlExpr
 codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
-  _ | Just result <- codegenList codegenEnv s ->
+  _ | Just result <- codegenForeign (codegenExpr codegenEnv) s ->
     result
-
-  _ | Just [NeutralExpr (Lit (LitString value))] <- helper "Erl.Atom" "atom" 1 s ->
-    S.Literal (S.Atom value)
-
-  _ | Just [] <- helper "Data.Unit" "unit" 0 s ->
-    S.Literal (S.Atom "unit")
 
   Var (Qualified (Just mn) (Ident i)) | mn /= currentModule ->
     S.FunCall (Just (S.atomLiteral $ erlModuleNamePs mn)) (S.atomLiteral i) []
@@ -414,44 +364,6 @@ codegenLetRec codegenEnv { lvl, bindings }
       , substitutions: codegenEnv.substitutions
       }
 
-codegenList :: CodegenEnv -> NeutralExpr -> Maybe ErlExpr
-codegenList codegenEnv = gather [] <@> finish where
-  typesMod = "Erl.Data.List.Types"
-  listPrim = helper typesMod
-  gen = codegenExpr codegenEnv
-
-  finish = { lit: finishLit, cons: finishCons }
-  finishLit acc =
-    Just (S.List (gen <$> acc))
-  finishCons [] _ =
-    Nothing
-  finishCons acc s' =
-    Just (finishCons' acc s')
-  finishCons' [] s' = gen s'
-  finishCons' acc s' =
-    S.ListCons (gen <$> acc) (gen s')
-
-  gather acc s end = case unit of
-    _ | Just [head, tail] <- listPrim "cons" 2 s ->
-      gather (acc <> [head]) tail end
-    _ | Just [l, r] <- listPrim "appendImpl" 2 s ->
-      gather acc l
-        { lit: \acc' -> gather acc' r end
-        , cons: \acc' l' ->
-            Just (S.BinOp S.ListConcat (finishCons' acc' l') $ fromMaybe' (\_ -> gen r) (gather [] r finish))
-        }
-    -- TODO: use NeutStop to choose a different normal form for this Array ~> List?
-    _ | Just [cons, nil, ls] <- helper "Data.Foldable" "foldrArray" 3 s
-      , Just [] <- listPrim "cons" 0 cons
-      , Just [] <- listPrim "nil" 0 nil
-      , Lit (LitArray acc') <- unwrap ls ->
-      end.lit (acc <> acc')
-    _ | Just [] <- listPrim "nil" 0 s ->
-      end.lit acc
-    _ ->
-      end.cons acc s
-
-
 codegenPrimOp :: CodegenEnv -> BackendOperator NeutralExpr -> ErlExpr
 codegenPrimOp codegenEnv@{ currentModule } = case _ of
   Op1 o x -> do
@@ -531,8 +443,5 @@ codegenPrimOp codegenEnv@{ currentModule } = case _ of
           y'
         OpNumberOrd o' -> opOrd o' x' y'
         OpStringAppend ->
-          S.FunCall (Just $ atomLiteral $ C.unicode) (atomLiteral $ C.characters_to_binary)
-            [ S.List [ x', y' ]
-            , S.atomLiteral C.utf8
-            ]
+          S.BinaryAppend x' y'
         OpStringOrd o' -> opOrd o' x' y'

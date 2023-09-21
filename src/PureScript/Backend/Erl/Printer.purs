@@ -76,6 +76,8 @@ printExpr = case _ of
   S.Literal (S.Char c) -> D.text $ "$" <> escapeNonprinting (escapeErlString (StringCU.singleton c))
   S.Literal (S.Atom a) -> D.text $ escapeAtom a
 
+  s@(S.BinaryAppend _ _) -> printBinaryAppend s
+
   S.Var v -> D.text v
 
   S.List a -> printBrackets $ D.foldWithSeparator (D.text ",") $ printExpr <$> a
@@ -245,6 +247,14 @@ printUnaryOp = D.text <<< case _ of
   S.BitwiseNot ->           "bnot"
   S.Positive ->             "+"
   S.Negate ->               "-"
+
+printBinaryAppend :: ErlExpr -> Doc Void
+printBinaryAppend = finish <<< go
+  where
+  finish items =
+    D.text "<<" <> Array.intercalate (D.text ", ") (items <#> \e -> printExpr e <> D.text "/binary") <> D.text ">>"
+  go (S.BinaryAppend e1 e2) = go e1 <> go e2
+  go s = [ s ]
 
 printField :: Tuple String ErlExpr -> Doc Void
 printField (Tuple f e) =

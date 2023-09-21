@@ -49,6 +49,7 @@ data ErlExpr
   | Case ErlExpr (NonEmptyArray CaseClause)
   | BinOp BinaryOperator ErlExpr ErlExpr
   | UnaryOp UnaryOperator ErlExpr
+  | BinaryAppend ErlExpr ErlExpr
 
   | Unimplemented String
 
