@@ -18,6 +18,7 @@
 /test-snapshots/.spago
 /test-snapshots/output
 /test-snapshots/output-es
+/test-snapshots/output-erl
 /test-snapshots/**/.purs*
 /test-snapshots/**/.psc*
 /test-snapshots/generated-docs

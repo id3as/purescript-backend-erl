@@ -108,7 +108,7 @@ codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
   _ | Just result <- codegenForeign (codegenExpr codegenEnv) s ->
     result
 
-  Var (Qualified (Just mn) (Ident i)) | mn /= currentModule ->
+  Var (Qualified (Just mn) (Ident i)) | true || mn /= currentModule ->
     S.FunCall (Just (S.atomLiteral $ erlModuleNamePs mn)) (S.atomLiteral i) []
 
   Var (Qualified _ (Ident i)) ->
