@@ -1,7 +1,7 @@
 -- @inline Snapshot.Scoping.noInline never
 module Snapshot.Scoping where
 
-import Prelude
+import Data.Semiring ((+))
 
 noInline :: forall a. a -> a
 noInline a = a

@@ -17,7 +17,7 @@ ex() ->
   (fun
     (N@0) ->
       begin
-        A@1 = case (N@0 =:= 0) of
+        A@1@1 = case (N@0 =:= 0) of
           true ->
             begin
               A@1 = ((snapshot_scoping@ps:noInline())(N@0)),
@@ -26,11 +26,11 @@ ex() ->
           _ ->
             2
         end,
-        case (A@1 =:= 2) of
+        case (A@1@1 =:= 2) of
           true ->
             0;
           _ ->
-            A@1
+            A@1@1
         end
       end
   end).

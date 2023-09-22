@@ -16,6 +16,7 @@ import Data.Set as Set
 import Data.Tuple (Tuple(..), fst, snd, uncurry)
 import Partial.Unsafe (unsafeCrashWith)
 import PureScript.Backend.Erl.Constants as C
+import PureScript.Backend.Erl.Convert.Before (renameRoot)
 import PureScript.Backend.Erl.Convert.Common (erlModuleNameForeign, erlModuleNamePs, tagAtom, toAtomName, toErlVar, toErlVarExpr, toErlVarName, toErlVarWith)
 import PureScript.Backend.Erl.Convert.Foreign (codegenForeign)
 import PureScript.Backend.Erl.Parser (ForeignDecls)
@@ -92,7 +93,7 @@ codegenTopLevelBinding codegenEnv (Tuple (Ident i) n) =
             S.Tupled $ [ tagAtom tag ] <> vars
       ]
     _ ->
-      [ FunctionDefinition i [] $ codegenExpr codegenEnv n ]
+      [ FunctionDefinition i [] $ codegenExpr codegenEnv $ renameRoot n ]
 
 helper :: String -> String -> Int -> NeutralExpr -> Maybe (Array NeutralExpr)
 helper moduleName ident = case _, _ of
