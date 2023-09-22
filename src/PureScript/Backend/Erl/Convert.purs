@@ -2,6 +2,7 @@ module PureScript.Backend.Erl.Convert where
 
 import Prelude
 
+import Control.Alternative (guard)
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NEA
@@ -11,6 +12,7 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (unwrap)
+import Data.Set as Set
 import Data.Tuple (Tuple(..), fst, snd, uncurry)
 import Partial.Unsafe (unsafeCrashWith)
 import PureScript.Backend.Erl.Constants as C
@@ -44,7 +46,8 @@ codegenModule { name, bindings, imports, foreign: foreign_ } foreigns =
       ]
 
     reexports :: Array ErlDefinition
-    reexports = foreigns.exported <#> \(Tuple decl arity) -> do
+    reexports = foreigns.exported >>= \(Tuple decl arity) -> do
+      guard $ Ident decl `Set.member` foreign_
       let
         vars =
           Array.replicate arity unit
@@ -52,7 +55,7 @@ codegenModule { name, bindings, imports, foreign: foreign_ } foreigns =
               toErlVarExpr (Tuple Nothing (Level i))
       -- Uhh this is definitely wrong, at least in some cases
       -- (EffectFn?)
-      FunctionDefinition decl [] $
+      pure $ FunctionDefinition decl [] $
         S.curriedFun vars $
           S.FunCall (Just (S.atomLiteral (erlModuleNameForeign name))) (S.atomLiteral decl) vars
 

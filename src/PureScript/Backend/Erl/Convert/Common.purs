@@ -44,9 +44,8 @@ toErlVarName :: String -> String
 toErlVarName text = case String.uncons text of
   Just { head, tail } ->
     -- Lazy to include start
-    String.replace (String.Pattern "'") (String.Replacement "_@prime") $
-    String.replace (String.Pattern "$") (String.Replacement "_@dollar") $
-
+    String.replaceAll (String.Pattern "'") (String.Replacement "_@prime") $
+    String.replaceAll (String.Pattern "$") (String.Replacement "_@dollar") $
      String.fromCodePointArray (StringCP.toUpper head) <> tail
   Nothing -> "V"
 

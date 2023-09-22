@@ -69,7 +69,12 @@ printDefinition = case _ of
 printExpr :: ErlExpr -> Doc Void
 printExpr = case _ of
   S.Literal (S.Integer n) -> D.text $ show n
-  S.Literal (S.Float f) -> D.text $ show f
+  S.Literal (S.Float f) -> D.text $
+    -- Erlang does not like scientific notation without a decimal point
+    show f # Regex.replace' (Regex.Unsafe.unsafeRegex "^(\\d+)(e[+-]?\\d+)$" mempty) \original ->
+      case _ of
+        [Just integer, Just exponent] -> integer <> ".0" <> exponent
+        _ -> original
   S.Literal (S.String s)
     | isAscii s -> D.text $ "<<\"" <> escapeErlString s <> "\">>"
     | otherwise -> D.text $ "<<\"" <> escapeErlString s <> "\"/utf8>>"
