@@ -2,31 +2,31 @@
 -export([result/0]).
 result() ->
   begin
-    IsOdd@Mutual@0 = (fun
-      (IsOdd@Local@0, IsEven@Local@0) ->
+    IsOdd@Mutual = (fun
+      (IsOdd@Local, IsEven@Local) ->
         (fun
-          (V@1) ->
-            case (V@1 =:= 0) of
+          (V) ->
+            case (V =:= 0) of
               true ->
                 false;
               _ ->
-                ((IsEven@Local@0(IsOdd@Local@0, IsEven@Local@0))((V@1 - 1)))
+                ((IsEven@Local(IsOdd@Local, IsEven@Local))((V - 1)))
             end
         end)
     end),
-    IsEven@Mutual@0 = (fun
-      (IsOdd@Local@0, IsEven@Local@0) ->
+    IsEven@Mutual = (fun
+      (IsOdd@Local, IsEven@Local) ->
         (fun
-          (V@1) ->
-            case (V@1 =:= 0) of
+          (V) ->
+            case (V =:= 0) of
               true ->
                 true;
               _ ->
-                ((IsOdd@Local@0(IsOdd@Local@0, IsEven@Local@0))((V@1 - 1)))
+                ((IsOdd@Local(IsOdd@Local, IsEven@Local))((V - 1)))
             end
         end)
     end),
-    IsOdd@0 = (IsOdd@Mutual@0(IsOdd@Mutual@0, IsEven@Mutual@0)),
-    IsEven@0 = (IsEven@Mutual@0(IsOdd@Mutual@0, IsEven@Mutual@0)),
-    {tuple,(IsEven@0(5)),(IsOdd@0(5))}
+    IsOdd = (IsOdd@Mutual(IsOdd@Mutual, IsEven@Mutual)),
+    IsEven = (IsEven@Mutual(IsOdd@Mutual, IsEven@Mutual)),
+    {tuple,(IsEven(5)),(IsOdd(5))}
   end.

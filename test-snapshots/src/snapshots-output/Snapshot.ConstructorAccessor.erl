@@ -44,10 +44,10 @@ test5() ->
   (fun
     (_) ->
       (fun
-        (V@1) ->
-          case (first =:= (erlang:element(1, V@1))) of
+        (V) ->
+          case (first =:= (erlang:element(1, V))) of
             true ->
-              (erlang:element(2, V@1));
+              (erlang:element(2, V));
             _ ->
               (erlang:throw({fail,<<"Failed pattern match">>}))
           end
@@ -55,24 +55,24 @@ test5() ->
   end).
 test51() ->
   (fun
-    (V@0) ->
-      case (first =:= (erlang:element(1, V@0))) of
+    (V) ->
+      case (first =:= (erlang:element(1, V))) of
         true ->
-          (erlang:element(2, V@0));
+          (erlang:element(2, V));
         _ ->
           (erlang:throw({fail,<<"Failed pattern match">>}))
       end
   end).
 test4() ->
   (fun
-    (V@0) ->
-      case (first =:= (erlang:element(1, V@0))) of
+    (V) ->
+      case (first =:= (erlang:element(1, V))) of
         true ->
-          (erlang:element(2, V@0));
+          (erlang:element(2, V));
         _ ->
-          case (last =:= (erlang:element(1, V@0))) of
+          case (last =:= (erlang:element(1, V))) of
             true ->
-              (erlang:element(2, V@0));
+              (erlang:element(2, V));
             _ ->
               (erlang:throw({fail,<<"Failed pattern match">>}))
           end
@@ -80,18 +80,18 @@ test4() ->
   end).
 test3() ->
   (fun
-    (V@0) ->
-      case ((erlang:element(2, V@0)) < (erlang:element(4, V@0))) of
+    (V) ->
+      case ((erlang:element(2, V)) < (erlang:element(4, V))) of
         true ->
-          (erlang:element(2, V@0));
+          (erlang:element(2, V));
         _ ->
-          (erlang:element(3, V@0))
+          (erlang:element(3, V))
       end
   end).
 test2() ->
   (fun
-    (V@0) ->
-      (erlang:element(2, V@0))
+    (V) ->
+      (erlang:element(2, V))
   end).
 test1() ->
   (fun
@@ -100,8 +100,8 @@ test1() ->
   end).
 'don\'tInlineMeMe'() ->
   (fun
-    (A@0) ->
-      A@0
+    (A) ->
+      A
   end).
 result() ->
   #{test1 => (((snapshot_constructorAccessor@ps:'don\'tInlineMeMe'())((snapshot_constructorAccessor@ps:test1())))((snapshot_constructorAccessor@ps:'NoArgs'()))),

@@ -2,14 +2,14 @@
 -export([result/0]).
 result() ->
   begin
-    Fib@0 = (fun
-      Fib@0 (V@1) ->
-        case (V@1 < 2) of
+    Fib = (fun
+      Fib (V) ->
+        case (V < 2) of
           true ->
-            V@1;
+            V;
           _ ->
-            ((Fib@0((V@1 - 1))) + (Fib@0((V@1 - 2))))
+            ((Fib((V - 1))) + (Fib((V - 2))))
         end
     end),
-    (Fib@0(6))
+    (Fib(6))
   end.

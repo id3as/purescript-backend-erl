@@ -30,14 +30,17 @@ toAtomName text = case String.uncons text of
   Nothing -> text
 
 toErlVar :: Maybe Ident -> Level -> String
-toErlVar _ (Level lvl) | lvl < 0 = "_"
-toErlVar text (Level lvl) =
-  maybe "V" (toErlVarName <<< unwrap) text <> "@" <> show lvl
+toErlVar text lvl =
+  maybe "V" (toErlVarName <<< unwrap) text # addLevel lvl
+
+addLevel :: Level -> String -> String
+addLevel (Level 0) = identity
+addLevel (Level lvl) | lvl < 0 = const "_"
+addLevel (Level lvl) = (_ <> ("@" <> show lvl))
 
 toErlVarWith :: String -> Maybe Ident -> Level -> String
-toErlVarWith _ _ (Level lvl) | lvl < 0 = "_"
-toErlVarWith suffix text (Level lvl) =
-  maybe "V" (toErlVarName <<< unwrap) text <> "@" <> suffix <> "@" <> show lvl
+toErlVarWith suffix text lvl =
+  maybe "V" (toErlVarName <<< unwrap) text <> "@" <> suffix # addLevel lvl
 
 -- String.replace (String.Pattern ".") (String.Replacement "_") (unwrap name)
 --   T.intercalate "_" (toAtomName <$> T.splitOn "." name)

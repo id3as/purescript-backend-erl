@@ -2,17 +2,17 @@
 -export([result/0]).
 result() ->
   begin
-    FibAnd@Rec@0 = (fun
-      FibAnd@Rec@0 () ->
+    FibAnd@Rec = (fun
+      FibAnd@Rec () ->
         {tuple,<<"fib">>,(fun
-          (N@1) ->
-            case (N@1 < 2) of
+          (N) ->
+            case (N < 2) of
               true ->
-                N@1;
+                N;
               _ ->
-                (((erlang:element(3, (FibAnd@Rec@0())))((N@1 - 1))) + ((erlang:element(3, (FibAnd@Rec@0())))((N@1 - 2))))
+                (((erlang:element(3, (FibAnd@Rec())))((N - 1))) + ((erlang:element(3, (FibAnd@Rec())))((N - 2))))
             end
         end)}
     end),
-    {tuple,(erlang:element(2, (FibAnd@Rec@0()))),((erlang:element(3, (FibAnd@Rec@0())))(6))}
+    {tuple,(erlang:element(2, (FibAnd@Rec()))),((erlang:element(3, (FibAnd@Rec())))(6))}
   end.

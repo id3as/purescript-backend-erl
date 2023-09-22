@@ -2,40 +2,40 @@
 -export([freshE/0, 'exE\''/0, exE/0]).
 freshE() ->
   (fun
-    (DictMonadState@0) ->
-      ((maps:get(state, DictMonadState@0))((fun
-        (S@1) ->
-          {tuple,S@1,(S@1 + 1)}
+    (DictMonadState) ->
+      ((maps:get(state, DictMonadState))((fun
+        (S) ->
+          {tuple,S,(S + 1)}
       end)))
   end).
 'exE\''() ->
   (fun
-    (S@0) ->
+    (S) ->
       begin
-        V@1 = (S@0 + 1),
+        V = (S + 1),
         (fun
           () ->
             begin
-              _ = (((effect_console@ps:log())(((data_show@ps:showIntImpl())(S@0))))()),
-              _ = (((effect_console@ps:log())(((data_show@ps:showIntImpl())(V@1))))()),
-              {tuple,#{a => S@0,
-              b => V@1},(V@1 + 1)}
+              _ = (((effect_console@ps:log())(((data_show@ps:showIntImpl())(S))))()),
+              _ = (((effect_console@ps:log())(((data_show@ps:showIntImpl())(V))))()),
+              {tuple,#{a => S,
+              b => V},(V + 1)}
             end
         end)
       end
   end).
 exE() ->
   (fun
-    (S@0) ->
+    (S) ->
       begin
-        V@1 = (S@0 + 1),
+        V = (S + 1),
         (fun
           () ->
             begin
-              _ = (((effect_console@ps:log())(((data_show@ps:showIntImpl())(S@0))))()),
-              _ = (((effect_console@ps:log())(((data_show@ps:showIntImpl())(V@1))))()),
-              {tuple,#{a => S@0,
-              b => V@1},(V@1 + 1)}
+              _ = (((effect_console@ps:log())(((data_show@ps:showIntImpl())(S))))()),
+              _ = (((effect_console@ps:log())(((data_show@ps:showIntImpl())(V))))()),
+              {tuple,#{a => S,
+              b => V},(V + 1)}
             end
         end)
       end

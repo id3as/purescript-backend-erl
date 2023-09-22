@@ -2,17 +2,17 @@
 -export([f/0, g/0]).
 f() ->
   (fun
-    (X@0) ->
+    (X) ->
       (fun
-        (Y@1) ->
-          (array:from_list([X@0,Y@1,X@0,Y@1,X@0]))
+        (Y) ->
+          (array:from_list([X,Y,X,Y,X]))
       end)
   end).
 g() ->
   (fun
-    (X@0) ->
+    (X) ->
       (fun
-        (Y@1) ->
-          (((snapshot_function@ps:f())(X@0))(Y@1))
+        (Y) ->
+          (((snapshot_function@ps:f())(X))(Y))
       end)
   end).

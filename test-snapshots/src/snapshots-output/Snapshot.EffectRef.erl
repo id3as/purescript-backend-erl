@@ -4,37 +4,37 @@ positionZero() ->
   ((effect_ref@ps:new())(0)).
 onLet() ->
   (fun
-    (X@0) ->
+    (X) ->
       begin
-        A@1 = (X@0 + X@0),
-        ((effect_ref@ps:new())(((A@1 + A@1) + X@0)))
+        A = (X + X),
+        ((effect_ref@ps:new())(((A + A) + X)))
       end
   end).
 onLetTest() ->
   begin
-    V@0 = ((snapshot_effectRef@ps:onLet())(1)),
+    V = ((snapshot_effectRef@ps:onLet())(1)),
     (fun
       () ->
         begin
-          N@1 = (V@0()),
-          V@2 = (((effect_ref@ps:read())(N@1))()),
-          (((test_assert@ps:assert())((V@2 =:= 5)))())
+          N = (V()),
+          V@1 = (((effect_ref@ps:read())(N))()),
+          (((test_assert@ps:assert())((V@1 =:= 5)))())
         end
     end)
   end.
 basicTest() ->
   begin
-    V@0 = ((effect_ref@ps:new())(0)),
+    V = ((effect_ref@ps:new())(0)),
     (fun
       () ->
         begin
-          N@1 = (V@0()),
+          N = (V()),
           _ = ((((effect_ref@ps:modify_())((fun
-            (V@2) ->
-              (V@2 + 1)
-          end)))(N@1))()),
-          V@3 = (((effect_ref@ps:read())(N@1))()),
-          (((test_assert@ps:assert())((V@3 =:= 1)))())
+            (V@1) ->
+              (V@1 + 1)
+          end)))(N))()),
+          V@1 = (((effect_ref@ps:read())(N))()),
+          (((test_assert@ps:assert())((V@1 =:= 1)))())
         end
     end)
   end.

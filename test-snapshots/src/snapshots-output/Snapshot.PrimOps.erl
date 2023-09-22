@@ -2,33 +2,33 @@
 -export([stringOps/0, numberOps/0, intOps/0, booleanOps/0]).
 stringOps() ->
   (fun
-    (X@0) ->
+    (X) ->
       (fun
-        (Y@1) ->
-          (array:from_list([<<X@0/binary, Y@1/binary>>]))
+        (Y) ->
+          (array:from_list([<<X/binary, Y/binary>>]))
       end)
   end).
 numberOps() ->
   (fun
-    (X@0) ->
+    (X) ->
       (fun
-        (Y@1) ->
-          (array:from_list([(X@0 + Y@1),(X@0 / Y@1),(X@0 * Y@1),(X@0 - Y@1)]))
+        (Y) ->
+          (array:from_list([(X + Y),(X / Y),(X * Y),(X - Y)]))
       end)
   end).
 intOps() ->
   (fun
-    (X@0) ->
+    (X) ->
       (fun
-        (Y@1) ->
-          (array:from_list([(X@0 band Y@1),(X@0 bor Y@1),(X@0 bsr Y@1),(X@0 bsl Y@1),(X@0 bsr Y@1),(X@0 xor Y@1),(X@0 + Y@1),(X@0 div Y@1),(X@0 * Y@1),(X@0 - Y@1)]))
+        (Y) ->
+          (array:from_list([(X band Y),(X bor Y),(X bsr Y),(X bsl Y),(X bsr Y),(X xor Y),(X + Y),(X div Y),(X * Y),(X - Y)]))
       end)
   end).
 booleanOps() ->
   (fun
-    (X@0) ->
+    (X) ->
       (fun
-        (Y@1) ->
-          (array:from_list([(X@0 andalso Y@1),(X@0 orelse Y@1)]))
+        (Y) ->
+          (array:from_list([(X andalso Y),(X orelse Y)]))
       end)
   end).

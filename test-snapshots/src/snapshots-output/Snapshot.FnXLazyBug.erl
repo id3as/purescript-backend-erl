@@ -2,35 +2,35 @@
 -export([zipWith4/0, result/0]).
 zipWith4() ->
   (fun
-    (F@0) ->
+    (F) ->
       (fun
-        (As@1) ->
+        (As) ->
           (fun
-            (Bs@2) ->
+            (Bs) ->
               (fun
-                (Cs@3) ->
+                (Cs) ->
                   (fun
-                    (Ds@4) ->
+                    (Ds) ->
                       begin
-                        Go@Rec@5 = (fun
-                          Go@Rec@5 () ->
+                        Go@Rec = (fun
+                          Go@Rec () ->
                             (fun
-                              (Acc@6, As1@7, Bs1@8, Cs1@9, Ds1@10) ->
+                              (Acc, As1, Bs1, Cs1, Ds1) ->
                                 begin
-                                  V@11 = ((erl_data_list_types@ps:uncons())(Ds1@10)),
-                                  V1@12 = ((erl_data_list_types@ps:uncons())(Cs1@9)),
-                                  V2@13 = ((erl_data_list_types@ps:uncons())(Bs1@8)),
-                                  V3@14 = ((erl_data_list_types@ps:uncons())(As1@7)),
-                                  case ((just =:= (erlang:element(1, V3@14))) andalso ((just =:= (erlang:element(1, V2@13))) andalso ((just =:= (erlang:element(1, V1@12))) andalso (just =:= (erlang:element(1, V@11)))))) of
+                                  V = ((erl_data_list_types@ps:uncons())(Ds1)),
+                                  V1 = ((erl_data_list_types@ps:uncons())(Cs1)),
+                                  V2 = ((erl_data_list_types@ps:uncons())(Bs1)),
+                                  V3 = ((erl_data_list_types@ps:uncons())(As1)),
+                                  case ((just =:= (erlang:element(1, V3))) andalso ((just =:= (erlang:element(1, V2))) andalso ((just =:= (erlang:element(1, V1))) andalso (just =:= (erlang:element(1, V)))))) of
                                     true ->
-                                      ((Go@Rec@5())([((((F@0((maps:get(head, (erlang:element(2, V3@14))))))((maps:get(head, (erlang:element(2, V2@13))))))((maps:get(head, (erlang:element(2, V1@12))))))((maps:get(head, (erlang:element(2, V@11))))))|Acc@6], (maps:get(tail, (erlang:element(2, V3@14)))), (maps:get(tail, (erlang:element(2, V2@13)))), (maps:get(tail, (erlang:element(2, V1@12)))), (maps:get(tail, (erlang:element(2, V@11))))));
+                                      ((Go@Rec())([((((F((maps:get(head, (erlang:element(2, V3))))))((maps:get(head, (erlang:element(2, V2))))))((maps:get(head, (erlang:element(2, V1))))))((maps:get(head, (erlang:element(2, V))))))|Acc], (maps:get(tail, (erlang:element(2, V3)))), (maps:get(tail, (erlang:element(2, V2)))), (maps:get(tail, (erlang:element(2, V1)))), (maps:get(tail, (erlang:element(2, V))))));
                                     _ ->
-                                      ((erl_data_list@ps:reverse())(Acc@6))
+                                      ((erl_data_list@ps:reverse())(Acc))
                                   end
                                 end
                             end)
                         end),
-                        ((Go@Rec@5())([], As@1, Bs@2, Cs@3, Ds@4))
+                        ((Go@Rec())([], As, Bs, Cs, Ds))
                       end
                   end)
               end)
@@ -39,14 +39,14 @@ zipWith4() ->
   end).
 result() ->
   ((((((snapshot_fnXLazyBug@ps:zipWith4())((fun
-    (A@0) ->
+    (A) ->
       (fun
-        (B@1) ->
+        (B) ->
           (fun
-            (C@2) ->
+            (C) ->
               (fun
-                (D@3) ->
-                  ((A@0 * B@1) + (C@2 * D@3))
+                (D) ->
+                  ((A * B) + (C * D))
               end)
           end)
       end)

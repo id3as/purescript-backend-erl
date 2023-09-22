@@ -6,9 +6,9 @@ result() ->
   (snapshot_import_impl@ps:fortyTwo()).
 addImpl() ->
   (fun
-    (V@0) ->
+    (V) ->
       (fun
         (V@1) ->
-          (snapshot_import_impl@foreign:addImpl(V@0, V@1))
+          (snapshot_import_impl@foreign:addImpl(V, V@1))
       end)
   end).

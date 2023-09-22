@@ -2,10 +2,10 @@
 -export([testAccessorGetIndex/0, result/0]).
 testAccessorGetIndex() ->
   (fun
-    (V@0) ->
-      case ((array:size(V@0)) =:= 1) of
+    (V) ->
+      case ((array:size(V)) =:= 1) of
         true ->
-          (array:get(0, V@0));
+          (array:get(0, V));
         _ ->
           0
       end

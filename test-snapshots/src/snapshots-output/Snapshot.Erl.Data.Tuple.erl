@@ -2,24 +2,24 @@
 -export([uncurriedMore/0, uncurried/0, tf2/0, t5/0, t2/0, sndt2/0, r5/0, result/0, fsttf2/0, fstt2/0]).
 uncurriedMore() ->
   (fun
-    ({A@0,B@1,C@2,D@3,E@4}) ->
+    ({A,B,C,D,E}) ->
       (fun
-        (F@5) ->
+        (F) ->
           (fun
-            ({G@6,H@7}) ->
-              {((A@0 + B@1) + G@6),<<C@2/binary, D@3/binary, (F@5(E@4))/binary, H@7/binary>>}
+            ({G,H}) ->
+              {((A + B) + G),<<C/binary, D/binary, (F(E))/binary, H/binary>>}
           end)
       end)
   end).
 uncurried() ->
   (fun
-    ({A@0,B@1,C@2,D@3,_}) ->
-      {(A@0 + B@1),<<C@2/binary, D@3/binary>>}
+    ({A,B,C,D,_}) ->
+      {(A + B),<<C/binary, D/binary>>}
   end).
 tf2() ->
   {(fun
-    (I@0) ->
-      (I@0 - 5)
+    (I) ->
+      (I - 5)
   end),<<"7">>}.
 t5() ->
   {3,4,<<"hi">>,<<"there">>,$V}.

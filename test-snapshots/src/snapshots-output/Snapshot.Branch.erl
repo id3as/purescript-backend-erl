@@ -2,18 +2,18 @@
 -export([i/0, h/0, g/0, f/0, result/0, dontInlineMe/0]).
 i() ->
   (fun
-    (V@0) ->
+    (V) ->
       (fun
-        (V1@1) ->
-          case V@0 of
+        (V1) ->
+          case V of
             true ->
-              (not V1@1);
+              (not V1);
             _ ->
-              case (not V1@1) of
+              case (not V1) of
                 true ->
                   true;
                 _ ->
-                  case V1@1 of
+                  case V1 of
                     true ->
                       false;
                     _ ->
@@ -25,8 +25,8 @@ i() ->
   end).
 h() ->
   (fun
-    (V@0) ->
-      case (V@0 =:= 3.14) of
+    (V) ->
+      case (V =:= 3.14) of
         true ->
           3.14159;
         _ ->
@@ -35,16 +35,16 @@ h() ->
   end).
 g() ->
   (fun
-    (V@0) ->
-      case (V@0 =:= 0) of
+    (V) ->
+      case (V =:= 0) of
         true ->
           1;
         _ ->
-          case (V@0 =:= 1) of
+          case (V =:= 1) of
             true ->
               2;
             _ ->
-              case (V@0 =:= 2) of
+              case (V =:= 2) of
                 true ->
                   3;
                 _ ->
@@ -55,16 +55,16 @@ g() ->
   end).
 f() ->
   (fun
-    (X@0) ->
+    (X) ->
       (fun
-        (Y@1) ->
+        (Y) ->
           (fun
-            (Z@2) ->
-              case X@0 of
+            (Z) ->
+              case X of
                 true ->
-                  case Y@1 of
+                  case Y of
                     true ->
-                      case Z@2 of
+                      case Z of
                         true ->
                           0;
                         _ ->
@@ -95,6 +95,6 @@ result() ->
   h => 3.14159}.
 dontInlineMe() ->
   (fun
-    (A@0) ->
-      A@0
+    (A) ->
+      A
   end).

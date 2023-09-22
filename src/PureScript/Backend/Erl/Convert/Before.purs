@@ -11,7 +11,8 @@ import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Newtype (unwrap, wrap)
 import Data.Profunctor (dimap)
-import Data.Traversable (class Traversable, foldr, for, traverse)
+import Data.Set as Set
+import Data.Traversable (class Foldable, class Traversable, foldr, for, maximum, traverse)
 import Data.Tuple (Tuple(..), fst, snd, uncurry)
 import Partial.Unsafe (unsafeCrashWith)
 import PureScript.Backend.Optimizer.CoreFn (Ident(..))
@@ -25,7 +26,7 @@ type Renamings =
   Map Name Rename
 
 type Found =
-  { duplicates :: Map Name Int
+  { duplicates :: Map Ident Int
   , usages :: Map Rename Int
   }
 
@@ -53,21 +54,27 @@ isUnused rename = gets $ _.usages
 
 -- Anonymous variables need to be treated the same as variables named `v`
 -- for the purpose of this analysis
-ensure :: Name -> Name
-ensure (Tuple Nothing lvl) = Tuple (Just (Ident "v")) lvl
-ensure i = i
+ensure :: Name -> Ident
+ensure = fst >>> fromMaybe (Ident "v")
 
-choose :: Name -> Renaming Rename
-choose = ensure >>> \name -> state \found ->
-  case Map.lookup name found.duplicates of
-    Nothing -> Tuple name found { duplicates = Map.insert name 1 found.duplicates }
-    Just i -> Tuple (newName name i) found { duplicates = Map.insert name (i+1) found.duplicates }
+choose :: Ident -> Renaming Rename
+choose name = state \found ->
+  let i = fromMaybe 0 (Map.lookup name found.duplicates)
+  in Tuple (newName name i) found { duplicates = Map.insert name (i+1) found.duplicates }
 
-newName :: Name -> Int -> Rename
-newName (Tuple Nothing lvl) i =
-  Tuple (Just (Ident ("v@" <> show i))) lvl
-newName (Tuple (Just (Ident s)) lvl) i =
-  Tuple (Just (Ident (s <> "@" <> show i))) lvl
+chooseMany :: forall f. Foldable f => f Ident -> Renaming Level
+chooseMany names = state \found ->
+  let
+    set = Set.toMap $ Set.fromFoldable names
+    dups = found.duplicates <* set
+    lvl = fromMaybe 0 (maximum dups)
+    newDups = Map.union (lvl <$ set) found.duplicates
+  in
+    Tuple (Level lvl) found { duplicates = newDups }
+
+newName :: Ident -> Int -> Rename
+newName i lvl =
+  Tuple (Just i) (Level lvl)
 
 binding ::
   forall f b.
@@ -75,11 +82,25 @@ binding ::
   f Name -> Renaming b ->
   Renaming (Tuple (f Rename) b)
 binding names inner = do
-  renamings <- for names \name -> do
-    Tuple name <$> choose name
-  let renaming = local $ Map.union $ Map.fromFoldable renamings
-  let renames = map snd renamings
+  mapping <- for names \name -> do
+    Tuple name <$> choose (ensure name)
+  let renaming = local $ Map.union $ Map.fromFoldable mapping
+  let renames = map snd mapping
   flip Tuple <$> renaming inner <*> traverse isUnused renames
+
+bindRec ::
+  forall f b.
+    Traversable f =>
+  f Ident ->
+  Level ->
+  Renaming b ->
+  Renaming (Tuple Level b)
+bindRec idents lvl inner = do
+  lvl' <- chooseMany idents
+  let
+    renaming = local $ Map.union $ Map.fromFoldable $ idents <#> \ident ->
+      Tuple (Tuple (Just ident) lvl) (Tuple (Just ident) lvl')
+  Tuple lvl' <$> renaming inner
 
 scopedBinding ::
   forall f b.
@@ -95,23 +116,11 @@ renameTree =  dimap unwrap (map wrap) case _ of
   UncurriedAbs names e -> uncurry UncurriedAbs <$> scopedBinding names (renameTree e)
   UncurriedEffectAbs names e -> uncurry UncurriedEffectAbs <$> scopedBinding names (renameTree e)
   LetRec l identsAndValues e -> do
-    let
-      handle (Tuple ident value) more = do
-        Tuple (Identity (Tuple identM l')) (Tuple value' (Tuple more' e')) <-
-          binding (Identity (Tuple (Just ident) l))
-            (Tuple <$> renameTree value <*> more)
-        let
-          ident' = case identM of
-            Nothing -> unsafeCrashWith "Lost identifier"
-            _ | l' /= l -> unsafeCrashWith "Level changed"
-            Just i -> i
-        pure $ Tuple ([Tuple ident' value'] <> more') e'
-    Tuple identsAndValuesM e' <- foldr handle (Tuple [] <$> renameTree e) identsAndValues
-    let
-      identsAndValues' = case NEA.fromArray identsAndValuesM of
-        Nothing -> unsafeCrashWith "Empty bindings"
-        Just x -> x
-    pure $ LetRec l identsAndValues' e'
+    let idents = fst <$> identsAndValues
+    Tuple l' (Tuple values e') <- bindRec idents l do
+      Tuple <$> traverse (renameTree <<< snd) identsAndValues <*> renameTree e
+    let identsAndValues' = NEA.zip idents values
+    pure $ LetRec l' identsAndValues' e'
   Let i l v e -> ado
     v' <- renameTree v
     Tuple (Identity (Tuple i' l')) e' <-

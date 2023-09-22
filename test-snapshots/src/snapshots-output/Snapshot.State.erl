@@ -2,71 +2,71 @@
 -export(['State'/0, functorState/0, freshMTL/0, freshE/0, fresh/0, exMTL/0, 'exE\''/0, exE/0, monadState/0, bindState/0, applyState/0, applicativeState/0, ex/0]).
 'State'() ->
   (fun
-    (X@0) ->
-      X@0
+    (X) ->
+      X
   end).
 functorState() ->
   #{map => (fun
-    (F@0) ->
+    (F) ->
       (fun
-        (V@1) ->
+        (V) ->
           (fun
-            (S@2) ->
+            (S) ->
               begin
-                V1@3 = (V@1(S@2)),
-                {tuple,(F@0((erlang:element(2, V1@3)))),(erlang:element(3, V1@3))}
+                V1 = (V(S)),
+                {tuple,(F((erlang:element(2, V1)))),(erlang:element(3, V1))}
               end
           end)
       end)
   end)}.
 freshMTL() ->
   (fun
-    (X@0) ->
-      {tuple,X@0,(X@0 + 1)}
+    (X) ->
+      {tuple,X,(X + 1)}
   end).
 freshE() ->
   (fun
-    (DictMonadState@0) ->
-      ((maps:get(state, DictMonadState@0))((fun
-        (S@1) ->
-          {tuple,S@1,(S@1 + 1)}
+    (DictMonadState) ->
+      ((maps:get(state, DictMonadState))((fun
+        (S) ->
+          {tuple,S,(S + 1)}
       end)))
   end).
 fresh() ->
   (fun
-    (S@0) ->
-      {tuple,S@0,(S@0 + 1)}
+    (S) ->
+      {tuple,S,(S + 1)}
   end).
 exMTL() ->
   (fun
-    (S@0) ->
+    (S) ->
       begin
-        V@1 = (S@0 + 1),
-        {tuple,#{a => S@0,
-        b => V@1},(V@1 + 1)}
+        V = (S + 1),
+        {tuple,#{a => S,
+        b => V},(V + 1)}
       end
   end).
 'exE\''() ->
   (fun
-    (S@0) ->
+    (S) ->
       begin
-        V@1 = (S@0 + 1),
+        V = (S + 1),
         (fun
           () ->
-            {tuple,#{a => S@0,
-            b => V@1},(V@1 + 1)}
+            {tuple,#{a => S,
+            b => V},(V + 1)}
         end)
       end
   end).
 exE() ->
   (fun
-    (S@0) ->
+    (S) ->
       begin
-        V@1 = (S@0 + 1),
+        V = (S + 1),
         (fun
           () ->
-            {tuple,#{a => S@0,
-            b => V@1},(V@1 + 1)}
+            {tuple,#{a => S,
+            b => V},(V + 1)}
         end)
       end
   end).
@@ -81,14 +81,14 @@ monadState() ->
   end)}.
 bindState() ->
   #{bind => (fun
-    (V@0) ->
+    (V) ->
       (fun
-        (F@1) ->
+        (F) ->
           (fun
-            (S@2) ->
+            (S) ->
               begin
-                V1@3 = (V@0(S@2)),
-                ((F@1((erlang:element(2, V1@3))))((erlang:element(3, V1@3))))
+                V1 = (V(S)),
+                ((F((erlang:element(2, V1))))((erlang:element(3, V1))))
               end
           end)
       end)
@@ -99,15 +99,15 @@ bindState() ->
   end)}.
 applyState() ->
   #{apply => (fun
-    (F@0) ->
+    (F) ->
       (fun
-        (A@1) ->
+        (A) ->
           (fun
-            (S@2) ->
+            (S) ->
               begin
-                V1@3 = (F@0(S@2)),
-                V1@4 = (A@1((erlang:element(3, V1@3)))),
-                (((maps:get(pure, (snapshot_state@ps:applicativeState())))(((erlang:element(2, V1@3))((erlang:element(2, V1@4))))))((erlang:element(3, V1@4))))
+                V1 = (F(S)),
+                V1@1 = (A((erlang:element(3, V1)))),
+                (((maps:get(pure, (snapshot_state@ps:applicativeState())))(((erlang:element(2, V1))((erlang:element(2, V1@1))))))((erlang:element(3, V1@1))))
               end
           end)
       end)
@@ -118,10 +118,10 @@ applyState() ->
   end)}.
 applicativeState() ->
   #{pure => (fun
-    (A@0) ->
+    (A) ->
       (fun
-        (S@1) ->
-          {tuple,A@0,S@1}
+        (S) ->
+          {tuple,A,S}
       end)
   end),
   'Apply0' => (fun
@@ -130,10 +130,10 @@ applicativeState() ->
   end)}.
 ex() ->
   (fun
-    (S@0) ->
+    (S) ->
       begin
-        V@1 = (S@0 + 1),
-        {tuple,#{a => S@0,
-        b => V@1},(V@1 + 1)}
+        V = (S + 1),
+        {tuple,#{a => S,
+        b => V},(V + 1)}
       end
   end).

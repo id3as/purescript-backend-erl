@@ -2,41 +2,41 @@
 -export([stringComparison/0, numberComparison/0, integerComparison/0, charComparison/0, booleanComparison/0]).
 stringComparison() ->
   (fun
-    (X@0) ->
+    (X) ->
       (fun
-        (Y@1) ->
-          (array:from_list([(X@0 =:= Y@1),(X@0 =/= Y@1),(X@0 < Y@1),(X@0 =< Y@1),(X@0 >= Y@1),(X@0 > Y@1)]))
+        (Y) ->
+          (array:from_list([(X =:= Y),(X =/= Y),(X < Y),(X =< Y),(X >= Y),(X > Y)]))
       end)
   end).
 numberComparison() ->
   (fun
-    (X@0) ->
+    (X) ->
       (fun
-        (Y@1) ->
-          (array:from_list([(X@0 =:= Y@1),(X@0 =/= Y@1),(X@0 < Y@1),(X@0 =< Y@1),(X@0 >= Y@1),(X@0 > Y@1)]))
+        (Y) ->
+          (array:from_list([(X =:= Y),(X =/= Y),(X < Y),(X =< Y),(X >= Y),(X > Y)]))
       end)
   end).
 integerComparison() ->
   (fun
-    (X@0) ->
+    (X) ->
       (fun
-        (Y@1) ->
-          (array:from_list([(X@0 =:= Y@1),(X@0 =/= Y@1),(X@0 < Y@1),(X@0 =< Y@1),(X@0 >= Y@1),(X@0 > Y@1)]))
+        (Y) ->
+          (array:from_list([(X =:= Y),(X =/= Y),(X < Y),(X =< Y),(X >= Y),(X > Y)]))
       end)
   end).
 charComparison() ->
   (fun
-    (X@0) ->
+    (X) ->
       (fun
-        (Y@1) ->
-          (array:from_list([(X@0 =:= Y@1),(X@0 =/= Y@1),(X@0 < Y@1),(X@0 =< Y@1),(X@0 >= Y@1),(X@0 > Y@1)]))
+        (Y) ->
+          (array:from_list([(X =:= Y),(X =/= Y),(X < Y),(X =< Y),(X >= Y),(X > Y)]))
       end)
   end).
 booleanComparison() ->
   (fun
-    (X@0) ->
+    (X) ->
       (fun
-        (Y@1) ->
-          (array:from_list([(X@0 =:= Y@1),(X@0 =/= Y@1),(X@0 < Y@1),(X@0 =< Y@1),(X@0 >= Y@1),(X@0 > Y@1)]))
+        (Y) ->
+          (array:from_list([(X =:= Y),(X =/= Y),(X < Y),(X =< Y),(X >= Y),(X > Y)]))
       end)
   end).

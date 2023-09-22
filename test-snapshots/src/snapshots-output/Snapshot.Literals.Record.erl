@@ -2,6 +2,6 @@
 -export([recordAccess/0]).
 recordAccess() ->
   (fun
-    (V@0) ->
-      (maps:get(fooBarBaz, V@0))
+    (V) ->
+      (maps:get(fooBarBaz, V))
   end).

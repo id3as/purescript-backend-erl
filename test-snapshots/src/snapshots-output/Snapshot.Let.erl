@@ -2,48 +2,48 @@
 -export([letRecursive/0, letChain/0, isOdd/0, isEven/0]).
 letRecursive() ->
   (fun
-    (X@0) ->
-      case (X@0 =:= 0) of
+    (X) ->
+      case (X =:= 0) of
         true ->
           0;
         _ ->
-          ((snapshot_let@ps:letRecursive())((X@0 - 1)))
+          ((snapshot_let@ps:letRecursive())((X - 1)))
       end
   end).
 letChain() ->
   (fun
-    (X@0) ->
+    (X) ->
       begin
-        A@1 = (X@0 + X@0),
-        B@2 = (A@1 + A@1),
-        C@3 = (B@2 + B@2),
-        (((A@1 + B@2) + C@3) + (C@3 * C@3))
+        A = (X + X),
+        B = (A + A),
+        C = (B + B),
+        (((A + B) + C) + (C * C))
       end
   end).
 isOdd() ->
   (fun
-    (X@0) ->
-      case (X@0 =:= 1) of
+    (X) ->
+      case (X =:= 1) of
         true ->
           false;
         _ ->
-          ((snapshot_let@ps:isEven())((X@0 - 1)))
+          ((snapshot_let@ps:isEven())((X - 1)))
       end
   end).
 isEven() ->
   (fun
-    (X@0) ->
-      case (X@0 =:= 0) of
+    (X) ->
+      case (X =:= 0) of
         true ->
           true;
         _ ->
           begin
-            V@1 = (X@0 - 1),
-            case (V@1 =:= 1) of
+            V = (X - 1),
+            case (V =:= 1) of
               true ->
                 false;
               _ ->
-                ((snapshot_let@ps:isEven())((V@1 - 1)))
+                ((snapshot_let@ps:isEven())((V - 1)))
             end
           end
       end

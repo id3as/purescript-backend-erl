@@ -10,11 +10,11 @@
   end).
 lastComponentIsRun() ->
   begin
-    V@0 = ((snapshot_effect@ps:'don\'tInlineMeMe'())(<<"a">>)),
+    V = ((snapshot_effect@ps:'don\'tInlineMeMe'())(<<"a">>)),
     (fun
       () ->
         begin
-          _ = (V@0()),
+          _ = (V()),
           _ = (((snapshot_effect@ps:'don\'tInlineMeMe'())(<<"b">>))()),
           (((snapshot_effect@ps:'don\'tInlineMeMe'())(<<"c">>))())
         end
@@ -22,13 +22,13 @@ lastComponentIsRun() ->
   end.
 lastPureIsUnwrapped() ->
   begin
-    V@0 = ((snapshot_effect@ps:'don\'tInlineMeMe'())(<<"a">>)),
+    V = ((snapshot_effect@ps:'don\'tInlineMeMe'())(<<"a">>)),
     (fun
       () ->
         begin
-          Value@1 = (V@0()),
+          Value = (V()),
           _ = (((snapshot_effect@ps:'don\'tInlineMeMe'())(<<"b">>))()),
-          Value@1
+          Value
         end
     end)
   end.

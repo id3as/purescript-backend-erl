@@ -2,13 +2,13 @@
 -export(['NCtor'/0, 'NewtypeCtor\''/0, 'F1'/0, 'F2'/0, 'DCtor'/0, 'Ctor\''/0, useNewtypeType/0, useNewtypeCtor/0, useDataType/0, useDataCtor/0, normal/0, useNormal/0, 'instanceName\''/0, useNormal1/0, useInstance/0, ignore/0, useClass/0, 'foo\'oo'/0, useFooPrime3/0, 'foo\'\''/0, useFooPrime2/0, 'foo\''/0, useFooPrime1/0, result/0, foo/0, 'classMember\''/0, useMember/0]).
 'NCtor'() ->
   (fun
-    (X@0) ->
-      X@0
+    (X) ->
+      X
   end).
 'NewtypeCtor\''() ->
   (fun
-    (X@0) ->
-      X@0
+    (X) ->
+      X
   end).
 'F1'() ->
   {f1}.
@@ -26,13 +26,13 @@
   end).
 useNewtypeType() ->
   (fun
-    (I@0) ->
-      I@0
+    (I) ->
+      I
   end).
 useNewtypeCtor() ->
   (fun
-    (I@0) ->
-      I@0
+    (I) ->
+      I
   end).
 useDataType() ->
   (fun
@@ -41,28 +41,28 @@ useDataType() ->
   end).
 useDataCtor() ->
   (fun
-    (S@0) ->
-      {'ctor\'',S@0,4}
+    (S) ->
+      {'ctor\'',S,4}
   end).
 normal() ->
   (fun
-    (Dict@0) ->
-      (maps:get(normal, Dict@0))
+    (Dict) ->
+      (maps:get(normal, Dict))
   end).
 useNormal() ->
   (fun
-    (DictNormal@0) ->
+    (DictNormal) ->
       begin
-        Normal1@1 = ((snapshot_prime@ps:normal())(DictNormal@0)),
+        Normal1 = ((snapshot_prime@ps:normal())(DictNormal)),
         (fun
-          (DictNormal1@2) ->
+          (DictNormal1) ->
             begin
-              Normal2@3 = ((snapshot_prime@ps:normal())(DictNormal1@2)),
+              Normal2 = ((snapshot_prime@ps:normal())(DictNormal1)),
               (fun
-                (A@4) ->
+                (A) ->
                   (fun
-                    (B@5) ->
-                      <<(Normal1@1(A@4))/binary, (Normal2@3(B@5))/binary>>
+                    (B) ->
+                      <<(Normal1(A))/binary, (Normal2(B))/binary>>
                   end)
               end)
             end
@@ -71,12 +71,12 @@ useNormal() ->
   end).
 'instanceName\''() ->
   #{normal => (fun
-    (V@0) ->
-      case (f1 =:= (erlang:element(1, V@0))) of
+    (V) ->
+      case (f1 =:= (erlang:element(1, V))) of
         true ->
           <<"F1">>;
         _ ->
-          case (f2 =:= (erlang:element(1, V@0))) of
+          case (f2 =:= (erlang:element(1, V))) of
             true ->
               <<"F2">>;
             _ ->
@@ -90,13 +90,13 @@ useInstance() ->
   (((snapshot_prime@ps:useNormal1())((snapshot_prime@ps:'F1'())))((snapshot_prime@ps:'F2'()))).
 ignore() ->
   (fun
-    (Dict@0) ->
-      (maps:get(ignore, Dict@0))
+    (Dict) ->
+      (maps:get(ignore, Dict))
   end).
 useClass() ->
   (fun
-    (DictClassName_@prime@0) ->
-      ((snapshot_prime@ps:ignore())(DictClassName_@prime@0))
+    (DictClassName_@prime) ->
+      ((snapshot_prime@ps:ignore())(DictClassName_@prime))
   end).
 'foo\'oo'() ->
   <<"foo\'oo">>.
@@ -119,11 +119,11 @@ foo() ->
   <<"foo">>.
 'classMember\''() ->
   (fun
-    (Dict@0) ->
-      (maps:get('classMember\'', Dict@0))
+    (Dict) ->
+      (maps:get('classMember\'', Dict))
   end).
 useMember() ->
   (fun
-    (DictClassMember@0) ->
-      ((snapshot_prime@ps:'classMember\''())(DictClassMember@0))
+    (DictClassMember) ->
+      ((snapshot_prime@ps:'classMember\''())(DictClassMember))
   end).

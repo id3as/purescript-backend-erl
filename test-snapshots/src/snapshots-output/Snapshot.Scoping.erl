@@ -2,35 +2,35 @@
 -export([noInline/0, inline/0, ex/0]).
 noInline() ->
   (fun
-    (A@0) ->
-      A@0
+    (A) ->
+      A
   end).
 inline() ->
   (fun
-    (N@0) ->
+    (N) ->
       begin
-        A@1 = ((snapshot_scoping@ps:noInline())(N@0)),
-        (A@1 + A@1)
+        A = ((snapshot_scoping@ps:noInline())(N)),
+        (A + A)
       end
   end).
 ex() ->
   (fun
-    (N@0) ->
+    (N) ->
       begin
-        A@1@1 = case (N@0 =:= 0) of
+        A@1 = case (N =:= 0) of
           true ->
             begin
-              A@1 = ((snapshot_scoping@ps:noInline())(N@0)),
-              (A@1 + A@1)
+              A = ((snapshot_scoping@ps:noInline())(N)),
+              (A + A)
             end;
           _ ->
             2
         end,
-        case (A@1@1 =:= 2) of
+        case (A@1 =:= 2) of
           true ->
             0;
           _ ->
-            A@1@1
+            A@1
         end
       end
   end).
