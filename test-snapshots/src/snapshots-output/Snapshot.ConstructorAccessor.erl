@@ -37,9 +37,9 @@
 z() ->
   {foo,1,1,1}.
 y() ->
-  ((('Foo'())(1))(1)).
+  (((snapshot_constructorAccessor@ps:'Foo'())(1))(1)).
 x() ->
-  (('Foo'())(1)).
+  ((snapshot_constructorAccessor@ps:'Foo'())(1)).
 test5() ->
   (fun
     (_@dollar__unused@0) ->
@@ -104,8 +104,8 @@ test1() ->
       A@0
   end).
 result() ->
-  #{test1 => ((('don\'tInlineMeMe'())((test1())))(('NoArgs'()))),
-  test2 => ((('don\'tInlineMeMe'())((test2())))({hasArgs,2,1,0})),
-  test3 => ((('don\'tInlineMeMe'())((test3())))({hasArgs,5,3,1})),
-  test4 => ((('don\'tInlineMeMe'())((test4())))({last,4})),
-  test5 => ((('don\'tInlineMeMe'())((test51())))({first,5}))}.
+  #{test1 => (((snapshot_constructorAccessor@ps:'don\'tInlineMeMe'())((snapshot_constructorAccessor@ps:test1())))((snapshot_constructorAccessor@ps:'NoArgs'()))),
+  test2 => (((snapshot_constructorAccessor@ps:'don\'tInlineMeMe'())((snapshot_constructorAccessor@ps:test2())))({hasArgs,2,1,0})),
+  test3 => (((snapshot_constructorAccessor@ps:'don\'tInlineMeMe'())((snapshot_constructorAccessor@ps:test3())))({hasArgs,5,3,1})),
+  test4 => (((snapshot_constructorAccessor@ps:'don\'tInlineMeMe'())((snapshot_constructorAccessor@ps:test4())))({last,4})),
+  test5 => (((snapshot_constructorAccessor@ps:'don\'tInlineMeMe'())((snapshot_constructorAccessor@ps:test51())))({first,5}))}.

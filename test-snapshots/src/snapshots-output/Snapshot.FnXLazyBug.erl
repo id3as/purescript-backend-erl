@@ -38,7 +38,7 @@ zipWith4() ->
       end)
   end).
 result() ->
-  ((((((zipWith4())((fun
+  ((((((snapshot_fnXLazyBug@ps:zipWith4())((fun
     (A@0) ->
       (fun
         (B@1) ->

@@ -73,11 +73,11 @@ exE() ->
 monadState() ->
   #{'Applicative0' => (fun
     (_@dollar__unused@0) ->
-      (applicativeState())
+      (snapshot_state@ps:applicativeState())
   end),
   'Bind1' => (fun
     (_@dollar__unused@0) ->
-      (bindState())
+      (snapshot_state@ps:bindState())
   end)}.
 bindState() ->
   #{bind => (fun
@@ -95,7 +95,7 @@ bindState() ->
   end),
   'Apply0' => (fun
     (_@dollar__unused@0) ->
-      (applyState())
+      (snapshot_state@ps:applyState())
   end)}.
 applyState() ->
   #{apply => (fun
@@ -107,14 +107,14 @@ applyState() ->
               begin
                 V1@3 = (F@0(S@2)),
                 V1@4 = (A@1((erlang:element(3, V1@3)))),
-                (((maps:get(pure, (applicativeState())))(((erlang:element(2, V1@3))((erlang:element(2, V1@4))))))((erlang:element(3, V1@4))))
+                (((maps:get(pure, (snapshot_state@ps:applicativeState())))(((erlang:element(2, V1@3))((erlang:element(2, V1@4))))))((erlang:element(3, V1@4))))
               end
           end)
       end)
   end),
   'Functor0' => (fun
     (_@dollar__unused@0) ->
-      (functorState())
+      (snapshot_state@ps:functorState())
   end)}.
 applicativeState() ->
   #{pure => (fun
@@ -126,7 +126,7 @@ applicativeState() ->
   end),
   'Apply0' => (fun
     (_@dollar__unused@0) ->
-      (applyState())
+      (snapshot_state@ps:applyState())
   end)}.
 ex() ->
   (fun

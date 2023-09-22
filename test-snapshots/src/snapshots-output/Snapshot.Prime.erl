@@ -37,7 +37,7 @@ useNewtypeCtor() ->
 useDataType() ->
   (fun
     (V@0) ->
-      ('DCtor'())
+      (snapshot_prime@ps:'DCtor'())
   end).
 useDataCtor() ->
   (fun
@@ -53,11 +53,11 @@ useNormal() ->
   (fun
     (DictNormal@0) ->
       begin
-        Normal1@1 = ((normal())(DictNormal@0)),
+        Normal1@1 = ((snapshot_prime@ps:normal())(DictNormal@0)),
         (fun
           (DictNormal1@2) ->
             begin
-              Normal2@3 = ((normal())(DictNormal1@2)),
+              Normal2@3 = ((snapshot_prime@ps:normal())(DictNormal1@2)),
               (fun
                 (A@4) ->
                   (fun
@@ -85,9 +85,9 @@ useNormal() ->
       end
   end)}.
 useNormal1() ->
-  (((useNormal())(('instanceName\''())))(('instanceName\''()))).
+  (((snapshot_prime@ps:useNormal())((snapshot_prime@ps:'instanceName\''())))((snapshot_prime@ps:'instanceName\''()))).
 useInstance() ->
-  (((useNormal1())(('F1'())))(('F2'()))).
+  (((snapshot_prime@ps:useNormal1())((snapshot_prime@ps:'F1'())))((snapshot_prime@ps:'F2'()))).
 ignore() ->
   (fun
     (Dict@0) ->
@@ -96,25 +96,25 @@ ignore() ->
 useClass() ->
   (fun
     (DictClassName_@prime@0) ->
-      ((ignore())(DictClassName_@prime@0))
+      ((snapshot_prime@ps:ignore())(DictClassName_@prime@0))
   end).
 'foo\'oo'() ->
   <<"foo\'oo">>.
 useFooPrime3() ->
-  ('foo\'oo'()).
+  (snapshot_prime@ps:'foo\'oo'()).
 'foo\'\''() ->
   <<"foo\'\'">>.
 useFooPrime2() ->
-  ('foo\'\''()).
+  (snapshot_prime@ps:'foo\'\''()).
 'foo\''() ->
   <<"foo\'">>.
 useFooPrime1() ->
-  ('foo\''()).
+  (snapshot_prime@ps:'foo\''()).
 result() ->
-  #{test1 => (('foo\''()) =:= ('foo\''())),
-  test2 => (('foo\'\''()) =:= ('foo\'\''())),
-  test3 => (('foo\'oo'()) =:= ('foo\'oo'())),
-  useInstance => (((useNormal1())(('F1'())))(('F2'())))}.
+  #{test1 => ((snapshot_prime@ps:'foo\''()) =:= (snapshot_prime@ps:'foo\''())),
+  test2 => ((snapshot_prime@ps:'foo\'\''()) =:= (snapshot_prime@ps:'foo\'\''())),
+  test3 => ((snapshot_prime@ps:'foo\'oo'()) =:= (snapshot_prime@ps:'foo\'oo'())),
+  useInstance => (((snapshot_prime@ps:useNormal1())((snapshot_prime@ps:'F1'())))((snapshot_prime@ps:'F2'())))}.
 foo() ->
   <<"foo">>.
 'classMember\''() ->
@@ -125,5 +125,5 @@ foo() ->
 useMember() ->
   (fun
     (DictClassMember@0) ->
-      (('classMember\''())(DictClassMember@0))
+      ((snapshot_prime@ps:'classMember\''())(DictClassMember@0))
   end).

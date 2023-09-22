@@ -12,7 +12,7 @@ onLet() ->
   end).
 onLetTest() ->
   begin
-    V@0 = ((onLet())(1)),
+    V@0 = ((snapshot_effectRef@ps:onLet())(1)),
     (fun
       () ->
         begin
@@ -42,7 +42,7 @@ main() ->
   (fun
     () ->
       begin
-        _@dollar__unused@0 = ((basicTest())()),
-        ((onLetTest())())
+        _@dollar__unused@0 = ((snapshot_effectRef@ps:basicTest())()),
+        ((snapshot_effectRef@ps:onLetTest())())
       end
   end).

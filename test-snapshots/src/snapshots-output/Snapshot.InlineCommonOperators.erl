@@ -149,8 +149,8 @@ inlineBinary() ->
                       lteInt => (I@0 =< I@0),
                       gtInt => (I@0 > I@0),
                       gteInt => (I@0 >= I@0),
-                      minInt => (((min())(I@0))(I@0)),
-                      maxInt => (((max())(I@0))(I@0))}
+                      minInt => (((snapshot_inlineCommonOperators@ps:min())(I@0))(I@0)),
+                      maxInt => (((snapshot_inlineCommonOperators@ps:max())(I@0))(I@0))}
                   end)
               end)
           end)

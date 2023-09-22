@@ -30,10 +30,10 @@ sndt2() ->
 r5() ->
   {7,<<"hithere">>}.
 result() ->
-  ((((uncurriedMore())({3,4,<<"hi">>,<<"there">>,$V}))((fun
+  ((((snapshot_erl_data_tuple@ps:uncurriedMore())({3,4,<<"hi">>,<<"there">>,$V}))((fun
     (V@0) ->
       <<"">>
-  end)))((r5()))).
+  end)))((snapshot_erl_data_tuple@ps:r5()))).
 fsttf2() ->
   7.
 fstt2() ->

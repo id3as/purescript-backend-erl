@@ -7,7 +7,7 @@ letRecursive() ->
         true ->
           0;
         _ ->
-          ((letRecursive())((X@0 - 1)))
+          ((snapshot_let@ps:letRecursive())((X@0 - 1)))
       end
   end).
 letChain() ->
@@ -27,7 +27,7 @@ isOdd() ->
         true ->
           false;
         _ ->
-          ((isEven())((X@0 - 1)))
+          ((snapshot_let@ps:isEven())((X@0 - 1)))
       end
   end).
 isEven() ->
@@ -43,7 +43,7 @@ isEven() ->
               true ->
                 false;
               _ ->
-                ((isEven())((V@1 - 1)))
+                ((snapshot_let@ps:isEven())((V@1 - 1)))
             end
           end
       end

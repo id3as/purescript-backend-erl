@@ -13,6 +13,6 @@ g() ->
     (X@0) ->
       (fun
         (Y@1) ->
-          (((f())(X@0))(Y@1))
+          (((snapshot_function@ps:f())(X@0))(Y@1))
       end)
   end).

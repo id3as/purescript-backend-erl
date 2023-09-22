@@ -102,4 +102,4 @@ bug28() ->
       end
   end).
 result() ->
-  (array:from_list([((bug28())(#{q => (array:from_list([1,2]))})),((bug28_2())(#{q => (array:from_list([1,2]))})),((nestedArray())((array:from_list([(array:from_list([1,2])),(array:from_list([3]))])))),((nestedArrayViaRecord())(#{q => (array:from_list([#{r => (array:from_list([1,2]))},#{r => (array:from_list([3]))}]))})),((onlyArray())((array:from_list([1])))),((maybeArray())({just,(array:from_list([1,2]))})),((namedArray())((array:from_list([1,2]))))])).
+  (array:from_list([((snapshot_arrayMatch@ps:bug28())(#{q => (array:from_list([1,2]))})),((snapshot_arrayMatch@ps:bug28_2())(#{q => (array:from_list([1,2]))})),((snapshot_arrayMatch@ps:nestedArray())((array:from_list([(array:from_list([1,2])),(array:from_list([3]))])))),((snapshot_arrayMatch@ps:nestedArrayViaRecord())(#{q => (array:from_list([#{r => (array:from_list([1,2]))},#{r => (array:from_list([3]))}]))})),((snapshot_arrayMatch@ps:onlyArray())((array:from_list([1])))),((snapshot_arrayMatch@ps:maybeArray())({just,(array:from_list([1,2]))})),((snapshot_arrayMatch@ps:namedArray())((array:from_list([1,2]))))])).

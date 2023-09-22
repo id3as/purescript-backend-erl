@@ -25,7 +25,7 @@ lit0() ->
   [].
 hd() ->
   begin
-    V@0 = ((erl_data_list_types@ps:uncons())((lit1()))),
+    V@0 = ((erl_data_list_types@ps:uncons())((snapshot_erl_data_list@ps:lit1()))),
     case (just =:= (erlang:element(1, V@0))) of
       true ->
         {just,(maps:get(head, (erlang:element(2, V@0))))};
@@ -42,13 +42,13 @@ concatSimple() ->
       end)
   end).
 concatNeut() ->
-  ((lit1()) ++ (lit2())).
+  ((snapshot_erl_data_list@ps:lit1()) ++ (snapshot_erl_data_list@ps:lit2())).
 concatLR() ->
   [1,2,3,4].
 result() ->
-  #{hd => (hd()),
-  concatNeut => (concatNeut()),
-  concatLR => (concatLR())}.
+  #{hd => (snapshot_erl_data_list@ps:hd()),
+  concatNeut => (snapshot_erl_data_list@ps:concatNeut()),
+  concatLR => (snapshot_erl_data_list@ps:concatLR())}.
 concatL() ->
   (fun
     (L@0) ->

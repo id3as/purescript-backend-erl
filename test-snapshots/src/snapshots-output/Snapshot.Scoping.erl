@@ -9,7 +9,7 @@ inline() ->
   (fun
     (N@0) ->
       begin
-        A@1 = ((noInline())(N@0)),
+        A@1 = ((snapshot_scoping@ps:noInline())(N@0)),
         (A@1 + A@1)
       end
   end).
@@ -20,7 +20,7 @@ ex() ->
         A@1 = case (N@0 =:= 0) of
           true ->
             begin
-              A@1 = ((noInline())(N@0)),
+              A@1 = ((snapshot_scoping@ps:noInline())(N@0)),
               (A@1 + A@1)
             end;
           _ ->

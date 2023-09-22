@@ -10,24 +10,24 @@
   end).
 lastComponentIsRun() ->
   begin
-    V@0 = (('don\'tInlineMeMe'())(<<"a">>)),
+    V@0 = ((snapshot_effect@ps:'don\'tInlineMeMe'())(<<"a">>)),
     (fun
       () ->
         begin
           _@dollar__unused@1 = (V@0()),
-          _@dollar__unused@2 = ((('don\'tInlineMeMe'())(<<"b">>))()),
-          ((('don\'tInlineMeMe'())(<<"c">>))())
+          _@dollar__unused@2 = (((snapshot_effect@ps:'don\'tInlineMeMe'())(<<"b">>))()),
+          (((snapshot_effect@ps:'don\'tInlineMeMe'())(<<"c">>))())
         end
     end)
   end.
 lastPureIsUnwrapped() ->
   begin
-    V@0 = (('don\'tInlineMeMe'())(<<"a">>)),
+    V@0 = ((snapshot_effect@ps:'don\'tInlineMeMe'())(<<"a">>)),
     (fun
       () ->
         begin
           Value@1 = (V@0()),
-          _@dollar__unused@2 = ((('don\'tInlineMeMe'())(<<"b">>))()),
+          _@dollar__unused@2 = (((snapshot_effect@ps:'don\'tInlineMeMe'())(<<"b">>))()),
           Value@1
         end
     end)
@@ -36,7 +36,7 @@ main() ->
   (fun
     () ->
       begin
-        _@dollar__unused@0 = ((lastComponentIsRun())()),
-        ((lastPureIsUnwrapped())())
+        _@dollar__unused@0 = ((snapshot_effect@ps:lastComponentIsRun())()),
+        ((snapshot_effect@ps:lastPureIsUnwrapped())())
       end
   end).
