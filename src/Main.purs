@@ -9,13 +9,15 @@ import ArgParse.Basic as ArgParser
 import Data.Array (notElem)
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
+import Data.Array.NonEmpty as NEA
 import Data.Either (Either(..), either)
 import Data.Foldable (for_, traverse_)
 import Data.List as List
 import Data.Map as Map
-import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Monoid (power)
 import Data.Newtype (unwrap)
+import Data.Set as Set
 import Data.String as String
 import Data.String.CodeUnits as SCU
 import Data.Tuple (Tuple(..))
@@ -29,6 +31,7 @@ import Effect.Class.Console as Console
 import Effect.Ref as Ref
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff as FS
+import Node.Glob.Basic (expandGlobs)
 import Node.Path as Path
 import Node.Process as Process
 import Parsing (parseErrorMessage)
@@ -89,6 +92,7 @@ foreignSemantics = Map.union erlForeignSemantics $
 
 runCompile :: MainArgs -> Aff Unit
 runCompile { compile, filter, cwd } = do
+  let run = false
   liftEffect $ traverse_ Process.chdir cwd
   failed <- liftEffect $ Ref.new 0
   currentDir <- liftEffect Process.cwd
@@ -96,6 +100,19 @@ runCompile { compile, filter, cwd } = do
   let ebin = Path.concat [ outputDir, "ebin" ]
   mkdirp outputDir
   mkdirp ebin
+  waiting <- liftEffect $ Ref.new Nothing
+  let
+    singleWorkerThread action = do
+      wait <- liftEffect $ Ref.read waiting
+      traverse_ Aff.joinFiber wait
+      fiber <- Aff.forkAff action
+      liftEffect $ Ref.write (Just fiber) waiting
+  -- The glob module does not export a way to test a string against a glob
+  exactMatches <-
+    (expandGlobs "output" ((_ <> "/corefn.json") <$> NEA.toArray filter))
+      <#> Set.mapMaybe
+        (String.stripPrefix (String.Pattern "output/")
+          >=> String.stripSuffix (String.Pattern "/corefn.json"))
   coreFnModulesFromOutput "output" filter >>= case _ of
     Left errors -> do
       for_ errors \(Tuple filePath err) -> do
@@ -128,28 +145,28 @@ runCompile { compile, filter, cwd } = do
                   $ codegenModule backend foreigns
             mkdirp moduleOutputDir
             FS.writeTextFile UTF8 moduleOutputPath formatted
-            case foreignFile of
-              Right content -> do
-                FS.writeTextFile UTF8 moduleOutputForeignPath content
-                when compile $ void $ loadModuleMain
-                  { ebin
-                  , modulePath: moduleOutputForeignPath
-                  , runMain: Nothing
-                  }
-              _ -> pure unit
-            when compile do
-              result <- loadModuleMain
-                { runMain: Nothing
-                , modulePath: moduleOutputPath
-                , ebin
-                }
-              case result of
-                Left { message } -> do
-                  Console.log $ withGraphics (foreground Red) "✗" <> " " <> name <> " failed to compile."
-                  liftEffect $ Ref.modify_ (_ + 1) failed
-                  Console.log message
-                Right _ -> do
-                  pure unit
+            for_ foreignFile $ FS.writeTextFile UTF8 moduleOutputForeignPath
+            when (run || compile && Set.member name exactMatches) do
+              singleWorkerThread do
+                for_ foreignFile \_ -> do
+                  when compile $ void $ loadModuleMain
+                    { ebin
+                    , modulePath: moduleOutputForeignPath
+                    , runMain: Nothing
+                    }
+                when compile do
+                  result <- loadModuleMain
+                    { runMain: Nothing
+                    , modulePath: moduleOutputPath
+                    , ebin
+                    }
+                  case result of
+                    Left { message } -> do
+                      Console.log $ withGraphics (foreground Red) "✗" <> " " <> name <> " failed to compile."
+                      liftEffect $ Ref.modify_ (_ + 1) failed
+                      Console.log message
+                    Right _ -> do
+                      pure unit
         , onPrepareModule: \build coreFnMod@(Module { name }) -> do
             let total = show build.moduleCount
             let index = show (build.moduleIndex + 1)
@@ -157,8 +174,10 @@ runCompile { compile, filter, cwd } = do
             Console.log $ "[" <> padding <> index <> " of " <> total <> "] Building " <> unwrap name
             pure coreFnMod
         }
+      singleWorkerThread (pure unit)
       nFailed <- liftEffect $ Ref.read failed
       case nFailed of
         0 -> pure unit
-        _ -> Console.log $ show nFailed <> " modules failed to compile"
+        _ -> pure unit
+      Console.log $ show nFailed <> " out of " <> show (List.length coreFnModules) <> " modules failed to compile"
       pure unit
