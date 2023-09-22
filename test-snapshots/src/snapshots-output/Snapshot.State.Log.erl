@@ -16,8 +16,8 @@ freshE() ->
         (fun
           () ->
             begin
-              X@2 = (((effect_console@ps:log())(((data_show@ps:showIntImpl())(S@0))))()),
-              X@3 = (((effect_console@ps:log())(((data_show@ps:showIntImpl())(V@1))))()),
+              _ = (((effect_console@ps:log())(((data_show@ps:showIntImpl())(S@0))))()),
+              _ = (((effect_console@ps:log())(((data_show@ps:showIntImpl())(V@1))))()),
               {tuple,#{a => S@0,
               b => V@1},(V@1 + 1)}
             end
@@ -32,8 +32,8 @@ exE() ->
         (fun
           () ->
             begin
-              A_@prime@2 = (((effect_console@ps:log())(((data_show@ps:showIntImpl())(S@0))))()),
-              X@3 = (((effect_console@ps:log())(((data_show@ps:showIntImpl())(V@1))))()),
+              _ = (((effect_console@ps:log())(((data_show@ps:showIntImpl())(S@0))))()),
+              _ = (((effect_console@ps:log())(((data_show@ps:showIntImpl())(V@1))))()),
               {tuple,#{a => S@0,
               b => V@1},(V@1 + 1)}
             end

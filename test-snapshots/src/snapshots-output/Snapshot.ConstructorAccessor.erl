@@ -42,7 +42,7 @@ x() ->
   ((snapshot_constructorAccessor@ps:'Foo'())(1)).
 test5() ->
   (fun
-    (_@dollar__unused@0) ->
+    (_) ->
       (fun
         (V@1) ->
           case (first =:= (erlang:element(1, V@1))) of
@@ -95,7 +95,7 @@ test2() ->
   end).
 test1() ->
   (fun
-    (V@0) ->
+    (_) ->
       true
   end).
 'don\'tInlineMeMe'() ->

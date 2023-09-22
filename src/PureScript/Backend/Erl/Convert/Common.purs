@@ -30,10 +30,12 @@ toAtomName text = case String.uncons text of
   Nothing -> text
 
 toErlVar :: Maybe Ident -> Level -> String
+toErlVar _ (Level lvl) | lvl < 0 = "_"
 toErlVar text (Level lvl) =
   maybe "V" (toErlVarName <<< unwrap) text <> "@" <> show lvl
 
 toErlVarWith :: String -> Maybe Ident -> Level -> String
+toErlVarWith _ _ (Level lvl) | lvl < 0 = "_"
 toErlVarWith suffix text (Level lvl) =
   maybe "V" (toErlVarName <<< unwrap) text <> "@" <> suffix <> "@" <> show lvl
 

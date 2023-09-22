@@ -2,7 +2,7 @@
 -export(['don\'tInlineMeMe'/0, lastComponentIsRun/0, lastPureIsUnwrapped/0, main/0]).
 'don\'tInlineMeMe'() ->
   (fun
-    (V@0) ->
+    (_) ->
       (fun
         () ->
           unit
@@ -14,8 +14,8 @@ lastComponentIsRun() ->
     (fun
       () ->
         begin
-          _@dollar__unused@1 = (V@0()),
-          _@dollar__unused@2 = (((snapshot_effect@ps:'don\'tInlineMeMe'())(<<"b">>))()),
+          _ = (V@0()),
+          _ = (((snapshot_effect@ps:'don\'tInlineMeMe'())(<<"b">>))()),
           (((snapshot_effect@ps:'don\'tInlineMeMe'())(<<"c">>))())
         end
     end)
@@ -27,7 +27,7 @@ lastPureIsUnwrapped() ->
       () ->
         begin
           Value@1 = (V@0()),
-          _@dollar__unused@2 = (((snapshot_effect@ps:'don\'tInlineMeMe'())(<<"b">>))()),
+          _ = (((snapshot_effect@ps:'don\'tInlineMeMe'())(<<"b">>))()),
           Value@1
         end
     end)
@@ -36,7 +36,7 @@ main() ->
   (fun
     () ->
       begin
-        _@dollar__unused@0 = ((snapshot_effect@ps:lastComponentIsRun())()),
+        _ = ((snapshot_effect@ps:lastComponentIsRun())()),
         ((snapshot_effect@ps:lastPureIsUnwrapped())())
       end
   end).

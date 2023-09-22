@@ -3,7 +3,7 @@ module PureScript.Backend.Erl.Convert.Before where
 import Prelude
 
 import Control.Monad.Reader (ReaderT, asks, local, runReaderT)
-import Control.Monad.State (State, evalState, get, modify_, put, state)
+import Control.Monad.State (State, evalState, get, gets, modify_, put, state)
 import Data.Array.NonEmpty as NEA
 import Data.Identity (Identity(..))
 import Data.Map (Map)
@@ -12,11 +12,11 @@ import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Newtype (unwrap, wrap)
 import Data.Profunctor (dimap)
 import Data.Traversable (class Traversable, foldr, for, traverse)
-import Data.Tuple (Tuple(..), snd, uncurry)
+import Data.Tuple (Tuple(..), fst, snd, uncurry)
 import Partial.Unsafe (unsafeCrashWith)
 import PureScript.Backend.Optimizer.CoreFn (Ident(..))
 import PureScript.Backend.Optimizer.Semantics (NeutralExpr)
-import PureScript.Backend.Optimizer.Syntax (BackendSyntax(..), Level)
+import PureScript.Backend.Optimizer.Syntax (BackendSyntax(..), Level(..))
 
 type Name = Tuple (Maybe Ident) Level
 type Rename = Name
@@ -33,8 +33,8 @@ type Renaming = ReaderT Renamings (State Found)
 
 scope :: forall a. Renaming a -> Renaming a
 scope inner = do
-  s <- get
-  inner <* put s
+  s <- gets _.duplicates
+  inner <* modify_ _ { duplicates = s }
 
 use :: Rename -> Map Rename Int -> Map Rename Int
 use renamed =
@@ -47,7 +47,9 @@ reference name = do
   pure renamed
 
 isUnused :: Rename -> Renaming Rename
-isUnused = pure
+isUnused rename = gets $ _.usages
+  >>> Map.lookup rename
+  >>> maybe (Tuple (fst rename) (Level (-1))) (const rename)
 
 -- Anonymous variables need to be treated the same as variables named `v`
 -- for the purpose of this analysis

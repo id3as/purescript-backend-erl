@@ -13,7 +13,7 @@ uncurriedMore() ->
   end).
 uncurried() ->
   (fun
-    ({A@0,B@1,C@2,D@3,_e@4}) ->
+    ({A@0,B@1,C@2,D@3,_}) ->
       {(A@0 + B@1),<<C@2/binary, D@3/binary>>}
   end).
 tf2() ->
@@ -31,7 +31,7 @@ r5() ->
   {7,<<"hithere">>}.
 result() ->
   ((((snapshot_erl_data_tuple@ps:uncurriedMore())({3,4,<<"hi">>,<<"there">>,$V}))((fun
-    (V@0) ->
+    (_) ->
       <<"">>
   end)))((snapshot_erl_data_tuple@ps:r5()))).
 fsttf2() ->

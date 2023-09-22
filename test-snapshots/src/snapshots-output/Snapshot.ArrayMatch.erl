@@ -88,7 +88,7 @@ maybeArray() ->
   end).
 bug28_2() ->
   (fun
-    (A@0) ->
+    (_) ->
       3
   end).
 bug28() ->

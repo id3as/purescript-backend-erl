@@ -72,11 +72,11 @@ exE() ->
   end).
 monadState() ->
   #{'Applicative0' => (fun
-    (_@dollar__unused@0) ->
+    (_) ->
       (snapshot_state@ps:applicativeState())
   end),
   'Bind1' => (fun
-    (_@dollar__unused@0) ->
+    (_) ->
       (snapshot_state@ps:bindState())
   end)}.
 bindState() ->
@@ -94,7 +94,7 @@ bindState() ->
       end)
   end),
   'Apply0' => (fun
-    (_@dollar__unused@0) ->
+    (_) ->
       (snapshot_state@ps:applyState())
   end)}.
 applyState() ->
@@ -113,7 +113,7 @@ applyState() ->
       end)
   end),
   'Functor0' => (fun
-    (_@dollar__unused@0) ->
+    (_) ->
       (snapshot_state@ps:functorState())
   end)}.
 applicativeState() ->
@@ -125,7 +125,7 @@ applicativeState() ->
       end)
   end),
   'Apply0' => (fun
-    (_@dollar__unused@0) ->
+    (_) ->
       (snapshot_state@ps:applyState())
   end)}.
 ex() ->

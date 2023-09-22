@@ -10,7 +10,7 @@ renamed() ->
         begin
           A0@1 = (V@0()),
           A1@2 = (((snapshot_nestedDo@ps:pure_())(A0@1))()),
-          A2@3 = (((snapshot_nestedDo@ps:pure_())(A1@2))()),
+          _ = (((snapshot_nestedDo@ps:pure_())(A1@2))()),
           (((effect_console@ps:log())(<<"Oh no">>))())
         end
     end)
@@ -23,7 +23,7 @@ renamed0() ->
         begin
           A0@1 = (V@0()),
           A@2 = (((snapshot_nestedDo@ps:pure_())(A0@1))()),
-          A@3 = (((snapshot_nestedDo@ps:pure_())(A@2))()),
+          _ = (((snapshot_nestedDo@ps:pure_())(A@2))()),
           (((effect_console@ps:log())(<<"Oh no">>))())
         end
     end)
@@ -36,7 +36,7 @@ renamed1() ->
         begin
           A@1 = (V@0()),
           A@2 = (((snapshot_nestedDo@ps:pure_())(A@1))()),
-          _@dollar__unused@3 = (((snapshot_nestedDo@ps:pure_())(A@2))()),
+          _ = (((snapshot_nestedDo@ps:pure_())(A@2))()),
           (((effect_console@ps:log())(<<"Oh no">>))())
         end
     end)
@@ -49,7 +49,7 @@ renamed2() ->
         begin
           A@1 = (V@0()),
           A1@2 = (((snapshot_nestedDo@ps:pure_())(A@1))()),
-          A@3 = (((snapshot_nestedDo@ps:pure_())(A1@2))()),
+          _ = (((snapshot_nestedDo@ps:pure_())(A1@2))()),
           (((effect_console@ps:log())(<<"Oh no">>))())
         end
     end)
@@ -61,7 +61,7 @@ do1() ->
       () ->
         begin
           A@1 = (V@0()),
-          A@2 = (((snapshot_nestedDo@ps:pure_())(A@1))()),
+          _ = (((snapshot_nestedDo@ps:pure_())(A@1))()),
           (((effect_console@ps:log())(<<"Oh no">>))())
         end
     end)
@@ -72,7 +72,7 @@ do0() ->
     (fun
       () ->
         begin
-          A@1 = (V@0()),
+          _ = (V@0()),
           (((effect_console@ps:log())(<<"Oh no">>))())
         end
     end)
@@ -85,7 +85,7 @@ bug26() ->
         begin
           A@1 = (V@0()),
           A@2 = (((snapshot_nestedDo@ps:pure_())(A@1))()),
-          A@3 = (((snapshot_nestedDo@ps:pure_())(A@2))()),
+          _ = (((snapshot_nestedDo@ps:pure_())(A@2))()),
           (((effect_console@ps:log())(<<"Oh no">>))())
         end
     end)

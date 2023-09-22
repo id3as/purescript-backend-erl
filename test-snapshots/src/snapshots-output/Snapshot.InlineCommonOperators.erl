@@ -59,7 +59,7 @@ max() ->
   end).
 newtypeN_() ->
   #{'Coercible0' => (fun
-    (_@dollar__unused@0) ->
+    (_) ->
       undefined
   end)}.
 inlineWrap() ->

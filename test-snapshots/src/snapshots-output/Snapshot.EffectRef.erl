@@ -29,7 +29,7 @@ basicTest() ->
       () ->
         begin
           N@1 = (V@0()),
-          _@dollar__unused@2 = ((((effect_ref@ps:modify_())((fun
+          _ = ((((effect_ref@ps:modify_())((fun
             (V@2) ->
               (V@2 + 1)
           end)))(N@1))()),
@@ -42,7 +42,7 @@ main() ->
   (fun
     () ->
       begin
-        _@dollar__unused@0 = ((snapshot_effectRef@ps:basicTest())()),
+        _ = ((snapshot_effectRef@ps:basicTest())()),
         ((snapshot_effectRef@ps:onLetTest())())
       end
   end).
