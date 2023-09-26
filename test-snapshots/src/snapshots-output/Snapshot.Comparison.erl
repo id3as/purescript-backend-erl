@@ -1,52 +1,52 @@
 -module(snapshot_comparison@ps).
--export([stringComparison/2, stringComparison/0, numberComparison/2, numberComparison/0, integerComparison/2, integerComparison/0, charComparison/2, charComparison/0, booleanComparison/2, booleanComparison/0]).
-stringComparison(X, Y@1) ->
-  (array:from_list([(X =:= Y@1),(X =/= Y@1),(X < Y@1),(X =< Y@1),(X >= Y@1),(X > Y@1)])).
+-export([stringComparison/0, stringComparison/2, numberComparison/0, numberComparison/2, integerComparison/0, integerComparison/2, charComparison/0, charComparison/2, booleanComparison/0, booleanComparison/2]).
 stringComparison() ->
   (fun
-    (X) ->
+    (V@0) ->
       (fun
-        (Y) ->
-          (array:from_list([(X =:= Y),(X =/= Y),(X < Y),(X =< Y),(X >= Y),(X > Y)]))
+        (V@1) ->
+          (stringComparison(V@0, V@1))
       end)
   end).
-numberComparison(X, Y@1) ->
-  (array:from_list([(X =:= Y@1),(X =/= Y@1),(X < Y@1),(X =< Y@1),(X >= Y@1),(X > Y@1)])).
+stringComparison(X, Y) ->
+  (array:from_list([(X =:= Y),(X =/= Y),(X < Y),(X =< Y),(X >= Y),(X > Y)])).
 numberComparison() ->
   (fun
-    (X) ->
+    (V@0) ->
       (fun
-        (Y) ->
-          (array:from_list([(X =:= Y),(X =/= Y),(X < Y),(X =< Y),(X >= Y),(X > Y)]))
+        (V@1) ->
+          (numberComparison(V@0, V@1))
       end)
   end).
-integerComparison(X, Y@1) ->
-  (array:from_list([(X =:= Y@1),(X =/= Y@1),(X < Y@1),(X =< Y@1),(X >= Y@1),(X > Y@1)])).
+numberComparison(X, Y) ->
+  (array:from_list([(X =:= Y),(X =/= Y),(X < Y),(X =< Y),(X >= Y),(X > Y)])).
 integerComparison() ->
   (fun
-    (X) ->
+    (V@0) ->
       (fun
-        (Y) ->
-          (array:from_list([(X =:= Y),(X =/= Y),(X < Y),(X =< Y),(X >= Y),(X > Y)]))
+        (V@1) ->
+          (integerComparison(V@0, V@1))
       end)
   end).
-charComparison(X, Y@1) ->
-  (array:from_list([(X =:= Y@1),(X =/= Y@1),(X < Y@1),(X =< Y@1),(X >= Y@1),(X > Y@1)])).
+integerComparison(X, Y) ->
+  (array:from_list([(X =:= Y),(X =/= Y),(X < Y),(X =< Y),(X >= Y),(X > Y)])).
 charComparison() ->
   (fun
-    (X) ->
+    (V@0) ->
       (fun
-        (Y) ->
-          (array:from_list([(X =:= Y),(X =/= Y),(X < Y),(X =< Y),(X >= Y),(X > Y)]))
+        (V@1) ->
+          (charComparison(V@0, V@1))
       end)
   end).
-booleanComparison(X, Y@1) ->
-  (array:from_list([(X =:= Y@1),(X =/= Y@1),(X < Y@1),(X =< Y@1),(X >= Y@1),(X > Y@1)])).
+charComparison(X, Y) ->
+  (array:from_list([(X =:= Y),(X =/= Y),(X < Y),(X =< Y),(X >= Y),(X > Y)])).
 booleanComparison() ->
   (fun
-    (X) ->
+    (V@0) ->
       (fun
-        (Y) ->
-          (array:from_list([(X =:= Y),(X =/= Y),(X < Y),(X =< Y),(X >= Y),(X > Y)]))
+        (V@1) ->
+          (booleanComparison(V@0, V@1))
       end)
   end).
+booleanComparison(X, Y) ->
+  (array:from_list([(X =:= Y),(X =/= Y),(X < Y),(X =< Y),(X >= Y),(X > Y)])).

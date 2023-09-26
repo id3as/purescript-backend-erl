@@ -1,41 +1,37 @@
 -module(snapshot_uncurriedFunction@ps).
--export([test4a/1, test4a/0, test4b/0, test3a/2, test3a/0, test3b/0, test2a/2, test2a/0, test2b/0, test1a/0, test1b/0, main/0]).
+-export([test4a/0, test4a/1, test4b/0, test3a/0, test3a/2, test3b/0, test2a/0, test2a/2, test2b/0, test1a/0, test1b/0, main/0]).
+test4a() ->
+  (fun
+    (V@0) ->
+      (test4a(V@0))
+  end).
 test4a(A) ->
   begin
     V = ((effect_console@ps:log())(A)),
     _ = (V()),
     A
   end.
-test4a() ->
-  (fun
-    (A) ->
-      begin
-        V = ((effect_console@ps:log())(A)),
-        _ = (V()),
-        A
-      end
-  end).
 test4b() ->
   (fun
     () ->
       ((snapshot_uncurriedFunction@ps:test4a())(<<"test4b">>))
   end).
-test3a(V, B@1) ->
-  B@1.
 test3a() ->
   (fun
-    (_, B) ->
-      B
+    (V@0, V@1) ->
+      (test3a(V@0, V@1))
   end).
+test3a(_, B) ->
+  B.
 test3b() ->
   ((snapshot_uncurriedFunction@ps:test3a())(1, 2)).
-test2a(A, V@1) ->
-  A.
 test2a() ->
   (fun
-    (A, _) ->
-      A
+    (V@0, V@1) ->
+      (test2a(V@0, V@1))
   end).
+test2a(A, _) ->
+  A.
 test2b() ->
   ((snapshot_uncurriedFunction@ps:test2a())(1, 2)).
 test1a() ->

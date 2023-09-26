@@ -1,42 +1,42 @@
 -module(snapshot_primOps@ps).
--export([stringOps/2, stringOps/0, numberOps/2, numberOps/0, intOps/2, intOps/0, booleanOps/2, booleanOps/0]).
-stringOps(X, Y@1) ->
-  (array:from_list([<<X/binary, Y@1/binary>>])).
+-export([stringOps/0, stringOps/2, numberOps/0, numberOps/2, intOps/0, intOps/2, booleanOps/0, booleanOps/2]).
 stringOps() ->
   (fun
-    (X) ->
+    (V@0) ->
       (fun
-        (Y) ->
-          (array:from_list([<<X/binary, Y/binary>>]))
+        (V@1) ->
+          (stringOps(V@0, V@1))
       end)
   end).
-numberOps(X, Y@1) ->
-  (array:from_list([(X + Y@1),(X / Y@1),(X * Y@1),(X - Y@1)])).
+stringOps(X, Y) ->
+  (array:from_list([<<X/binary, Y/binary>>])).
 numberOps() ->
   (fun
-    (X) ->
+    (V@0) ->
       (fun
-        (Y) ->
-          (array:from_list([(X + Y),(X / Y),(X * Y),(X - Y)]))
+        (V@1) ->
+          (numberOps(V@0, V@1))
       end)
   end).
-intOps(X, Y@1) ->
-  (array:from_list([(X band Y@1),(X bor Y@1),(X bsr Y@1),(X bsl Y@1),(X bsr Y@1),(X xor Y@1),(X + Y@1),(X div Y@1),(X * Y@1),(X - Y@1)])).
+numberOps(X, Y) ->
+  (array:from_list([(X + Y),(X / Y),(X * Y),(X - Y)])).
 intOps() ->
   (fun
-    (X) ->
+    (V@0) ->
       (fun
-        (Y) ->
-          (array:from_list([(X band Y),(X bor Y),(X bsr Y),(X bsl Y),(X bsr Y),(X xor Y),(X + Y),(X div Y),(X * Y),(X - Y)]))
+        (V@1) ->
+          (intOps(V@0, V@1))
       end)
   end).
-booleanOps(X, Y@1) ->
-  (array:from_list([(X andalso Y@1),(X orelse Y@1)])).
+intOps(X, Y) ->
+  (array:from_list([(X band Y),(X bor Y),(X bsr Y),(X bsl Y),(X bsr Y),(X xor Y),(X + Y),(X div Y),(X * Y),(X - Y)])).
 booleanOps() ->
   (fun
-    (X) ->
+    (V@0) ->
       (fun
-        (Y) ->
-          (array:from_list([(X andalso Y),(X orelse Y)]))
+        (V@1) ->
+          (booleanOps(V@0, V@1))
       end)
   end).
+booleanOps(X, Y) ->
+  (array:from_list([(X andalso Y),(X orelse Y)])).

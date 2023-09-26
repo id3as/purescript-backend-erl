@@ -13,6 +13,7 @@ type ErlModule =
   { moduleName :: String
   , definitions :: Array ErlDefinition
   , exports :: Array ErlExport
+  , comments :: Array String
   }
 
 data ErlExport = Export String Int

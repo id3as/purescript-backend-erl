@@ -50,6 +50,7 @@ printModule lib =
       [ printAttribute "module" (D.text (escapeAtom lib.moduleName))
       , printAttribute "export" $ printBrackets $
           D.foldWithSeparator (D.text ", ") $ (\(Export name arity) -> D.text (escapeAtom name) <> D.text "/" <> D.text (show arity)) <$> lib.exports
+      , printAttribute "compile" (D.text "no_auto_import")
       ]
       <>
       map printDefinition lib.definitions

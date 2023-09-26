@@ -1,15 +1,23 @@
 -module(snapshot_branch@ps).
--export([i/2, i/0, h/1, h/0, g/1, g/0, f/3, f/0, result/0, dontInlineMe/1, dontInlineMe/0]).
-i(V, V1@1) ->
+-export([i/0, i/2, h/0, h/1, g/0, g/1, f/0, f/3, result/0, dontInlineMe/0, dontInlineMe/1]).
+i() ->
+  (fun
+    (V@0) ->
+      (fun
+        (V@1) ->
+          (i(V@0, V@1))
+      end)
+  end).
+i(V, V1) ->
   case V of
     true ->
-      (not V1@1);
+      (not V1);
     _ ->
-      case (not V1@1) of
+      case (not V1) of
         true ->
           true;
         _ ->
-          case V1@1 of
+          case V1 of
             true ->
               false;
             _ ->
@@ -17,28 +25,10 @@ i(V, V1@1) ->
           end
       end
   end.
-i() ->
+h() ->
   (fun
-    (V) ->
-      (fun
-        (V1) ->
-          case V of
-            true ->
-              (not V1);
-            _ ->
-              case (not V1) of
-                true ->
-                  true;
-                _ ->
-                  case V1 of
-                    true ->
-                      false;
-                    _ ->
-                      (erlang:throw({fail,<<"Failed pattern match">>}))
-                  end
-              end
-          end
-      end)
+    (V@0) ->
+      (h(V@0))
   end).
 h(V) ->
   case (V =:= 3.14) of
@@ -47,15 +37,10 @@ h(V) ->
     _ ->
       (erlang:throw({fail,<<"Failed pattern match">>}))
   end.
-h() ->
+g() ->
   (fun
-    (V) ->
-      case (V =:= 3.14) of
-        true ->
-          3.14159;
-        _ ->
-          (erlang:throw({fail,<<"Failed pattern match">>}))
-      end
+    (V@0) ->
+      (g(V@0))
   end).
 g(V) ->
   case (V =:= 0) of
@@ -74,32 +59,23 @@ g(V) ->
           end
       end
   end.
-g() ->
+f() ->
   (fun
-    (V) ->
-      case (V =:= 0) of
-        true ->
-          1;
-        _ ->
-          case (V =:= 1) of
-            true ->
-              2;
-            _ ->
-              case (V =:= 2) of
-                true ->
-                  3;
-                _ ->
-                  0
-              end
-          end
-      end
+    (V@0) ->
+      (fun
+        (V@1) ->
+          (fun
+            (V@2) ->
+              (f(V@0, V@1, V@2))
+          end)
+      end)
   end).
-f(X, Y@1, Z@2) ->
+f(X, Y, Z) ->
   case X of
     true ->
-      case Y@1 of
+      case Y of
         true ->
-          case Z@2 of
+          case Z of
             true ->
               0;
             _ ->
@@ -111,32 +87,6 @@ f(X, Y@1, Z@2) ->
     _ ->
       3
   end.
-f() ->
-  (fun
-    (X) ->
-      (fun
-        (Y) ->
-          (fun
-            (Z) ->
-              case X of
-                true ->
-                  case Y of
-                    true ->
-                      case Z of
-                        true ->
-                          0;
-                        _ ->
-                          1
-                      end;
-                    _ ->
-                      2
-                  end;
-                _ ->
-                  3
-              end
-          end)
-      end)
-  end).
 result() ->
   #{f0 => 0,
   f1 => 1,
@@ -151,10 +101,10 @@ result() ->
   iftf => false,
   itft => true,
   h => 3.14159}.
-dontInlineMe(A) ->
-  A.
 dontInlineMe() ->
   (fun
-    (A) ->
-      A
+    (V@0) ->
+      (dontInlineMe(V@0))
   end).
+dontInlineMe(A) ->
+  A.

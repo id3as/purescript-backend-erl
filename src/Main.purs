@@ -9,6 +9,7 @@ import ArgParse.Basic as ArgParser
 import Data.Array (notElem)
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
+import Data.Bifunctor (lmap)
 import Data.Either (Either(..), either)
 import Data.Foldable (for_, traverse_)
 import Data.List as List
@@ -16,6 +17,7 @@ import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Monoid (power)
 import Data.Newtype (unwrap)
+import Data.Set as Set
 import Data.String as String
 import Data.String.CodeUnits as SCU
 import Data.Tuple (Tuple(..))
@@ -112,7 +114,9 @@ runCompile { compile, filter, cwd } = do
         , analyzeCustom
         , foreignSemantics
         , traceIdents: mempty
-        , onCodegenModule: \_ (Module { name: ModuleName name, path, exports }) (backend) _ -> do
+        , onCodegenModule: \_ (Module { name: ModuleName name, path: reportedPath, exports }) (backend) _ -> do
+            -- Sorry, working around a weird language server bug
+            let path = fromMaybe <*> String.stripPrefix (String.Pattern currentDir) $ reportedPath
             let moduleOutputDir = Path.concat [ outputDir, name ]
             let moduleOutputPath = Path.concat [ moduleOutputDir, erlModuleNamePs (ModuleName name) <> erlExt ]
             let moduleOutputForeignPath = Path.concat [ moduleOutputDir, erlModuleNameForeign (ModuleName name) <> erlExt ]
@@ -122,8 +126,12 @@ runCompile { compile, filter, cwd } = do
                   # (fromMaybe <*> String.stripSuffix (String.Pattern ".purs"))
                   # (_ <> ".erl")
             foreignFile <- try $ FS.readTextFile UTF8 fileForeign
-            let foreignsE = either (Right <<< mempty) parseFile foreignFile
-            foreigns <- either (throwError <<< Aff.error <<< parseErrorMessage) pure foreignsE
+            let
+              foreignsE = case foreignFile of
+                Left _ | Set.isEmpty backend.foreign -> Right mempty
+                Left err -> Left $ "No foreigns file for " <> name <> " " <> Aff.message err
+                Right content -> lmap parseErrorMessage $ parseFile content
+            foreigns <- either (throwError <<< Aff.error) pure foreignsE
             let
               formatted =
                 Dodo.print plainText Dodo.twoSpaces

@@ -1,22 +1,22 @@
 -module(snapshot_function@ps).
--export([f/2, f/0, g/2, g/0]).
-f(X, Y@1) ->
-  (array:from_list([X,Y@1,X,Y@1,X])).
+-export([f/0, f/2, g/0, g/2]).
 f() ->
   (fun
-    (X) ->
+    (V@0) ->
       (fun
-        (Y) ->
-          (array:from_list([X,Y,X,Y,X]))
+        (V@1) ->
+          (f(V@0, V@1))
       end)
   end).
-g(X, Y@1) ->
-  (((snapshot_function@ps:f())(X))(Y@1)).
+f(X, Y) ->
+  (array:from_list([X,Y,X,Y,X])).
 g() ->
   (fun
-    (X) ->
+    (V@0) ->
       (fun
-        (Y) ->
-          (((snapshot_function@ps:f())(X))(Y))
+        (V@1) ->
+          (g(V@0, V@1))
       end)
   end).
+g(X, Y) ->
+  (((snapshot_function@ps:f())(X))(Y)).

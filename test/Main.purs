@@ -139,7 +139,7 @@ runSnapshotTests { accept, compile, run, filter } = do
         , foreignSemantics
         , traceIdents: mempty
         , onCodegenModule: \_ (Module { name: ModuleName name, path: reportedPath, exports }) (backend) _ -> do
-            -- Sorry, working around a weird VSCode bug
+            -- Sorry, working around a weird language server bug
             let path = fromMaybe <*> String.stripPrefix (String.Pattern snapshotDir) $ reportedPath
             let testFileDir = Path.concat [ testOut, name ]
             let testFilePath = Path.concat [ testFileDir, erlModuleNamePs (ModuleName name) <> erlExt ]

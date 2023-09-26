@@ -1,12 +1,12 @@
 -module(snapshot_state@ps).
--export(['State'/1, 'State'/0, functorState/0, freshMTL/1, freshMTL/0, freshE/1, freshE/0, fresh/1, fresh/0, exMTL/1, exMTL/0, 'exE\''/1, 'exE\''/0, exE/1, exE/0, monadState/0, bindState/0, applyState/0, applicativeState/0, ex/1, ex/0]).
-'State'(X) ->
-  X.
+-export(['State'/0, 'State'/1, functorState/0, freshMTL/0, freshMTL/1, freshE/0, freshE/1, fresh/0, fresh/1, exMTL/0, exMTL/1, 'exE\''/0, 'exE\''/1, exE/0, exE/1, monadState/0, bindState/0, applyState/0, applicativeState/0, ex/0, ex/1]).
 'State'() ->
   (fun
-    (X) ->
-      X
+    (V@0) ->
+      ('State'(V@0))
   end).
+'State'(X) ->
+  X.
 functorState() ->
   #{map => (fun
     (F) ->
@@ -21,32 +21,34 @@ functorState() ->
           end)
       end)
   end)}.
-freshMTL(X) ->
-  {tuple,X,(X + 1)}.
 freshMTL() ->
   (fun
-    (X) ->
-      {tuple,X,(X + 1)}
+    (V@0) ->
+      (freshMTL(V@0))
+  end).
+freshMTL(X) ->
+  {tuple,X,(X + 1)}.
+freshE() ->
+  (fun
+    (V@0) ->
+      (freshE(V@0))
   end).
 freshE(DictMonadState) ->
   ((maps:get(state, DictMonadState))((fun
     (S) ->
       {tuple,S,(S + 1)}
   end))).
-freshE() ->
+fresh() ->
   (fun
-    (DictMonadState) ->
-      ((maps:get(state, DictMonadState))((fun
-        (S) ->
-          {tuple,S,(S + 1)}
-      end)))
+    (V@0) ->
+      (fresh(V@0))
   end).
 fresh(S) ->
   {tuple,S,(S + 1)}.
-fresh() ->
+exMTL() ->
   (fun
-    (S) ->
-      {tuple,S,(S + 1)}
+    (V@0) ->
+      (exMTL(V@0))
   end).
 exMTL(S) ->
   begin
@@ -54,14 +56,10 @@ exMTL(S) ->
     {tuple,#{a => S,
     b => V},(V + 1)}
   end.
-exMTL() ->
+'exE\''() ->
   (fun
-    (S) ->
-      begin
-        V = (S + 1),
-        {tuple,#{a => S,
-        b => V},(V + 1)}
-      end
+    (V@0) ->
+      ('exE\''(V@0))
   end).
 'exE\''(S) ->
   begin
@@ -72,17 +70,10 @@ exMTL() ->
         b => V},(V + 1)}
     end)
   end.
-'exE\''() ->
+exE() ->
   (fun
-    (S) ->
-      begin
-        V = (S + 1),
-        (fun
-          () ->
-            {tuple,#{a => S,
-            b => V},(V + 1)}
-        end)
-      end
+    (V@0) ->
+      (exE(V@0))
   end).
 exE(S) ->
   begin
@@ -93,18 +84,6 @@ exE(S) ->
         b => V},(V + 1)}
     end)
   end.
-exE() ->
-  (fun
-    (S) ->
-      begin
-        V = (S + 1),
-        (fun
-          () ->
-            {tuple,#{a => S,
-            b => V},(V + 1)}
-        end)
-      end
-  end).
 monadState() ->
   #{'Applicative0' => (fun
     (_) ->
@@ -163,18 +142,14 @@ applicativeState() ->
     (_) ->
       (snapshot_state@ps:applyState())
   end)}.
+ex() ->
+  (fun
+    (V@0) ->
+      (ex(V@0))
+  end).
 ex(S) ->
   begin
     V = (S + 1),
     {tuple,#{a => S,
     b => V},(V + 1)}
   end.
-ex() ->
-  (fun
-    (S) ->
-      begin
-        V = (S + 1),
-        {tuple,#{a => S,
-        b => V},(V + 1)}
-      end
-  end).

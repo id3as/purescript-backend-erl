@@ -1,20 +1,17 @@
 -module(snapshot_effectRef@ps).
--export([positionZero/0, onLet/1, onLet/0, onLetTest/0, basicTest/0, main/0]).
+-export([positionZero/0, onLet/0, onLet/1, onLetTest/0, basicTest/0, main/0]).
 positionZero() ->
   ((effect_ref@ps:new())(0)).
+onLet() ->
+  (fun
+    (V@0) ->
+      (onLet(V@0))
+  end).
 onLet(X) ->
   begin
     A = (X + X),
     ((effect_ref@ps:new())(((A + A) + X)))
   end.
-onLet() ->
-  (fun
-    (X) ->
-      begin
-        A = (X + X),
-        ((effect_ref@ps:new())(((A + A) + X)))
-      end
-  end).
 onLetTest() ->
   begin
     V = ((snapshot_effectRef@ps:onLet())(1)),

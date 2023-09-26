@@ -10,10 +10,11 @@ import Data.Foldable (foldMap, foldr)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.Map (Map)
 import Data.Map as Map
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), isJust, isNothing)
 import Data.Newtype (unwrap)
 import Data.Set as Set
 import Data.Tuple (Tuple(..), fst, snd, uncurry)
+import Debug (spy, traceM)
 import Partial.Unsafe (unsafeCrashWith)
 import PureScript.Backend.Erl.Constants as C
 import PureScript.Backend.Erl.Convert.Before (renameRoot)
@@ -35,7 +36,7 @@ type CodegenEnv =
   }
 
 codegenModule :: BackendModule -> ForeignDecls -> ErlModule
-codegenModule { name, bindings, imports, foreign: foreign_ } foreigns =
+codegenModule { name, bindings, imports, foreign: foreign_, exports: moduleExports } foreigns =
   let
     codegenEnv :: CodegenEnv
     codegenEnv = { currentModule: name, substitutions: Map.empty }
@@ -47,8 +48,17 @@ codegenModule { name, bindings, imports, foreign: foreign_ } foreigns =
       ]
 
     reexports :: Array ErlDefinition
-    reexports = foreigns.exported >>= \(Tuple decl arity) -> do
-      guard $ Ident decl `Set.member` foreign_
+    reexports = spy "reexports" $ foreigns.exported >>= \(Tuple decl arity) -> do
+      -- when (not (Ident decl `Set.member` foreign_)) do
+      --   traceM $ "Not generated " <> decl <> " " <> show (Array. (Ident decl) moduleExports)
+      -- guard $ Ident decl `Set.member` foreign_
+      -- when (isJust (Array.find (_.bindings >>> Array.any (fst >>> eq (Ident decl))) bindings)) do
+      --   traceM $ "Not generated " <> decl
+      -- guard $ isNothing $ Array.find (_.bindings >>> Array.any (fst >>> eq (Ident decl))) bindings
+      if (decl /= "sleep") then pure unit else do
+        pure unit
+        traceM foreigns
+        traceM $ Array.fromFoldable foreign_
       let
         vars =
           Array.replicate arity unit
@@ -67,6 +77,7 @@ codegenModule { name, bindings, imports, foreign: foreign_ } foreigns =
     { moduleName: erlModuleNamePs name
     , definitions
     , exports
+    , comments: []
     }
 
 definitionExports :: ErlDefinition -> Array ErlExport
@@ -79,7 +90,7 @@ codegenTopLevelBindingGroup
   -> BackendBindingGroup Ident NeutralExpr
   -> Array ErlDefinition
 codegenTopLevelBindingGroup codegenEnv { bindings } =
-  Array.concatMap (codegenTopLevelBinding codegenEnv) bindings
+  Array.concatMap (codegenTopLevelBinding codegenEnv <<< map renameRoot) bindings
 
 codegenTopLevelBinding
   :: CodegenEnv
@@ -93,19 +104,25 @@ codegenTopLevelBinding codegenEnv (Tuple (Ident i) n) =
             S.Tupled $ [ tagAtom tag ] <> vars
       ]
     Abs vars e ->
-      [ FunctionDefinition i (uncurry toErlVar <$> NEA.toArray vars) $ codegenExpr codegenEnv $ renameRoot e
-      , FunctionDefinition i [] $ codegenExpr codegenEnv $ renameRoot n
+      let evars = NEA.toArray vars # mapWithIndex (\idx _ -> S.Var ("V@" <> show idx)) in
+      [ FunctionDefinition i [] $ S.curriedFun evars $
+          S.FunCall Nothing (S.Literal (S.Atom i)) evars
+      , FunctionDefinition i (uncurry toErlVar <$> NEA.toArray vars) $ codegenExpr codegenEnv e
       ]
-    UncurriedAbs vars e ->
-      [ FunctionDefinition i (uncurry toErlVar <$> vars) $ codegenExpr codegenEnv $ renameRoot e
-      , FunctionDefinition i [] $ codegenExpr codegenEnv $ renameRoot n
+    UncurriedAbs vars e | Array.length vars > 0 ->
+      let evars = vars # mapWithIndex (\idx _ -> S.Var ("V@" <> show idx)) in
+      [ FunctionDefinition i [] $ S.simpleFun evars $
+          S.FunCall Nothing (S.Literal (S.Atom i)) evars
+      , FunctionDefinition i (uncurry toErlVar <$> vars) $ codegenExpr codegenEnv e
       ]
-    UncurriedEffectAbs vars e ->
-      [ FunctionDefinition i (uncurry toErlVar <$> vars) $ codegenChain effectChainMode codegenEnv $ renameRoot e
-      , FunctionDefinition i [] $ codegenExpr codegenEnv $ renameRoot n
+    UncurriedEffectAbs vars e | Array.length vars > 0 ->
+      let evars = vars # mapWithIndex (\idx _ -> S.Var ("V@" <> show idx)) in
+      [ FunctionDefinition i [] $ S.simpleFun evars $
+          S.FunCall Nothing (S.Literal (S.Atom i)) evars
+      , FunctionDefinition i (uncurry toErlVar <$> vars) $ codegenChain effectChainMode codegenEnv e
       ]
     _ ->
-      [ FunctionDefinition i [] $ codegenExpr codegenEnv $ renameRoot n ]
+      [ FunctionDefinition i [] $ codegenExpr codegenEnv n ]
 
 helper :: String -> String -> Int -> NeutralExpr -> Maybe (Array NeutralExpr)
 helper moduleName ident = case _, _ of
