@@ -92,6 +92,18 @@ codegenTopLevelBinding codegenEnv (Tuple (Ident i) n) =
           S.curriedFun vars $
             S.Tupled $ [ tagAtom tag ] <> vars
       ]
+    Abs vars e ->
+      [ FunctionDefinition i (uncurry toErlVar <$> NEA.toArray vars) $ codegenExpr codegenEnv $ renameRoot e
+      , FunctionDefinition i [] $ codegenExpr codegenEnv $ renameRoot n
+      ]
+    UncurriedAbs vars e ->
+      [ FunctionDefinition i (uncurry toErlVar <$> vars) $ codegenExpr codegenEnv $ renameRoot e
+      , FunctionDefinition i [] $ codegenExpr codegenEnv $ renameRoot n
+      ]
+    UncurriedEffectAbs vars e ->
+      [ FunctionDefinition i (uncurry toErlVar <$> vars) $ codegenChain effectChainMode codegenEnv $ renameRoot e
+      , FunctionDefinition i [] $ codegenExpr codegenEnv $ renameRoot n
+      ]
     _ ->
       [ FunctionDefinition i [] $ codegenExpr codegenEnv $ renameRoot n ]
 

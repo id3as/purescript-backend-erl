@@ -32,6 +32,7 @@ import Effect.Ref as Ref
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff as FS
 import Node.Glob.Basic (expandGlobs)
+import Node.Library.Execa (execa)
 import Node.Path as Path
 import Node.Process as Process
 import Parsing (parseErrorMessage)
@@ -92,27 +93,13 @@ foreignSemantics = Map.union erlForeignSemantics $
 
 runCompile :: MainArgs -> Aff Unit
 runCompile { compile, filter, cwd } = do
-  let run = false
   liftEffect $ traverse_ Process.chdir cwd
-  failed <- liftEffect $ Ref.new 0
   currentDir <- liftEffect Process.cwd
   let outputDir = Path.concat [ currentDir, "output-erl" ]
   let ebin = Path.concat [ outputDir, "ebin" ]
   mkdirp outputDir
   mkdirp ebin
-  waiting <- liftEffect $ Ref.new Nothing
-  let
-    singleWorkerThread action = do
-      wait <- liftEffect $ Ref.read waiting
-      traverse_ Aff.joinFiber wait
-      fiber <- Aff.forkAff action
-      liftEffect $ Ref.write (Just fiber) waiting
-  -- The glob module does not export a way to test a string against a glob
-  exactMatches <-
-    (expandGlobs "output" ((_ <> "/corefn.json") <$> NEA.toArray filter))
-      <#> Set.mapMaybe
-        (String.stripPrefix (String.Pattern "output/")
-          >=> String.stripSuffix (String.Pattern "/corefn.json"))
+  erls <- liftEffect $ Ref.new []
   coreFnModulesFromOutput "output" filter >>= case _ of
     Left errors -> do
       for_ errors \(Tuple filePath err) -> do
@@ -145,28 +132,10 @@ runCompile { compile, filter, cwd } = do
                   $ codegenModule backend foreigns
             mkdirp moduleOutputDir
             FS.writeTextFile UTF8 moduleOutputPath formatted
-            for_ foreignFile $ FS.writeTextFile UTF8 moduleOutputForeignPath
-            when (run || compile && Set.member name exactMatches) do
-              singleWorkerThread do
-                for_ foreignFile \_ -> do
-                  when compile $ void $ loadModuleMain
-                    { ebin
-                    , modulePath: moduleOutputForeignPath
-                    , runMain: Nothing
-                    }
-                when compile do
-                  result <- loadModuleMain
-                    { runMain: Nothing
-                    , modulePath: moduleOutputPath
-                    , ebin
-                    }
-                  case result of
-                    Left { message } -> do
-                      Console.log $ withGraphics (foreground Red) "✗" <> " " <> name <> " failed to compile."
-                      liftEffect $ Ref.modify_ (_ + 1) failed
-                      Console.log message
-                    Right _ -> do
-                      pure unit
+            for_ foreignFile \x -> do
+              FS.writeTextFile UTF8 moduleOutputForeignPath x
+              liftEffect $ Ref.modify_ (_ <> [moduleOutputForeignPath]) erls
+            liftEffect $ Ref.modify_ (_ <> [moduleOutputPath]) erls
         , onPrepareModule: \build coreFnMod@(Module { name }) -> do
             let total = show build.moduleCount
             let index = show (build.moduleIndex + 1)
@@ -174,10 +143,13 @@ runCompile { compile, filter, cwd } = do
             Console.log $ "[" <> padding <> index <> " of " <> total <> "] Building " <> unwrap name
             pure coreFnMod
         }
-      singleWorkerThread (pure unit)
-      nFailed <- liftEffect $ Ref.read failed
-      case nFailed of
-        0 -> pure unit
-        _ -> pure unit
-      Console.log $ show nFailed <> " out of " <> show (List.length coreFnModules) <> " modules failed to compile"
+      when compile do
+        filesToCompile <- liftEffect $ Ref.read erls
+        spawned <- execa "erlc" ([ "-W0" ] <> filesToCompile)
+          _ { cwd = Just ebin }
+        spawned.result >>= case _ of
+          Left { message } -> do
+            Console.log $ withGraphics (foreground Red) "✗ failed to compile."
+            Console.log message
+          Right _ -> pure unit
       pure unit
