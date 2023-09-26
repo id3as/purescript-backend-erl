@@ -1,5 +1,7 @@
 -module(snapshot_literals_record@ps).
--export([recordAccess/0]).
+-export([recordAccess/1, recordAccess/0]).
+recordAccess(V) ->
+  (maps:get(fooBarBaz, V)).
 recordAccess() ->
   (fun
     (V) ->

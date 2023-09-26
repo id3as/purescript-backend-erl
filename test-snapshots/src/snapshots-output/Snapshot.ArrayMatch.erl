@@ -1,5 +1,12 @@
 -module(snapshot_arrayMatch@ps).
--export([onlyArray/0, nestedArrayViaRecord/0, nestedArrayRefutable2/0, nestedArrayRefutable/0, nestedArray/0, namedArray/0, maybeArray/0, bug28_2/0, bug28/0, result/0]).
+-export([onlyArray/1, onlyArray/0, nestedArrayViaRecord/1, nestedArrayViaRecord/0, nestedArrayRefutable2/2, nestedArrayRefutable2/0, nestedArrayRefutable/2, nestedArrayRefutable/0, nestedArray/1, nestedArray/0, namedArray/1, namedArray/0, maybeArray/1, maybeArray/0, bug28_2/1, bug28_2/0, bug28/1, bug28/0, result/0]).
+onlyArray(A) ->
+  case ((array:size(A)) =:= 2) of
+    true ->
+      ((array:get(0, A)) + (array:get(1, A)));
+    _ ->
+      0
+  end.
 onlyArray() ->
   (fun
     (A) ->
@@ -10,6 +17,23 @@ onlyArray() ->
           0
       end
   end).
+nestedArrayViaRecord(V) ->
+  case ((array:size((maps:get(q, V)))) =:= 1) of
+    true ->
+      case ((array:size((maps:get(r, (array:get(0, (maps:get(q, V)))))))) =:= 2) of
+        true ->
+          ((array:get(0, (maps:get(r, (array:get(0, (maps:get(q, V)))))))) + (array:get(1, (maps:get(r, (array:get(0, (maps:get(q, V)))))))));
+        _ ->
+          0
+      end;
+    _ ->
+      case (((array:size((maps:get(q, V)))) =:= 2) andalso (((array:size((maps:get(r, (array:get(0, (maps:get(q, V)))))))) =:= 1) andalso ((array:size((maps:get(r, (array:get(1, (maps:get(q, V)))))))) =:= 1))) of
+        true ->
+          ((array:get(0, (maps:get(r, (array:get(0, (maps:get(q, V)))))))) + (array:get(0, (maps:get(r, (array:get(1, (maps:get(q, V)))))))));
+        _ ->
+          0
+      end
+  end.
 nestedArrayViaRecord() ->
   (fun
     (V) ->
@@ -30,6 +54,13 @@ nestedArrayViaRecord() ->
           end
       end
   end).
+nestedArrayRefutable2(V, V1@1) ->
+  case (((array:size(V)) =:= 2) andalso (((array:size((array:get(0, V)))) =:= 3) andalso (((array:get(2, (array:get(0, V)))) =:= 3) andalso (V1@1 =:= 2)))) of
+    true ->
+      (((array:get(0, (array:get(0, V)))) + (array:get(1, (array:get(0, V))))) + 1);
+    _ ->
+      0
+  end.
 nestedArrayRefutable2() ->
   (fun
     (V) ->
@@ -43,6 +74,13 @@ nestedArrayRefutable2() ->
           end
       end)
   end).
+nestedArrayRefutable(Arg1, Arg2@1) ->
+  case (((array:size(Arg1)) =:= 2) andalso (((array:size((array:get(0, Arg1)))) =:= 3) andalso (((array:get(2, (array:get(0, Arg1)))) =:= 3) andalso (Arg2@1 =:= 2)))) of
+    true ->
+      (((array:get(0, (array:get(0, Arg1)))) + (array:get(1, (array:get(0, Arg1))))) + 1);
+    _ ->
+      0
+  end.
 nestedArrayRefutable() ->
   (fun
     (Arg1) ->
@@ -56,6 +94,13 @@ nestedArrayRefutable() ->
           end
       end)
   end).
+nestedArray(V) ->
+  case (((array:size(V)) =:= 2) andalso ((array:size((array:get(0, V)))) =:= 2)) of
+    true ->
+      (((array:get(0, (array:get(0, V)))) + (array:get(1, (array:get(0, V))))) + 1);
+    _ ->
+      0
+  end.
 nestedArray() ->
   (fun
     (V) ->
@@ -66,6 +111,13 @@ nestedArray() ->
           0
       end
   end).
+namedArray(V) ->
+  case ((array:size(V)) =:= 2) of
+    true ->
+      ((array:get(0, V)) + (array:get(1, V)));
+    _ ->
+      0
+  end.
 namedArray() ->
   (fun
     (V) ->
@@ -76,6 +128,13 @@ namedArray() ->
           0
       end
   end).
+maybeArray(A) ->
+  case ((just =:= (erlang:element(1, A))) andalso ((array:size((erlang:element(2, A)))) =:= 2)) of
+    true ->
+      ((array:get(0, (erlang:element(2, A)))) + (array:get(1, (erlang:element(2, A)))));
+    _ ->
+      0
+  end.
 maybeArray() ->
   (fun
     (A) ->
@@ -86,11 +145,20 @@ maybeArray() ->
           0
       end
   end).
+bug28_2(A) ->
+  3.
 bug28_2() ->
   (fun
     (_) ->
       3
   end).
+bug28(A) ->
+  case ((array:size((maps:get(q, A)))) =:= 2) of
+    true ->
+      ((array:get(0, (maps:get(q, A)))) + (array:get(1, (maps:get(q, A)))));
+    _ ->
+      0
+  end.
 bug28() ->
   (fun
     (A) ->

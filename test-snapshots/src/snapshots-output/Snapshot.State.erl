@@ -1,5 +1,7 @@
 -module(snapshot_state@ps).
--export(['State'/0, functorState/0, freshMTL/0, freshE/0, fresh/0, exMTL/0, 'exE\''/0, exE/0, monadState/0, bindState/0, applyState/0, applicativeState/0, ex/0]).
+-export(['State'/1, 'State'/0, functorState/0, freshMTL/1, freshMTL/0, freshE/1, freshE/0, fresh/1, fresh/0, exMTL/1, exMTL/0, 'exE\''/1, 'exE\''/0, exE/1, exE/0, monadState/0, bindState/0, applyState/0, applicativeState/0, ex/1, ex/0]).
+'State'(X) ->
+  X.
 'State'() ->
   (fun
     (X) ->
@@ -19,11 +21,18 @@ functorState() ->
           end)
       end)
   end)}.
+freshMTL(X) ->
+  {tuple,X,(X + 1)}.
 freshMTL() ->
   (fun
     (X) ->
       {tuple,X,(X + 1)}
   end).
+freshE(DictMonadState) ->
+  ((maps:get(state, DictMonadState))((fun
+    (S) ->
+      {tuple,S,(S + 1)}
+  end))).
 freshE() ->
   (fun
     (DictMonadState) ->
@@ -32,11 +41,19 @@ freshE() ->
           {tuple,S,(S + 1)}
       end)))
   end).
+fresh(S) ->
+  {tuple,S,(S + 1)}.
 fresh() ->
   (fun
     (S) ->
       {tuple,S,(S + 1)}
   end).
+exMTL(S) ->
+  begin
+    V = (S + 1),
+    {tuple,#{a => S,
+    b => V},(V + 1)}
+  end.
 exMTL() ->
   (fun
     (S) ->
@@ -46,6 +63,15 @@ exMTL() ->
         b => V},(V + 1)}
       end
   end).
+'exE\''(S) ->
+  begin
+    V = (S + 1),
+    (fun
+      () ->
+        {tuple,#{a => S,
+        b => V},(V + 1)}
+    end)
+  end.
 'exE\''() ->
   (fun
     (S) ->
@@ -58,6 +84,15 @@ exMTL() ->
         end)
       end
   end).
+exE(S) ->
+  begin
+    V = (S + 1),
+    (fun
+      () ->
+        {tuple,#{a => S,
+        b => V},(V + 1)}
+    end)
+  end.
 exE() ->
   (fun
     (S) ->
@@ -128,6 +163,12 @@ applicativeState() ->
     (_) ->
       (snapshot_state@ps:applyState())
   end)}.
+ex(S) ->
+  begin
+    V = (S + 1),
+    {tuple,#{a => S,
+    b => V},(V + 1)}
+  end.
 ex() ->
   (fun
     (S) ->

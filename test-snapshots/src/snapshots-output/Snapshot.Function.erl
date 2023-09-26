@@ -1,5 +1,7 @@
 -module(snapshot_function@ps).
--export([f/0, g/0]).
+-export([f/2, f/0, g/2, g/0]).
+f(X, Y@1) ->
+  (array:from_list([X,Y@1,X,Y@1,X])).
 f() ->
   (fun
     (X) ->
@@ -8,6 +10,8 @@ f() ->
           (array:from_list([X,Y,X,Y,X]))
       end)
   end).
+g(X, Y@1) ->
+  (((snapshot_function@ps:f())(X))(Y@1)).
 g() ->
   (fun
     (X) ->

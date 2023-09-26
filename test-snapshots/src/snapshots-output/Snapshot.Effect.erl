@@ -1,5 +1,10 @@
 -module(snapshot_effect@ps).
--export(['don\'tInlineMeMe'/0, lastComponentIsRun/0, lastPureIsUnwrapped/0, main/0]).
+-export(['don\'tInlineMeMe'/1, 'don\'tInlineMeMe'/0, lastComponentIsRun/0, lastPureIsUnwrapped/0, main/0]).
+'don\'tInlineMeMe'(V) ->
+  (fun
+    () ->
+      unit
+  end).
 'don\'tInlineMeMe'() ->
   (fun
     (_) ->
