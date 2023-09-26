@@ -1,5 +1,3 @@
--- -- @inline Snapshot.Erl.Data.List.lit1 always
--- -- @inline Snapshot.Erl.Data.List.lit2 always
 -- @inline Data.Foldable.foldrArray arity=3
 -- -- ^ this is to undo CSE
 -- @expected #{hd=>{just,1},concatNeut=>[1,2,3,4,5,6],concatLR=>[1,2,3,4]}

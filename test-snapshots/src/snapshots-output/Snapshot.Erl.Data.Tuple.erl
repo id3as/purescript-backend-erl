@@ -33,8 +33,8 @@ result() ->
   ((((snapshot_erl_data_tuple@ps:uncurriedMore())({3,4,<<"hi">>,<<"there">>,$V}))((fun
     (_) ->
       <<"">>
-  end)))((snapshot_erl_data_tuple@ps:r5()))).
+  end)))({7,<<"hithere">>})).
 fsttf2() ->
-  7.
+  (((erl_data_tuple@ps:fst())((snapshot_erl_data_tuple@ps:tf2())))(12)).
 fstt2() ->
   4.

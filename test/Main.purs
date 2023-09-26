@@ -43,10 +43,11 @@ import Node.Library.Execa (execa)
 import Node.Path as Path
 import Node.Process as Process
 import Parsing (parseErrorMessage)
-import PureScript.Backend.Erl.Constants (erlExt, moduleLib)
-import PureScript.Backend.Erl.Convert.Common (erlModuleNamePs, erlModuleNameForeign)
+import PureScript.Backend.Erl.Constants (erlExt)
 import PureScript.Backend.Erl.Convert (codegenModule)
+import PureScript.Backend.Erl.Convert.Common (erlModuleNamePs, erlModuleNameForeign)
 import PureScript.Backend.Erl.Foreign (erlForeignSemantics)
+import PureScript.Backend.Erl.Foreign.Analyze (analyzeCustom)
 import PureScript.Backend.Erl.Parser (parseFile)
 import PureScript.Backend.Erl.Printer as P
 import PureScript.Backend.Optimizer.Builder (buildModules)
@@ -120,10 +121,6 @@ runSnapshotTests { accept, compile, run, filter } = do
   rmrf testOut
   mkdirp testOut
   mkdirp ebin
-  -- RUNTIME
-  let runtimePath = Path.concat [ testOut, "purs", "runtime" ]
-  mkdirp runtimePath
-  let runtimeFilePath = Path.concat [ runtimePath, moduleLib <> erlExt ]
   -- let runtimeContents = Dodo.print plainText Dodo.twoSpaces $ P.printModule $ runtimeModule
   -- FS.writeTextFile UTF8 runtimeFilePath runtimeContents
   cpr vendorDirectory testOut
@@ -138,6 +135,7 @@ runSnapshotTests { accept, compile, run, filter } = do
       -- copyFile (Path.concat [ "..", "..", "runtime.js" ]) (Path.concat [ testOut, "runtime.js" ])
       coreFnModules # buildModules
         { directives
+        , analyzeCustom
         , foreignSemantics
         , traceIdents: mempty
         , onCodegenModule: \_ (Module { name: ModuleName name, path: reportedPath, exports }) (backend) _ -> do

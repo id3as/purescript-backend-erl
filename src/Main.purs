@@ -9,15 +9,13 @@ import ArgParse.Basic as ArgParser
 import Data.Array (notElem)
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
-import Data.Array.NonEmpty as NEA
 import Data.Either (Either(..), either)
 import Data.Foldable (for_, traverse_)
 import Data.List as List
 import Data.Map as Map
-import Data.Maybe (Maybe(..), fromMaybe, maybe)
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Monoid (power)
 import Data.Newtype (unwrap)
-import Data.Set as Set
 import Data.String as String
 import Data.String.CodeUnits as SCU
 import Data.Tuple (Tuple(..))
@@ -31,7 +29,6 @@ import Effect.Class.Console as Console
 import Effect.Ref as Ref
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff as FS
-import Node.Glob.Basic (expandGlobs)
 import Node.Library.Execa (execa)
 import Node.Path as Path
 import Node.Process as Process
@@ -40,6 +37,7 @@ import PureScript.Backend.Erl.Constants (erlExt)
 import PureScript.Backend.Erl.Convert (codegenModule)
 import PureScript.Backend.Erl.Convert.Common (erlModuleNamePs, erlModuleNameForeign)
 import PureScript.Backend.Erl.Foreign (erlForeignSemantics)
+import PureScript.Backend.Erl.Foreign.Analyze (analyzeCustom)
 import PureScript.Backend.Erl.Parser (parseFile)
 import PureScript.Backend.Erl.Printer as P
 import PureScript.Backend.Optimizer.Builder (buildModules)
@@ -47,7 +45,7 @@ import PureScript.Backend.Optimizer.CoreFn (Ident, Module(..), ModuleName(..), Q
 import PureScript.Backend.Optimizer.Directives (parseDirectiveFile)
 import PureScript.Backend.Optimizer.Directives.Defaults (defaultDirectives)
 import PureScript.Backend.Optimizer.Semantics.Foreign (ForeignEval, coreForeignSemantics)
-import Test.Utils (coreFnModulesFromOutput, loadModuleMain, mkdirp)
+import Test.Utils (coreFnModulesFromOutput, mkdirp)
 
 type MainArgs =
   { compile :: Boolean
@@ -111,6 +109,7 @@ runCompile { compile, filter, cwd } = do
       let { directives } = parseDirectiveFile defaultDirectives
       coreFnModules # buildModules
         { directives
+        , analyzeCustom
         , foreignSemantics
         , traceIdents: mempty
         , onCodegenModule: \_ (Module { name: ModuleName name, path, exports }) (backend) _ -> do

@@ -1,6 +1,3 @@
--- @inline Snapshot.Erl.Data.Tuple.t2 always
--- @inline Snapshot.Erl.Data.Tuple.tf2 always
--- @inline Snapshot.Erl.Data.Tuple.t5 always
 -- @inline Snapshot.Erl.Data.Tuple.uncurriedMore never
 -- @expected {14,<<"hitherehithere">>}
 module Snapshot.Erl.Data.Tuple where
