@@ -73,7 +73,6 @@ codegenModule { name, bindings, imports, foreign: foreign_, exports: moduleExpor
 definitionExports :: ErlDefinition -> Array ErlExport
 definitionExports = case _ of
   FunctionDefinition f a _ -> [ Export f (Array.length a) ]
-  _ -> []
 
 codegenTopLevelBindingGroup
   :: CodegenEnv
@@ -400,7 +399,7 @@ codegenLetRec codegenEnv { lvl, bindings }
       }
 
 codegenPrimOp :: CodegenEnv -> BackendOperator NeutralExpr -> ErlExpr
-codegenPrimOp codegenEnv@{ currentModule } = case _ of
+codegenPrimOp codegenEnv = case _ of
   Op1 o x -> do
     let
       x' = codegenExpr codegenEnv x
@@ -412,14 +411,7 @@ codegenPrimOp codegenEnv@{ currentModule } = case _ of
       OpArrayLength ->
         S.FunCall (Just $ atomLiteral C.array) (atomLiteral C.size) [ x' ]
       OpIsTag (Qualified _ (Ident constructor)) ->
-        foldr (S.BinOp S.AndAlso) (S.Literal (S.Atom "true"))
-        [ S.FunCall (Just $ atomLiteral C.erlang) (atomLiteral "is_tuple") [ x' ]
-        , S.BinOp S.LessThanOrEqualTo (S.Literal (S.Integer 1)) $
-            S.FunCall (Just $ atomLiteral C.erlang) (atomLiteral "tuple_size") [ x' ]
-        , S.BinOp S.IdenticalTo (S.atomLiteral (toAtomName constructor)) $
-            S.FunCall (Just $ atomLiteral C.erlang) (atomLiteral C.element)
-              [ S.numberLiteral 1, x' ]
-        ]
+        S.mIS_TAG (S.atomLiteral (toAtomName constructor)) x'
 
   Op2 o x y ->
     let

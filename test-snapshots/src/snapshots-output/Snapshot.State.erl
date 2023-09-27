@@ -17,7 +17,7 @@ functorState() ->
             (S) ->
               begin
                 V1 = (V(S)),
-                {tuple,(F((erlang:element(2, V1)))),(erlang:element(3, V1))}
+                {tuple, (F((erlang:element(2, V1)))), (erlang:element(3, V1))}
               end
           end)
       end)
@@ -28,7 +28,7 @@ freshMTL() ->
       (freshMTL(X@Local))
   end).
 freshMTL(X) ->
-  {tuple,X,(X + 1)}.
+  {tuple, X, (X + 1)}.
 freshE() ->
   (fun
     (DictMonadState@Local) ->
@@ -37,7 +37,7 @@ freshE() ->
 freshE(DictMonadState) ->
   ((maps:get(state, DictMonadState))((fun
     (S) ->
-      {tuple,S,(S + 1)}
+      {tuple, S, (S + 1)}
   end))).
 fresh() ->
   (fun
@@ -45,7 +45,7 @@ fresh() ->
       (fresh(S@Local))
   end).
 fresh(S) ->
-  {tuple,S,(S + 1)}.
+  {tuple, S, (S + 1)}.
 exMTL() ->
   (fun
     (S@Local) ->
@@ -54,8 +54,8 @@ exMTL() ->
 exMTL(S) ->
   begin
     V = (S + 1),
-    {tuple,#{a => S,
-    b => V},(V + 1)}
+    {tuple, #{a => S,
+    b => V}, (V + 1)}
   end.
 'exE\''() ->
   (fun
@@ -67,8 +67,8 @@ exMTL(S) ->
     V = (S + 1),
     (fun
       () ->
-        {tuple,#{a => S,
-        b => V},(V + 1)}
+        {tuple, #{a => S,
+        b => V}, (V + 1)}
     end)
   end.
 exE() ->
@@ -81,8 +81,8 @@ exE(S) ->
     V = (S + 1),
     (fun
       () ->
-        {tuple,#{a => S,
-        b => V},(V + 1)}
+        {tuple, #{a => S,
+        b => V}, (V + 1)}
     end)
   end.
 monadState() ->
@@ -136,7 +136,7 @@ applicativeState() ->
     (A) ->
       (fun
         (S) ->
-          {tuple,A,S}
+          {tuple, A, S}
       end)
   end),
   'Apply0' => (fun
@@ -151,6 +151,6 @@ ex() ->
 ex(S) ->
   begin
     V = (S + 1),
-    {tuple,#{a => S,
-    b => V},(V + 1)}
+    {tuple, #{a => S,
+    b => V}, (V + 1)}
   end.

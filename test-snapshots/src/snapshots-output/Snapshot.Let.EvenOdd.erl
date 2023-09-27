@@ -29,5 +29,5 @@ result() ->
     end),
     IsOdd = (IsOdd@MutualFn(IsOdd@MutualFn, IsEven@MutualFn)),
     IsEven = (IsEven@MutualFn(IsOdd@MutualFn, IsEven@MutualFn)),
-    {tuple,(IsEven(5)),(IsOdd(5))}
+    {tuple, (IsEven(5)), (IsOdd(5))}
   end.

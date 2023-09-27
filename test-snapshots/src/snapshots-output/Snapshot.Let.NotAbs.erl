@@ -5,7 +5,7 @@ result() ->
   begin
     FibAnd@Rec = (fun
       FibAnd@Rec () ->
-        {tuple,<<"fib">>,(fun
+        {tuple, <<"fib">>, (fun
           (N) ->
             case (N < 2) of
               true ->
@@ -15,5 +15,5 @@ result() ->
             end
         end)}
     end),
-    {tuple,(erlang:element(2, (FibAnd@Rec()))),((erlang:element(3, (FibAnd@Rec())))(6))}
+    {tuple, (erlang:element(2, (FibAnd@Rec()))), ((erlang:element(3, (FibAnd@Rec())))(6))}
   end.

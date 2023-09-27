@@ -22,7 +22,7 @@ i(V, V1) ->
             true ->
               false;
             _ ->
-              (erlang:throw({fail,<<"Failed pattern match">>}))
+              (erlang:throw({fail, <<"Failed pattern match">>}))
           end
       end
   end.
@@ -36,7 +36,7 @@ h(V) ->
     true ->
       3.14159;
     _ ->
-      (erlang:throw({fail,<<"Failed pattern match">>}))
+      (erlang:throw({fail, <<"Failed pattern match">>}))
   end.
 g() ->
   (fun

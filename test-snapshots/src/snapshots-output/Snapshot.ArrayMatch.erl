@@ -1,6 +1,7 @@
 -module(snapshot_arrayMatch@ps).
 -export([onlyArray/0, onlyArray/1, nestedArrayViaRecord/0, nestedArrayViaRecord/1, nestedArrayRefutable2/0, nestedArrayRefutable2/2, nestedArrayRefutable/0, nestedArrayRefutable/2, nestedArray/0, nestedArray/1, namedArray/0, namedArray/1, maybeArray/0, maybeArray/1, bug28_2/0, bug28_2/1, bug28/0, bug28/1, result/0]).
 -compile(no_auto_import).
+-define(IS_TAG(Tag, V), ((erlang:is_tuple(V)) andalso ((1 =< (erlang:tuple_size(V))) andalso (Tag =:= (erlang:element(1, V)))))).
 onlyArray() ->
   (fun
     (A@Local) ->
@@ -95,7 +96,7 @@ maybeArray() ->
       (maybeArray(A@Local))
   end).
 maybeArray(A) ->
-  case (((erlang:is_tuple(A)) andalso ((1 =< (erlang:tuple_size(A))) andalso ((just =:= (erlang:element(1, A))) andalso true))) andalso ((array:size((erlang:element(2, A)))) =:= 2)) of
+  case (?IS_TAG(just, A) andalso ((array:size((erlang:element(2, A)))) =:= 2)) of
     true ->
       ((array:get(0, (erlang:element(2, A)))) + (array:get(1, (erlang:element(2, A)))));
     _ ->
@@ -121,4 +122,4 @@ bug28(A) ->
       0
   end.
 result() ->
-  (array:from_list([((snapshot_arrayMatch@ps:bug28())(#{q => (array:from_list([1,2]))})),((snapshot_arrayMatch@ps:bug28_2())(#{q => (array:from_list([1,2]))})),((snapshot_arrayMatch@ps:nestedArray())((array:from_list([(array:from_list([1,2])),(array:from_list([3]))])))),((snapshot_arrayMatch@ps:nestedArrayViaRecord())(#{q => (array:from_list([#{r => (array:from_list([1,2]))},#{r => (array:from_list([3]))}]))})),((snapshot_arrayMatch@ps:onlyArray())((array:from_list([1])))),((snapshot_arrayMatch@ps:maybeArray())({just,(array:from_list([1,2]))})),((snapshot_arrayMatch@ps:namedArray())((array:from_list([1,2]))))])).
+  (array:from_list([((snapshot_arrayMatch@ps:bug28())(#{q => (array:from_list([1, 2]))})), ((snapshot_arrayMatch@ps:bug28_2())(#{q => (array:from_list([1, 2]))})), ((snapshot_arrayMatch@ps:nestedArray())((array:from_list([(array:from_list([1, 2])), (array:from_list([3]))])))), ((snapshot_arrayMatch@ps:nestedArrayViaRecord())(#{q => (array:from_list([#{r => (array:from_list([1, 2]))}, #{r => (array:from_list([3]))}]))})), ((snapshot_arrayMatch@ps:onlyArray())((array:from_list([1])))), ((snapshot_arrayMatch@ps:maybeArray())({just, (array:from_list([1, 2]))})), ((snapshot_arrayMatch@ps:namedArray())((array:from_list([1, 2]))))])).

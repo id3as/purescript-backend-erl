@@ -1,6 +1,7 @@
 -module(snapshot_prime@ps).
 -export(['NCtor'/0, 'NCtor'/1, 'NewtypeCtor\''/0, 'NewtypeCtor\''/1, 'F1'/0, 'F2'/0, 'DCtor'/0, 'Ctor\''/0, useNewtypeType/0, useNewtypeType/1, useNewtypeCtor/0, useNewtypeCtor/1, useDataType/0, useDataType/1, useDataCtor/0, useDataCtor/1, normal/0, normal/1, useNormal/0, useNormal/1, 'instanceName\''/0, useNormal1/0, useInstance/0, ignore/0, ignore/1, useClass/0, useClass/1, 'foo\'oo'/0, useFooPrime3/0, 'foo\'\''/0, useFooPrime2/0, 'foo\''/0, useFooPrime1/0, result/0, foo/0, 'classMember\''/0, 'classMember\''/1, useMember/0, useMember/1]).
 -compile(no_auto_import).
+-define(IS_TAG(Tag, V), ((erlang:is_tuple(V)) andalso ((1 =< (erlang:tuple_size(V))) andalso (Tag =:= (erlang:element(1, V)))))).
 'NCtor'() ->
   (fun
     (X@Local) ->
@@ -26,7 +27,7 @@
     (Value0) ->
       (fun
         (Value1) ->
-          {'ctor\'',Value0,Value1}
+          {'ctor\'', Value0, Value1}
       end)
   end).
 useNewtypeType() ->
@@ -56,7 +57,7 @@ useDataCtor() ->
       (useDataCtor(S@Local))
   end).
 useDataCtor(S) ->
-  {'ctor\'',S,4}.
+  {'ctor\'', S, 4}.
 normal() ->
   (fun
     (Dict@Local) ->
@@ -89,15 +90,15 @@ useNormal(DictNormal) ->
 'instanceName\''() ->
   #{normal => (fun
     (V) ->
-      case ((erlang:is_tuple(V)) andalso ((1 =< (erlang:tuple_size(V))) andalso ((f1 =:= (erlang:element(1, V))) andalso true))) of
+      case ?IS_TAG(f1, V) of
         true ->
           <<"F1">>;
         _ ->
-          case ((erlang:is_tuple(V)) andalso ((1 =< (erlang:tuple_size(V))) andalso ((f2 =:= (erlang:element(1, V))) andalso true))) of
+          case ?IS_TAG(f2, V) of
             true ->
               <<"F2">>;
             _ ->
-              (erlang:throw({fail,<<"Failed pattern match">>}))
+              (erlang:throw({fail, <<"Failed pattern match">>}))
           end
       end
   end)}.

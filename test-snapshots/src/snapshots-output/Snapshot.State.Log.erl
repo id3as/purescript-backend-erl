@@ -9,7 +9,7 @@ freshE() ->
 freshE(DictMonadState) ->
   ((maps:get(state, DictMonadState))((fun
     (S) ->
-      {tuple,S,(S + 1)}
+      {tuple, S, (S + 1)}
   end))).
 'exE\''() ->
   (fun
@@ -24,8 +24,8 @@ freshE(DictMonadState) ->
         begin
           _ = (((effect_console@ps:log())(((data_show@ps:showIntImpl())(S))))()),
           _ = (((effect_console@ps:log())(((data_show@ps:showIntImpl())(V))))()),
-          {tuple,#{a => S,
-          b => V},(V + 1)}
+          {tuple, #{a => S,
+          b => V}, (V + 1)}
         end
     end)
   end.
@@ -42,8 +42,8 @@ exE(S) ->
         begin
           _ = (((effect_console@ps:log())(((data_show@ps:showIntImpl())(S))))()),
           _ = (((effect_console@ps:log())(((data_show@ps:showIntImpl())(V))))()),
-          {tuple,#{a => S,
-          b => V},(V + 1)}
+          {tuple, #{a => S,
+          b => V}, (V + 1)}
         end
     end)
   end.

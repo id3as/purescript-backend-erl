@@ -20,7 +20,7 @@ numberOps() ->
       end)
   end).
 numberOps(X, Y) ->
-  (array:from_list([(X + Y),(X / Y),(X * Y),(X - Y)])).
+  (array:from_list([(X + Y), (X / Y), (X * Y), (X - Y)])).
 intOps() ->
   (fun
     (X@Local) ->
@@ -30,7 +30,7 @@ intOps() ->
       end)
   end).
 intOps(X, Y) ->
-  (array:from_list([(X band Y),(X bor Y),(X bsr Y),(X bsl Y),(X bsr Y),(X xor Y),(X + Y),(X div Y),(X * Y),(X - Y)])).
+  (array:from_list([(X band Y), (X bor Y), (X bsr Y), (X bsl Y), (X bsr Y), (X xor Y), (X + Y), (X div Y), (X * Y), (X - Y)])).
 booleanOps() ->
   (fun
     (X@Local) ->
@@ -40,4 +40,4 @@ booleanOps() ->
       end)
   end).
 booleanOps(X, Y) ->
-  (array:from_list([(X andalso Y),(X orelse Y)])).
+  (array:from_list([(X andalso Y), (X orelse Y)])).

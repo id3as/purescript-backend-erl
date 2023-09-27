@@ -10,7 +10,7 @@ stringComparison() ->
       end)
   end).
 stringComparison(X, Y) ->
-  (array:from_list([(X =:= Y),(X =/= Y),(X < Y),(X =< Y),(X >= Y),(X > Y)])).
+  (array:from_list([(X =:= Y), (X =/= Y), (X < Y), (X =< Y), (X >= Y), (X > Y)])).
 numberComparison() ->
   (fun
     (X@Local) ->
@@ -20,7 +20,7 @@ numberComparison() ->
       end)
   end).
 numberComparison(X, Y) ->
-  (array:from_list([(X =:= Y),(X =/= Y),(X < Y),(X =< Y),(X >= Y),(X > Y)])).
+  (array:from_list([(X =:= Y), (X =/= Y), (X < Y), (X =< Y), (X >= Y), (X > Y)])).
 integerComparison() ->
   (fun
     (X@Local) ->
@@ -30,7 +30,7 @@ integerComparison() ->
       end)
   end).
 integerComparison(X, Y) ->
-  (array:from_list([(X =:= Y),(X =/= Y),(X < Y),(X =< Y),(X >= Y),(X > Y)])).
+  (array:from_list([(X =:= Y), (X =/= Y), (X < Y), (X =< Y), (X >= Y), (X > Y)])).
 charComparison() ->
   (fun
     (X@Local) ->
@@ -40,7 +40,7 @@ charComparison() ->
       end)
   end).
 charComparison(X, Y) ->
-  (array:from_list([(X =:= Y),(X =/= Y),(X < Y),(X =< Y),(X >= Y),(X > Y)])).
+  (array:from_list([(X =:= Y), (X =/= Y), (X < Y), (X =< Y), (X >= Y), (X > Y)])).
 booleanComparison() ->
   (fun
     (X@Local) ->
@@ -50,4 +50,4 @@ booleanComparison() ->
       end)
   end).
 booleanComparison(X, Y) ->
-  (array:from_list([(X =:= Y),(X =/= Y),(X < Y),(X =< Y),(X >= Y),(X > Y)])).
+  (array:from_list([(X =:= Y), (X =/= Y), (X < Y), (X =< Y), (X >= Y), (X > Y)])).

@@ -10,7 +10,7 @@ f() ->
       end)
   end).
 f(X, Y) ->
-  (array:from_list([X,Y,X,Y,X])).
+  (array:from_list([X, Y, X, Y, X])).
 g() ->
   (fun
     (X@Local) ->

@@ -1,6 +1,7 @@
 -module(snapshot_inlineCommonOperators@ps).
 -export([min/0, min/2, max/0, max/2, 'N'/0, 'N'/1, newtypeN_/0, inlineWrap/0, inlineVoid/0, inlineUnwrap/0, inlineUnsafeCoerce/0, inlineUnary/0, inlineUnary/3, inlineOver2/0, inlineOver/0, inlineOver/1, inlineListSingleton/0, inlineListCons/0, inlineListCons/2, inlineIntToNumber/0, inlineCoerce/0, inlineBinary/0, inlineBinary/5, inlineAtom/0]).
 -compile(no_auto_import).
+-define(IS_TAG(Tag, V), ((erlang:is_tuple(V)) andalso ((1 =< (erlang:tuple_size(V))) andalso (Tag =:= (erlang:element(1, V)))))).
 min() ->
   (fun
     (X@Local) ->
@@ -12,19 +13,19 @@ min() ->
 min(X, Y) ->
   begin
     V = (((maps:get(compare, (data_ord@ps:ordInt())))(X))(Y)),
-    case ((erlang:is_tuple(V)) andalso ((1 =< (erlang:tuple_size(V))) andalso ((lT =:= (erlang:element(1, V))) andalso true))) of
+    case ?IS_TAG(lT, V) of
       true ->
         X;
       _ ->
-        case ((erlang:is_tuple(V)) andalso ((1 =< (erlang:tuple_size(V))) andalso ((eQ =:= (erlang:element(1, V))) andalso true))) of
+        case ?IS_TAG(eQ, V) of
           true ->
             X;
           _ ->
-            case ((erlang:is_tuple(V)) andalso ((1 =< (erlang:tuple_size(V))) andalso ((gT =:= (erlang:element(1, V))) andalso true))) of
+            case ?IS_TAG(gT, V) of
               true ->
                 Y;
               _ ->
-                (erlang:throw({fail,<<"Failed pattern match">>}))
+                (erlang:throw({fail, <<"Failed pattern match">>}))
             end
         end
     end
@@ -40,19 +41,19 @@ max() ->
 max(X, Y) ->
   begin
     V = (((maps:get(compare, (data_ord@ps:ordInt())))(X))(Y)),
-    case ((erlang:is_tuple(V)) andalso ((1 =< (erlang:tuple_size(V))) andalso ((lT =:= (erlang:element(1, V))) andalso true))) of
+    case ?IS_TAG(lT, V) of
       true ->
         Y;
       _ ->
-        case ((erlang:is_tuple(V)) andalso ((1 =< (erlang:tuple_size(V))) andalso ((eQ =:= (erlang:element(1, V))) andalso true))) of
+        case ?IS_TAG(eQ, V) of
           true ->
             X;
           _ ->
-            case ((erlang:is_tuple(V)) andalso ((1 =< (erlang:tuple_size(V))) andalso ((gT =:= (erlang:element(1, V))) andalso true))) of
+            case ?IS_TAG(gT, V) of
               true ->
                 X;
               _ ->
-                (erlang:throw({fail,<<"Failed pattern match">>}))
+                (erlang:throw({fail, <<"Failed pattern match">>}))
             end
         end
     end
