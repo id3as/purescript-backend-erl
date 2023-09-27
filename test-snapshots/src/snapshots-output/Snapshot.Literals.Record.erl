@@ -3,8 +3,8 @@
 -compile(no_auto_import).
 recordAccess() ->
   (fun
-    (V@0) ->
-      (recordAccess(V@0))
+    (V@Local) ->
+      (recordAccess(V@Local))
   end).
 recordAccess(V) ->
   (maps:get(fooBarBaz, V)).

@@ -3,8 +3,8 @@
 -compile(no_auto_import).
 testAccessorGetIndex() ->
   (fun
-    (V@0) ->
-      (testAccessorGetIndex(V@0))
+    (V@Local) ->
+      (testAccessorGetIndex(V@Local))
   end).
 testAccessorGetIndex(V) ->
   case ((array:size(V)) =:= 1) of

@@ -3,10 +3,10 @@
 -compile(no_auto_import).
 min() ->
   (fun
-    (V@0) ->
+    (X@Local) ->
       (fun
-        (V@1) ->
-          (min(V@0, V@1))
+        (Y@Local@1) ->
+          (min(X@Local, Y@Local@1))
       end)
   end).
 min(X, Y) ->
@@ -31,10 +31,10 @@ min(X, Y) ->
   end.
 max() ->
   (fun
-    (V@0) ->
+    (X@Local) ->
       (fun
-        (V@1) ->
-          (max(V@0, V@1))
+        (Y@Local@1) ->
+          (max(X@Local, Y@Local@1))
       end)
   end).
 max(X, Y) ->
@@ -59,8 +59,8 @@ max(X, Y) ->
   end.
 'N'() ->
   (fun
-    (V@0) ->
-      ('N'(V@0))
+    (X@Local) ->
+      ('N'(X@Local))
   end).
 'N'(X) ->
   X.
@@ -82,12 +82,12 @@ inlineUnsafeCoerce() ->
   42.
 inlineUnary() ->
   (fun
-    (V@0) ->
+    (I@Local) ->
       (fun
-        (V@1) ->
+        (N@Local@1) ->
           (fun
-            (V@2) ->
-              (inlineUnary(V@0, V@1, V@2))
+            (B@Local@2) ->
+              (inlineUnary(I@Local, N@Local@1, B@Local@2))
           end)
       end)
   end).
@@ -99,8 +99,8 @@ inlineOver2() ->
   (data_semiring@ps:intAdd()).
 inlineOver() ->
   (fun
-    (V@0) ->
-      (inlineOver(V@0))
+    (V@Local) ->
+      (inlineOver(V@Local))
   end).
 inlineOver(V) ->
   (V + 1).
@@ -108,10 +108,10 @@ inlineListSingleton() ->
   [1].
 inlineListCons() ->
   (fun
-    (V@0) ->
+    (X@Local) ->
       (fun
-        (V@1) ->
-          (inlineListCons(V@0, V@1))
+        (V@Local@1) ->
+          (inlineListCons(X@Local, V@Local@1))
       end)
   end).
 inlineListCons(X, V) ->
@@ -122,16 +122,16 @@ inlineCoerce() ->
   42.
 inlineBinary() ->
   (fun
-    (V@0) ->
+    (I@Local) ->
       (fun
-        (V@1) ->
+        (N@Local@1) ->
           (fun
-            (V@2) ->
+            (B@Local@2) ->
               (fun
-                (V@3) ->
+                (S@Local@3) ->
                   (fun
-                    (V@4) ->
-                      (inlineBinary(V@0, V@1, V@2, V@3, V@4))
+                    (C@Local@4) ->
+                      (inlineBinary(I@Local, N@Local@1, B@Local@2, S@Local@3, C@Local@4))
                   end)
               end)
           end)

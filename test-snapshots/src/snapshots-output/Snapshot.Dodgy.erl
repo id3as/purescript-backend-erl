@@ -7,15 +7,15 @@
   {thereToGetRidOfUnreachableWarning}.
 noInline() ->
   (fun
-    (V@0) ->
-      (noInline(V@0))
+    (A@Local) ->
+      (noInline(A@Local))
   end).
 noInline(A) ->
   A.
 isSecretMsg() ->
   (fun
-    (V@0) ->
-      (isSecretMsg(V@0))
+    (V@Local) ->
+      (isSecretMsg(V@Local))
   end).
 isSecretMsg(V) ->
   ((erlang:is_tuple(V)) andalso ((1 =< (erlang:tuple_size(V))) andalso ((privateProcessTTimeoutMsg__ =:= (erlang:element(1, V))) andalso true))).

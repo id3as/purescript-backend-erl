@@ -3,15 +3,15 @@
 -compile(no_auto_import).
 'NCtor'() ->
   (fun
-    (V@0) ->
-      ('NCtor'(V@0))
+    (X@Local) ->
+      ('NCtor'(X@Local))
   end).
 'NCtor'(X) ->
   X.
 'NewtypeCtor\''() ->
   (fun
-    (V@0) ->
-      ('NewtypeCtor\''(V@0))
+    (X@Local) ->
+      ('NewtypeCtor\''(X@Local))
   end).
 'NewtypeCtor\''(X) ->
   X.
@@ -31,43 +31,43 @@
   end).
 useNewtypeType() ->
   (fun
-    (V@0) ->
-      (useNewtypeType(V@0))
+    (I@Local) ->
+      (useNewtypeType(I@Local))
   end).
 useNewtypeType(I) ->
   I.
 useNewtypeCtor() ->
   (fun
-    (V@0) ->
-      (useNewtypeCtor(V@0))
+    (I@Local) ->
+      (useNewtypeCtor(I@Local))
   end).
 useNewtypeCtor(I) ->
   I.
 useDataType() ->
   (fun
-    (V@0) ->
-      (useDataType(V@0))
+    (V@Local) ->
+      (useDataType(V@Local))
   end).
 useDataType(_) ->
   {dCtor}.
 useDataCtor() ->
   (fun
-    (V@0) ->
-      (useDataCtor(V@0))
+    (S@Local) ->
+      (useDataCtor(S@Local))
   end).
 useDataCtor(S) ->
   {'ctor\'',S,4}.
 normal() ->
   (fun
-    (V@0) ->
-      (normal(V@0))
+    (Dict@Local) ->
+      (normal(Dict@Local))
   end).
 normal(Dict) ->
   (maps:get(normal, Dict)).
 useNormal() ->
   (fun
-    (V@0) ->
-      (useNormal(V@0))
+    (DictNormal@Local) ->
+      (useNormal(DictNormal@Local))
   end).
 useNormal(DictNormal) ->
   begin
@@ -107,15 +107,15 @@ useInstance() ->
   (((snapshot_prime@ps:useNormal1())({f1}))({f2})).
 ignore() ->
   (fun
-    (V@0) ->
-      (ignore(V@0))
+    (Dict@Local) ->
+      (ignore(Dict@Local))
   end).
 ignore(Dict) ->
   (maps:get(ignore, Dict)).
 useClass() ->
   (fun
-    (V@0) ->
-      (useClass(V@0))
+    (DictClassName_@prime@Local) ->
+      (useClass(DictClassName_@prime@Local))
   end).
 useClass(DictClassName_@prime) ->
   ((snapshot_prime@ps:ignore())(DictClassName_@prime)).
@@ -140,15 +140,15 @@ foo() ->
   <<"foo">>.
 'classMember\''() ->
   (fun
-    (V@0) ->
-      ('classMember\''(V@0))
+    (Dict@Local) ->
+      ('classMember\''(Dict@Local))
   end).
 'classMember\''(Dict) ->
   (maps:get('classMember\'', Dict)).
 useMember() ->
   (fun
-    (V@0) ->
-      (useMember(V@0))
+    (DictClassMember@Local) ->
+      (useMember(DictClassMember@Local))
   end).
 useMember(DictClassMember) ->
   ((snapshot_prime@ps:'classMember\''())(DictClassMember)).

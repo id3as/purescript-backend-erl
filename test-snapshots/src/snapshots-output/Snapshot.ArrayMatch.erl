@@ -3,8 +3,8 @@
 -compile(no_auto_import).
 onlyArray() ->
   (fun
-    (V@0) ->
-      (onlyArray(V@0))
+    (A@Local) ->
+      (onlyArray(A@Local))
   end).
 onlyArray(A) ->
   case ((array:size(A)) =:= 2) of
@@ -15,8 +15,8 @@ onlyArray(A) ->
   end.
 nestedArrayViaRecord() ->
   (fun
-    (V@0) ->
-      (nestedArrayViaRecord(V@0))
+    (V@Local) ->
+      (nestedArrayViaRecord(V@Local))
   end).
 nestedArrayViaRecord(V) ->
   case ((array:size((maps:get(q, V)))) =:= 1) of
@@ -37,10 +37,10 @@ nestedArrayViaRecord(V) ->
   end.
 nestedArrayRefutable2() ->
   (fun
-    (V@0) ->
+    (V@Local) ->
       (fun
-        (V@1) ->
-          (nestedArrayRefutable2(V@0, V@1))
+        (V1@Local@1) ->
+          (nestedArrayRefutable2(V@Local, V1@Local@1))
       end)
   end).
 nestedArrayRefutable2(V, V1) ->
@@ -52,10 +52,10 @@ nestedArrayRefutable2(V, V1) ->
   end.
 nestedArrayRefutable() ->
   (fun
-    (V@0) ->
+    (Arg1@Local) ->
       (fun
-        (V@1) ->
-          (nestedArrayRefutable(V@0, V@1))
+        (Arg2@Local@1) ->
+          (nestedArrayRefutable(Arg1@Local, Arg2@Local@1))
       end)
   end).
 nestedArrayRefutable(Arg1, Arg2) ->
@@ -67,8 +67,8 @@ nestedArrayRefutable(Arg1, Arg2) ->
   end.
 nestedArray() ->
   (fun
-    (V@0) ->
-      (nestedArray(V@0))
+    (V@Local) ->
+      (nestedArray(V@Local))
   end).
 nestedArray(V) ->
   case (((array:size(V)) =:= 2) andalso ((array:size((array:get(0, V)))) =:= 2)) of
@@ -79,8 +79,8 @@ nestedArray(V) ->
   end.
 namedArray() ->
   (fun
-    (V@0) ->
-      (namedArray(V@0))
+    (V@Local) ->
+      (namedArray(V@Local))
   end).
 namedArray(V) ->
   case ((array:size(V)) =:= 2) of
@@ -91,8 +91,8 @@ namedArray(V) ->
   end.
 maybeArray() ->
   (fun
-    (V@0) ->
-      (maybeArray(V@0))
+    (A@Local) ->
+      (maybeArray(A@Local))
   end).
 maybeArray(A) ->
   case (((erlang:is_tuple(A)) andalso ((1 =< (erlang:tuple_size(A))) andalso ((just =:= (erlang:element(1, A))) andalso true))) andalso ((array:size((erlang:element(2, A)))) =:= 2)) of
@@ -103,15 +103,15 @@ maybeArray(A) ->
   end.
 bug28_2() ->
   (fun
-    (V@0) ->
-      (bug28_2(V@0))
+    (A@Local) ->
+      (bug28_2(A@Local))
   end).
 bug28_2(_) ->
   3.
 bug28() ->
   (fun
-    (V@0) ->
-      (bug28(V@0))
+    (A@Local) ->
+      (bug28(A@Local))
   end).
 bug28(A) ->
   case ((array:size((maps:get(q, A)))) =:= 2) of

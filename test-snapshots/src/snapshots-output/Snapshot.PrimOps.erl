@@ -3,40 +3,40 @@
 -compile(no_auto_import).
 stringOps() ->
   (fun
-    (V@0) ->
+    (X@Local) ->
       (fun
-        (V@1) ->
-          (stringOps(V@0, V@1))
+        (Y@Local@1) ->
+          (stringOps(X@Local, Y@Local@1))
       end)
   end).
 stringOps(X, Y) ->
   (array:from_list([<<X/binary, Y/binary>>])).
 numberOps() ->
   (fun
-    (V@0) ->
+    (X@Local) ->
       (fun
-        (V@1) ->
-          (numberOps(V@0, V@1))
+        (Y@Local@1) ->
+          (numberOps(X@Local, Y@Local@1))
       end)
   end).
 numberOps(X, Y) ->
   (array:from_list([(X + Y),(X / Y),(X * Y),(X - Y)])).
 intOps() ->
   (fun
-    (V@0) ->
+    (X@Local) ->
       (fun
-        (V@1) ->
-          (intOps(V@0, V@1))
+        (Y@Local@1) ->
+          (intOps(X@Local, Y@Local@1))
       end)
   end).
 intOps(X, Y) ->
   (array:from_list([(X band Y),(X bor Y),(X bsr Y),(X bsl Y),(X bsr Y),(X xor Y),(X + Y),(X div Y),(X * Y),(X - Y)])).
 booleanOps() ->
   (fun
-    (V@0) ->
+    (X@Local) ->
       (fun
-        (V@1) ->
-          (booleanOps(V@0, V@1))
+        (Y@Local@1) ->
+          (booleanOps(X@Local, Y@Local@1))
       end)
   end).
 booleanOps(X, Y) ->

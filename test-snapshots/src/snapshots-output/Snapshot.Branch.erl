@@ -3,10 +3,10 @@
 -compile(no_auto_import).
 i() ->
   (fun
-    (V@0) ->
+    (V@Local) ->
       (fun
-        (V@1) ->
-          (i(V@0, V@1))
+        (V1@Local@1) ->
+          (i(V@Local, V1@Local@1))
       end)
   end).
 i(V, V1) ->
@@ -28,8 +28,8 @@ i(V, V1) ->
   end.
 h() ->
   (fun
-    (V@0) ->
-      (h(V@0))
+    (V@Local) ->
+      (h(V@Local))
   end).
 h(V) ->
   case (V =:= 3.14) of
@@ -40,8 +40,8 @@ h(V) ->
   end.
 g() ->
   (fun
-    (V@0) ->
-      (g(V@0))
+    (V@Local) ->
+      (g(V@Local))
   end).
 g(V) ->
   case (V =:= 0) of
@@ -62,12 +62,12 @@ g(V) ->
   end.
 f() ->
   (fun
-    (V@0) ->
+    (X@Local) ->
       (fun
-        (V@1) ->
+        (Y@Local@1) ->
           (fun
-            (V@2) ->
-              (f(V@0, V@1, V@2))
+            (Z@Local@2) ->
+              (f(X@Local, Y@Local@1, Z@Local@2))
           end)
       end)
   end).
@@ -104,8 +104,8 @@ result() ->
   h => 3.14159}.
 dontInlineMe() ->
   (fun
-    (V@0) ->
-      (dontInlineMe(V@0))
+    (A@Local) ->
+      (dontInlineMe(A@Local))
   end).
 dontInlineMe(A) ->
   A.

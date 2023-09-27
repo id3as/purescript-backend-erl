@@ -3,8 +3,8 @@
 -compile(no_auto_import).
 letRecursive() ->
   (fun
-    (V@0) ->
-      (letRecursive(V@0))
+    (X@Local) ->
+      (letRecursive(X@Local))
   end).
 letRecursive(X) ->
   case (X =:= 0) of
@@ -15,8 +15,8 @@ letRecursive(X) ->
   end.
 letChain() ->
   (fun
-    (V@0) ->
-      (letChain(V@0))
+    (X@Local) ->
+      (letChain(X@Local))
   end).
 letChain(X) ->
   begin
@@ -27,8 +27,8 @@ letChain(X) ->
   end.
 isOdd() ->
   (fun
-    (V@0) ->
-      (isOdd(V@0))
+    (X@Local) ->
+      (isOdd(X@Local))
   end).
 isOdd(X) ->
   case (X =:= 1) of
@@ -39,8 +39,8 @@ isOdd(X) ->
   end.
 isEven() ->
   (fun
-    (V@0) ->
-      (isEven(V@0))
+    (X@Local) ->
+      (isEven(X@Local))
   end).
 isEven(X) ->
   case (X =:= 0) of

@@ -3,8 +3,8 @@
 -compile(no_auto_import).
 'don\'tInlineMeMe'() ->
   (fun
-    (V@0) ->
-      ('don\'tInlineMeMe'(V@0))
+    (V@Local) ->
+      ('don\'tInlineMeMe'(V@Local))
   end).
 'don\'tInlineMeMe'(_) ->
   (fun

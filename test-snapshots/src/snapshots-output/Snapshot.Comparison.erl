@@ -3,50 +3,50 @@
 -compile(no_auto_import).
 stringComparison() ->
   (fun
-    (V@0) ->
+    (X@Local) ->
       (fun
-        (V@1) ->
-          (stringComparison(V@0, V@1))
+        (Y@Local@1) ->
+          (stringComparison(X@Local, Y@Local@1))
       end)
   end).
 stringComparison(X, Y) ->
   (array:from_list([(X =:= Y),(X =/= Y),(X < Y),(X =< Y),(X >= Y),(X > Y)])).
 numberComparison() ->
   (fun
-    (V@0) ->
+    (X@Local) ->
       (fun
-        (V@1) ->
-          (numberComparison(V@0, V@1))
+        (Y@Local@1) ->
+          (numberComparison(X@Local, Y@Local@1))
       end)
   end).
 numberComparison(X, Y) ->
   (array:from_list([(X =:= Y),(X =/= Y),(X < Y),(X =< Y),(X >= Y),(X > Y)])).
 integerComparison() ->
   (fun
-    (V@0) ->
+    (X@Local) ->
       (fun
-        (V@1) ->
-          (integerComparison(V@0, V@1))
+        (Y@Local@1) ->
+          (integerComparison(X@Local, Y@Local@1))
       end)
   end).
 integerComparison(X, Y) ->
   (array:from_list([(X =:= Y),(X =/= Y),(X < Y),(X =< Y),(X >= Y),(X > Y)])).
 charComparison() ->
   (fun
-    (V@0) ->
+    (X@Local) ->
       (fun
-        (V@1) ->
-          (charComparison(V@0, V@1))
+        (Y@Local@1) ->
+          (charComparison(X@Local, Y@Local@1))
       end)
   end).
 charComparison(X, Y) ->
   (array:from_list([(X =:= Y),(X =/= Y),(X < Y),(X =< Y),(X >= Y),(X > Y)])).
 booleanComparison() ->
   (fun
-    (V@0) ->
+    (X@Local) ->
       (fun
-        (V@1) ->
-          (booleanComparison(V@0, V@1))
+        (Y@Local@1) ->
+          (booleanComparison(X@Local, Y@Local@1))
       end)
   end).
 booleanComparison(X, Y) ->

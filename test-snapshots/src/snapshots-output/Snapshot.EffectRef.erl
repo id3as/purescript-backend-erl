@@ -5,8 +5,8 @@ positionZero() ->
   ((effect_ref@ps:new())(0)).
 onLet() ->
   (fun
-    (V@0) ->
-      (onLet(V@0))
+    (X@Local) ->
+      (onLet(X@Local))
   end).
 onLet(X) ->
   begin

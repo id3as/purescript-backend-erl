@@ -43,10 +43,10 @@ x() ->
   ((snapshot_constructorAccessor@ps:'Foo'())(1)).
 test5() ->
   (fun
-    (V@0) ->
+    (_@dollar__unused@Local) ->
       (fun
-        (V@1) ->
-          (test5(V@0, V@1))
+        (V@Local@1) ->
+          (test5(_@dollar__unused@Local, V@Local@1))
       end)
   end).
 test5(_, V) ->
@@ -58,8 +58,8 @@ test5(_, V) ->
   end.
 test51() ->
   (fun
-    (V@0) ->
-      (test51(V@0))
+    (V@Local) ->
+      (test51(V@Local))
   end).
 test51(V) ->
   case ((erlang:is_tuple(V)) andalso ((1 =< (erlang:tuple_size(V))) andalso ((first =:= (erlang:element(1, V))) andalso true))) of
@@ -70,8 +70,8 @@ test51(V) ->
   end.
 test4() ->
   (fun
-    (V@0) ->
-      (test4(V@0))
+    (V@Local) ->
+      (test4(V@Local))
   end).
 test4(V) ->
   case ((erlang:is_tuple(V)) andalso ((1 =< (erlang:tuple_size(V))) andalso ((first =:= (erlang:element(1, V))) andalso true))) of
@@ -87,8 +87,8 @@ test4(V) ->
   end.
 test3() ->
   (fun
-    (V@0) ->
-      (test3(V@0))
+    (V@Local) ->
+      (test3(V@Local))
   end).
 test3(V) ->
   case ((erlang:element(2, V)) < (erlang:element(4, V))) of
@@ -99,22 +99,22 @@ test3(V) ->
   end.
 test2() ->
   (fun
-    (V@0) ->
-      (test2(V@0))
+    (V@Local) ->
+      (test2(V@Local))
   end).
 test2(V) ->
   (erlang:element(2, V)).
 test1() ->
   (fun
-    (V@0) ->
-      (test1(V@0))
+    (V@Local) ->
+      (test1(V@Local))
   end).
 test1(_) ->
   true.
 'don\'tInlineMeMe'() ->
   (fun
-    (V@0) ->
-      ('don\'tInlineMeMe'(V@0))
+    (A@Local) ->
+      ('don\'tInlineMeMe'(A@Local))
   end).
 'don\'tInlineMeMe'(A) ->
   A.

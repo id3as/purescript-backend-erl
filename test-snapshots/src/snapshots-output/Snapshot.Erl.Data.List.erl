@@ -13,8 +13,8 @@ uncons1() ->
   tail => [2,3]}}.
 uncons0() ->
   (fun
-    (V@0) ->
-      (uncons0(V@0))
+    (L@Local) ->
+      (uncons0(L@Local))
   end).
 uncons0(L) ->
   ((erl_data_list_types@ps:uncons())((L ++ L))).
@@ -30,10 +30,10 @@ hd() ->
   {just,1}.
 concatSimple() ->
   (fun
-    (V@0) ->
+    (L@Local) ->
       (fun
-        (V@1) ->
-          (concatSimple(V@0, V@1))
+        (R@Local@1) ->
+          (concatSimple(L@Local, R@Local@1))
       end)
   end).
 concatSimple(L, R) ->
@@ -48,8 +48,8 @@ result() ->
   concatLR => [1,2,3,4]}.
 concatL() ->
   (fun
-    (V@0) ->
-      (concatL(V@0))
+    (L@Local) ->
+      (concatL(L@Local))
   end).
 concatL(L) ->
   [1,2,3|L].

@@ -3,8 +3,8 @@
 -compile(no_auto_import).
 testCase() ->
   (fun
-    (V@0) ->
-      (testCase(V@0))
+    (DictRing@Local) ->
+      (testCase(DictRing@Local))
   end).
 testCase(DictRing) ->
   (maps:get(add, ((maps:get('Semiring0', DictRing))(undefined)))).

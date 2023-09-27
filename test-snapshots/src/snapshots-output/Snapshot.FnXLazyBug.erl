@@ -3,16 +3,16 @@
 -compile(no_auto_import).
 zipWith4() ->
   (fun
-    (V@0) ->
+    (F@Local) ->
       (fun
-        (V@1) ->
+        (As@Local@1) ->
           (fun
-            (V@2) ->
+            (Bs@Local@2) ->
               (fun
-                (V@3) ->
+                (Cs@Local@3) ->
                   (fun
-                    (V@4) ->
-                      (zipWith4(V@0, V@1, V@2, V@3, V@4))
+                    (Ds@Local@4) ->
+                      (zipWith4(F@Local, As@Local@1, Bs@Local@2, Cs@Local@3, Ds@Local@4))
                   end)
               end)
           end)

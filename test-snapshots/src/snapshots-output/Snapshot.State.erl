@@ -3,8 +3,8 @@
 -compile(no_auto_import).
 'State'() ->
   (fun
-    (V@0) ->
-      ('State'(V@0))
+    (X@Local) ->
+      ('State'(X@Local))
   end).
 'State'(X) ->
   X.
@@ -24,15 +24,15 @@ functorState() ->
   end)}.
 freshMTL() ->
   (fun
-    (V@0) ->
-      (freshMTL(V@0))
+    (X@Local) ->
+      (freshMTL(X@Local))
   end).
 freshMTL(X) ->
   {tuple,X,(X + 1)}.
 freshE() ->
   (fun
-    (V@0) ->
-      (freshE(V@0))
+    (DictMonadState@Local) ->
+      (freshE(DictMonadState@Local))
   end).
 freshE(DictMonadState) ->
   ((maps:get(state, DictMonadState))((fun
@@ -41,15 +41,15 @@ freshE(DictMonadState) ->
   end))).
 fresh() ->
   (fun
-    (V@0) ->
-      (fresh(V@0))
+    (S@Local) ->
+      (fresh(S@Local))
   end).
 fresh(S) ->
   {tuple,S,(S + 1)}.
 exMTL() ->
   (fun
-    (V@0) ->
-      (exMTL(V@0))
+    (S@Local) ->
+      (exMTL(S@Local))
   end).
 exMTL(S) ->
   begin
@@ -59,8 +59,8 @@ exMTL(S) ->
   end.
 'exE\''() ->
   (fun
-    (V@0) ->
-      ('exE\''(V@0))
+    (S@Local) ->
+      ('exE\''(S@Local))
   end).
 'exE\''(S) ->
   begin
@@ -73,8 +73,8 @@ exMTL(S) ->
   end.
 exE() ->
   (fun
-    (V@0) ->
-      (exE(V@0))
+    (S@Local) ->
+      (exE(S@Local))
   end).
 exE(S) ->
   begin
@@ -145,8 +145,8 @@ applicativeState() ->
   end)}.
 ex() ->
   (fun
-    (V@0) ->
-      (ex(V@0))
+    (S@Local) ->
+      (ex(S@Local))
   end).
 ex(S) ->
   begin

@@ -6,15 +6,14 @@ import Control.Alternative (guard)
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NEA
-import Data.Foldable (foldMap, foldr)
+import Data.Foldable (class Foldable, foldMap, foldr)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.Map (Map)
 import Data.Map as Map
-import Data.Maybe (Maybe(..), isJust, isNothing)
+import Data.Maybe (Maybe(..))
 import Data.Newtype (unwrap)
 import Data.Set as Set
 import Data.Tuple (Tuple(..), fst, snd, uncurry)
-import Debug (spy, traceM)
 import Partial.Unsafe (unsafeCrashWith)
 import PureScript.Backend.Erl.Constants as C
 import PureScript.Backend.Erl.Convert.Before (renameRoot)
@@ -95,19 +94,19 @@ codegenTopLevelBinding codegenEnv (Tuple (Ident i) n) =
             S.Tupled $ [ tagAtom tag ] <> vars
       ]
     Abs vars e ->
-      let evars = NEA.toArray vars # mapWithIndex (\idx _ -> S.Var ("V@" <> show idx)) in
+      let evars = locals vars in
       [ FunctionDefinition i [] $ S.curriedFun evars $
           S.FunCall Nothing (S.Literal (S.Atom i)) evars
       , FunctionDefinition i (uncurry toErlVar <$> NEA.toArray vars) $ codegenExpr codegenEnv e
       ]
     UncurriedAbs vars e | Array.length vars > 0 ->
-      let evars = vars # mapWithIndex (\idx _ -> S.Var ("V@" <> show idx)) in
+      let evars = locals vars in
       [ FunctionDefinition i [] $ S.simpleFun evars $
           S.FunCall Nothing (S.Literal (S.Atom i)) evars
       , FunctionDefinition i (uncurry toErlVar <$> vars) $ codegenExpr codegenEnv e
       ]
     UncurriedEffectAbs vars e | Array.length vars > 0 ->
-      let evars = vars # mapWithIndex (\idx _ -> S.Var ("V@" <> show idx)) in
+      let evars = locals vars in
       [ FunctionDefinition i [] $ S.simpleFun evars $
           S.FunCall Nothing (S.Literal (S.Atom i)) evars
       , FunctionDefinition i (uncurry toErlVar <$> vars) $ codegenChain effectChainMode codegenEnv e
@@ -328,6 +327,13 @@ codegenChain chainMode codegenEnv0 = collect [] codegenEnv0.substitutions
     _ ->
       finish chainMode.effect bindings substitutions expression
 
+locals :: forall f. Foldable f => f (Tuple (Maybe Ident) Level) -> Array ErlExpr
+locals = locals' >>> map S.Var
+
+locals' :: forall f. Foldable f => f (Tuple (Maybe Ident) Level) -> Array String
+locals' = Array.fromFoldable >>> mapWithIndex \idx (Tuple name _) ->
+  toErlVarWith "Local" name (Level idx)
+
 codegenLetRec ::
   CodegenEnv ->
   { lvl :: Level
@@ -346,9 +352,10 @@ codegenLetRec codegenEnv { lvl, bindings }
           , value
           , recName
           , recCall:
+              if NEA.length vars == 1 then S.Var recName else
               -- We generate an uncurried function, but the callsites expect a curried function still
               -- TODO: inline `S.FunCall _ (S.Fun _ _) _` afterwards
-              let recvars = S.Var <<< uncurry (toErlVarWith "RecLocal") <$> NEA.toArray vars in
+              let recvars = locals vars in
               S.curriedFun recvars (S.FunCall Nothing (S.Var recName) recvars)
           }
         _ ->
@@ -369,8 +376,8 @@ codegenLetRec codegenEnv { lvl, bindings }
   | otherwise =
     let
       normal i = toErlVar (Just i) lvl
-      local i = toErlVarWith "Local" (Just i) lvl
-      mutual i = toErlVarWith "Mutual" (Just i) lvl
+      local i = toErlVarWith "LocalFn" (Just i) lvl
+      mutual i = toErlVarWith "MutualFn" (Just i) lvl
 
       names = fst <$> NEA.toArray bindings
       bundled scheme = S.Var <<< scheme <$> names
@@ -432,7 +439,7 @@ codegenPrimOp codegenEnv@{ currentModule } = case _ of
     in
       case o of
         OpArrayIndex ->
-          S.FunCall (Just $ atomLiteral C.array) (atomLiteral C.get) [ x', y' ]
+          S.FunCall (Just $ atomLiteral C.array) (atomLiteral C.get) [ y', x' ]
         OpBooleanAnd ->
           S.BinOp S.AndAlso x' y'
         OpBooleanOr ->

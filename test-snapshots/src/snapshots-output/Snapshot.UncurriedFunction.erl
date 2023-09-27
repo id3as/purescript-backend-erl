@@ -3,8 +3,8 @@
 -compile(no_auto_import).
 test4a() ->
   (fun
-    (V@0) ->
-      (test4a(V@0))
+    (A@Local) ->
+      (test4a(A@Local))
   end).
 test4a(A) ->
   begin
@@ -19,8 +19,8 @@ test4b() ->
   end).
 test3a() ->
   (fun
-    (V@0, V@1) ->
-      (test3a(V@0, V@1))
+    (V@Local, B@Local@1) ->
+      (test3a(V@Local, B@Local@1))
   end).
 test3a(_, B) ->
   B.
@@ -28,8 +28,8 @@ test3b() ->
   ((snapshot_uncurriedFunction@ps:test3a())(1, 2)).
 test2a() ->
   (fun
-    (V@0, V@1) ->
-      (test2a(V@0, V@1))
+    (A@Local, V@Local@1) ->
+      (test2a(A@Local, V@Local@1))
   end).
 test2a(A, _) ->
   A.

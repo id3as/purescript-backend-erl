@@ -3,20 +3,20 @@
 -compile(no_auto_import).
 f() ->
   (fun
-    (V@0) ->
+    (X@Local) ->
       (fun
-        (V@1) ->
-          (f(V@0, V@1))
+        (Y@Local@1) ->
+          (f(X@Local, Y@Local@1))
       end)
   end).
 f(X, Y) ->
   (array:from_list([X,Y,X,Y,X])).
 g() ->
   (fun
-    (V@0) ->
+    (X@Local) ->
       (fun
-        (V@1) ->
-          (g(V@0, V@1))
+        (Y@Local@1) ->
+          (g(X@Local, Y@Local@1))
       end)
   end).
 g(X, Y) ->

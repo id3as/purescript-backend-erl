@@ -3,15 +3,15 @@
 -compile(no_auto_import).
 noInline() ->
   (fun
-    (V@0) ->
-      (noInline(V@0))
+    (A@Local) ->
+      (noInline(A@Local))
   end).
 noInline(A) ->
   A.
 inline() ->
   (fun
-    (V@0) ->
-      (inline(V@0))
+    (N@Local) ->
+      (inline(N@Local))
   end).
 inline(N) ->
   begin
@@ -20,8 +20,8 @@ inline(N) ->
   end.
 ex() ->
   (fun
-    (V@0) ->
-      (ex(V@0))
+    (N@Local) ->
+      (ex(N@Local))
   end).
 ex(N) ->
   begin

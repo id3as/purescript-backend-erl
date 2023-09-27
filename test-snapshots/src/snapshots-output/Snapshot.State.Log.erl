@@ -3,8 +3,8 @@
 -compile(no_auto_import).
 freshE() ->
   (fun
-    (V@0) ->
-      (freshE(V@0))
+    (DictMonadState@Local) ->
+      (freshE(DictMonadState@Local))
   end).
 freshE(DictMonadState) ->
   ((maps:get(state, DictMonadState))((fun
@@ -13,8 +13,8 @@ freshE(DictMonadState) ->
   end))).
 'exE\''() ->
   (fun
-    (V@0) ->
-      ('exE\''(V@0))
+    (S@Local) ->
+      ('exE\''(S@Local))
   end).
 'exE\''(S) ->
   begin
@@ -31,8 +31,8 @@ freshE(DictMonadState) ->
   end.
 exE() ->
   (fun
-    (V@0) ->
-      (exE(V@0))
+    (S@Local) ->
+      (exE(S@Local))
   end).
 exE(S) ->
   begin
