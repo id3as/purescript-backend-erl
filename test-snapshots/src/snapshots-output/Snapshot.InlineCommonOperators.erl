@@ -1,5 +1,6 @@
 -module(snapshot_inlineCommonOperators@ps).
 -export([min/0, min/2, max/0, max/2, 'N'/0, 'N'/1, newtypeN_/0, inlineWrap/0, inlineVoid/0, inlineUnwrap/0, inlineUnsafeCoerce/0, inlineUnary/0, inlineUnary/3, inlineOver2/0, inlineOver/0, inlineOver/1, inlineListSingleton/0, inlineListCons/0, inlineListCons/2, inlineIntToNumber/0, inlineCoerce/0, inlineBinary/0, inlineBinary/5, inlineAtom/0]).
+-compile(no_auto_import).
 min() ->
   (fun
     (V@0) ->
@@ -11,15 +12,15 @@ min() ->
 min(X, Y) ->
   begin
     V = (((maps:get(compare, (data_ord@ps:ordInt())))(X))(Y)),
-    case (lT =:= (erlang:element(1, V))) of
+    case ((erlang:is_tuple(V)) andalso ((1 =< (erlang:tuple_size(V))) andalso ((lT =:= (erlang:element(1, V))) andalso true))) of
       true ->
         X;
       _ ->
-        case (eQ =:= (erlang:element(1, V))) of
+        case ((erlang:is_tuple(V)) andalso ((1 =< (erlang:tuple_size(V))) andalso ((eQ =:= (erlang:element(1, V))) andalso true))) of
           true ->
             X;
           _ ->
-            case (gT =:= (erlang:element(1, V))) of
+            case ((erlang:is_tuple(V)) andalso ((1 =< (erlang:tuple_size(V))) andalso ((gT =:= (erlang:element(1, V))) andalso true))) of
               true ->
                 Y;
               _ ->
@@ -39,15 +40,15 @@ max() ->
 max(X, Y) ->
   begin
     V = (((maps:get(compare, (data_ord@ps:ordInt())))(X))(Y)),
-    case (lT =:= (erlang:element(1, V))) of
+    case ((erlang:is_tuple(V)) andalso ((1 =< (erlang:tuple_size(V))) andalso ((lT =:= (erlang:element(1, V))) andalso true))) of
       true ->
         Y;
       _ ->
-        case (eQ =:= (erlang:element(1, V))) of
+        case ((erlang:is_tuple(V)) andalso ((1 =< (erlang:tuple_size(V))) andalso ((eQ =:= (erlang:element(1, V))) andalso true))) of
           true ->
             X;
           _ ->
-            case (gT =:= (erlang:element(1, V))) of
+            case ((erlang:is_tuple(V)) andalso ((1 =< (erlang:tuple_size(V))) andalso ((gT =:= (erlang:element(1, V))) andalso true))) of
               true ->
                 X;
               _ ->

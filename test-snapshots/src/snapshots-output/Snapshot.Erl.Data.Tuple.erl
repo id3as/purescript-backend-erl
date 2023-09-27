@@ -1,5 +1,6 @@
 -module(snapshot_erl_data_tuple@ps).
 -export([uncurriedMore/0, uncurried/0, tf2/0, t5/0, t2/0, sndt2/0, r5/0, result/0, fsttf2/0, fstt2/0]).
+-compile(no_auto_import).
 uncurriedMore() ->
   (fun
     ({A,B,C,D,E}) ->

@@ -1,5 +1,6 @@
 -module(snapshot_state@ps).
 -export(['State'/0, 'State'/1, functorState/0, freshMTL/0, freshMTL/1, freshE/0, freshE/1, fresh/0, fresh/1, exMTL/0, exMTL/1, 'exE\''/0, 'exE\''/1, exE/0, exE/1, monadState/0, bindState/0, applyState/0, applicativeState/0, ex/0, ex/1]).
+-compile(no_auto_import).
 'State'() ->
   (fun
     (V@0) ->

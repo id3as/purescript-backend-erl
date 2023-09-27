@@ -1,5 +1,6 @@
 -module(snapshot_scoping@ps).
 -export([noInline/0, noInline/1, inline/0, inline/1, ex/0, ex/1]).
+-compile(no_auto_import).
 noInline() ->
   (fun
     (V@0) ->

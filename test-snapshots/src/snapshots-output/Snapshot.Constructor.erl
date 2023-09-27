@@ -1,5 +1,6 @@
 -module(snapshot_constructor@ps).
 -export(['Nil'/0, 'Node'/0, 'Stop1'/0, 'Continue1'/0, 'Stop2'/0, 'Continue2'/0, 'Just'/0, 'Nothing'/0]).
+-compile(no_auto_import).
 'Nil'() ->
   {nil}.
 'Node'() ->

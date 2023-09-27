@@ -48,17 +48,8 @@ codegenModule { name, bindings, imports, foreign: foreign_, exports: moduleExpor
       ]
 
     reexports :: Array ErlDefinition
-    reexports = spy "reexports" $ foreigns.exported >>= \(Tuple decl arity) -> do
-      -- when (not (Ident decl `Set.member` foreign_)) do
-      --   traceM $ "Not generated " <> decl <> " " <> show (Array. (Ident decl) moduleExports)
-      -- guard $ Ident decl `Set.member` foreign_
-      -- when (isJust (Array.find (_.bindings >>> Array.any (fst >>> eq (Ident decl))) bindings)) do
-      --   traceM $ "Not generated " <> decl
-      -- guard $ isNothing $ Array.find (_.bindings >>> Array.any (fst >>> eq (Ident decl))) bindings
-      if (decl /= "sleep") then pure unit else do
-        pure unit
-        traceM foreigns
-        traceM $ Array.fromFoldable foreign_
+    reexports = foreigns.exported >>= \(Tuple decl arity) -> do
+      guard $ Ident decl `Set.member` foreign_
       let
         vars =
           Array.replicate arity unit
@@ -410,9 +401,14 @@ codegenPrimOp codegenEnv@{ currentModule } = case _ of
       OpArrayLength ->
         S.FunCall (Just $ atomLiteral C.array) (atomLiteral C.size) [ x' ]
       OpIsTag (Qualified _ (Ident constructor)) ->
-        S.BinOp S.IdenticalTo (S.atomLiteral (toAtomName constructor)) $
-          S.FunCall (Just $ atomLiteral C.erlang) (atomLiteral C.element)
-            [ S.numberLiteral 1, x' ]
+        foldr (S.BinOp S.AndAlso) (S.Literal (S.Atom "true"))
+        [ S.FunCall (Just $ atomLiteral C.erlang) (atomLiteral "is_tuple") [ x' ]
+        , S.BinOp S.LessThanOrEqualTo (S.Literal (S.Integer 1)) $
+            S.FunCall (Just $ atomLiteral C.erlang) (atomLiteral "tuple_size") [ x' ]
+        , S.BinOp S.IdenticalTo (S.atomLiteral (toAtomName constructor)) $
+            S.FunCall (Just $ atomLiteral C.erlang) (atomLiteral C.element)
+              [ S.numberLiteral 1, x' ]
+        ]
 
   Op2 o x y ->
     let

@@ -1,5 +1,6 @@
 -module(snapshot_let@ps).
 -export([letRecursive/0, letRecursive/1, letChain/0, letChain/1, isOdd/0, isOdd/1, isEven/0, isEven/1]).
+-compile(no_auto_import).
 letRecursive() ->
   (fun
     (V@0) ->

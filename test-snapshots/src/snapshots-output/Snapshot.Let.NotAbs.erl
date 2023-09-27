@@ -1,5 +1,6 @@
 -module(snapshot_let_notAbs@ps).
 -export([result/0]).
+-compile(no_auto_import).
 result() ->
   begin
     FibAnd@Rec = (fun

@@ -1,5 +1,6 @@
 -module(snapshot_comparison@ps).
 -export([stringComparison/0, stringComparison/2, numberComparison/0, numberComparison/2, integerComparison/0, integerComparison/2, charComparison/0, charComparison/2, booleanComparison/0, booleanComparison/2]).
+-compile(no_auto_import).
 stringComparison() ->
   (fun
     (V@0) ->

@@ -1,5 +1,6 @@
 -module(snapshot_branch@ps).
 -export([i/0, i/2, h/0, h/1, g/0, g/1, f/0, f/3, result/0, dontInlineMe/0, dontInlineMe/1]).
+-compile(no_auto_import).
 i() ->
   (fun
     (V@0) ->

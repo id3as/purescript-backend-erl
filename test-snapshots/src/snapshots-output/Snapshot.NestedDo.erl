@@ -1,5 +1,6 @@
 -module(snapshot_nestedDo@ps).
 -export([pure_/0, renamed/0, renamed0/0, renamed1/0, renamed2/0, do1/0, do0/0, bug26/0]).
+-compile(no_auto_import).
 pure_() ->
   (effect@ps:pureE()).
 renamed() ->

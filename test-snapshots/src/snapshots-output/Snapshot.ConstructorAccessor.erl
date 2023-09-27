@@ -1,5 +1,6 @@
 -module(snapshot_constructorAccessor@ps).
 -export(['First'/0, 'Last'/0, 'NoArgs'/0, 'HasArgs'/0, 'Foo'/0, z/0, y/0, x/0, test5/0, test5/2, test51/0, test51/1, test4/0, test4/1, test3/0, test3/1, test2/0, test2/1, test1/0, test1/1, 'don\'tInlineMeMe'/0, 'don\'tInlineMeMe'/1, result/0]).
+-compile(no_auto_import).
 'First'() ->
   (fun
     (Value0) ->
@@ -49,7 +50,7 @@ test5() ->
       end)
   end).
 test5(_, V) ->
-  case (first =:= (erlang:element(1, V))) of
+  case ((erlang:is_tuple(V)) andalso ((1 =< (erlang:tuple_size(V))) andalso ((first =:= (erlang:element(1, V))) andalso true))) of
     true ->
       (erlang:element(2, V));
     _ ->
@@ -61,7 +62,7 @@ test51() ->
       (test51(V@0))
   end).
 test51(V) ->
-  case (first =:= (erlang:element(1, V))) of
+  case ((erlang:is_tuple(V)) andalso ((1 =< (erlang:tuple_size(V))) andalso ((first =:= (erlang:element(1, V))) andalso true))) of
     true ->
       (erlang:element(2, V));
     _ ->
@@ -73,11 +74,11 @@ test4() ->
       (test4(V@0))
   end).
 test4(V) ->
-  case (first =:= (erlang:element(1, V))) of
+  case ((erlang:is_tuple(V)) andalso ((1 =< (erlang:tuple_size(V))) andalso ((first =:= (erlang:element(1, V))) andalso true))) of
     true ->
       (erlang:element(2, V));
     _ ->
-      case (last =:= (erlang:element(1, V))) of
+      case ((erlang:is_tuple(V)) andalso ((1 =< (erlang:tuple_size(V))) andalso ((last =:= (erlang:element(1, V))) andalso true))) of
         true ->
           (erlang:element(2, V));
         _ ->

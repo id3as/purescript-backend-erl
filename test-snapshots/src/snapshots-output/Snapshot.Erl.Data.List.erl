@@ -1,5 +1,6 @@
 -module(snapshot_erl_data_list@ps).
 -export([unconsA1/0, unconsA0/0, uncons2/0, uncons1/0, uncons0/0, uncons0/1, n/0, lit2/0, lit1/0, lit0/0, hd/0, concatSimple/0, concatSimple/2, concatNeut/0, concatLR/0, result/0, concatL/0, concatL/1, concat/0]).
+-compile(no_auto_import).
 unconsA1() ->
   {just,#{head => 1,
   tail => []}}.

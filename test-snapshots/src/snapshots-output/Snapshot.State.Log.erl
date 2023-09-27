@@ -1,5 +1,6 @@
 -module(snapshot_state_log@ps).
 -export([freshE/0, freshE/1, 'exE\''/0, 'exE\''/1, exE/0, exE/1]).
+-compile(no_auto_import).
 freshE() ->
   (fun
     (V@0) ->

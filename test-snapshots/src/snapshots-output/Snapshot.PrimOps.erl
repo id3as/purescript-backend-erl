@@ -1,5 +1,6 @@
 -module(snapshot_primOps@ps).
 -export([stringOps/0, stringOps/2, numberOps/0, numberOps/2, intOps/0, intOps/2, booleanOps/0, booleanOps/2]).
+-compile(no_auto_import).
 stringOps() ->
   (fun
     (V@0) ->

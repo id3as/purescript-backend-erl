@@ -1,5 +1,6 @@
 -module(snapshot_arrayMatch@ps).
 -export([onlyArray/0, onlyArray/1, nestedArrayViaRecord/0, nestedArrayViaRecord/1, nestedArrayRefutable2/0, nestedArrayRefutable2/2, nestedArrayRefutable/0, nestedArrayRefutable/2, nestedArray/0, nestedArray/1, namedArray/0, namedArray/1, maybeArray/0, maybeArray/1, bug28_2/0, bug28_2/1, bug28/0, bug28/1, result/0]).
+-compile(no_auto_import).
 onlyArray() ->
   (fun
     (V@0) ->
@@ -94,7 +95,7 @@ maybeArray() ->
       (maybeArray(V@0))
   end).
 maybeArray(A) ->
-  case ((just =:= (erlang:element(1, A))) andalso ((array:size((erlang:element(2, A)))) =:= 2)) of
+  case (((erlang:is_tuple(A)) andalso ((1 =< (erlang:tuple_size(A))) andalso ((just =:= (erlang:element(1, A))) andalso true))) andalso ((array:size((erlang:element(2, A)))) =:= 2)) of
     true ->
       ((array:get(0, (erlang:element(2, A)))) + (array:get(1, (erlang:element(2, A)))));
     _ ->

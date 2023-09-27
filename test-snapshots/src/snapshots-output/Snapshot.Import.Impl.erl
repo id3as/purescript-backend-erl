@@ -1,5 +1,6 @@
 -module(snapshot_import_impl@ps).
 -export([fortyTwo/0, result/0, addImpl/0]).
+-compile(no_auto_import).
 fortyTwo() ->
   (((snapshot_import_impl@ps:addImpl())(21))(21)).
 result() ->

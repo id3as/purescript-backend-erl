@@ -1,5 +1,6 @@
 -module(snapshot_let_fib@ps).
 -export([result/0]).
+-compile(no_auto_import).
 result() ->
   begin
     Fib = (fun
