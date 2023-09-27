@@ -152,8 +152,7 @@ runCompile { compile, filter, cwd } = do
         }
       when compile do
         filesToCompile <- liftEffect $ Ref.read erls
-        spawned <- execa "erlc" ([ "-W0" ] <> filesToCompile)
-          _ { cwd = Just ebin }
+        spawned <- execa "erlc" ([ "-o", ebin, "-W0" ] <> filesToCompile) identity
         spawned.result >>= case _ of
           Left { message } -> do
             Console.log $ withGraphics (foreground Red) "✗ failed to compile."

@@ -4,13 +4,11 @@ import Prelude
 
 import Data.Array (all, foldr)
 import Data.Array as Array
-import Data.Array.NonEmpty (NonEmptyArray)
 import Data.CodePoint.Unicode as CodePointU
 import Data.CodePoint.Unicode as U
 import Data.Enum (fromEnum)
 import Data.Foldable (class Foldable, fold, foldMap)
 import Data.Maybe (Maybe(..), maybe)
-import Data.Set (Set)
 import Data.Set as Set
 import Data.String (CodePoint, toCodePointArray)
 import Data.String as CodePoints
@@ -26,8 +24,7 @@ import Dodo (Doc, flexAlt)
 import Dodo as D
 import Dodo.Common (trailingComma)
 import Partial.Unsafe (unsafePartial)
-import PureScript.Backend.Erl.Constants as C
-import PureScript.Backend.Erl.Syntax (BinaryOperator, CaseClause(..), ErlDefinition, ErlExport(..), ErlExpr, ErlModule, FunHead(..), IfClause(..), UnaryOperator, atomLiteral)
+import PureScript.Backend.Erl.Syntax (BinaryOperator, CaseClause(..), ErlDefinition, ErlExport(..), ErlExpr, ErlModule, FunHead(..), IfClause(..), UnaryOperator)
 import PureScript.Backend.Erl.Syntax as S
 
 printWrap :: Doc Void -> Doc Void -> Doc Void -> Doc Void
@@ -97,13 +94,11 @@ printExpr = case _ of
       case _ of
         [Just integer, Just exponent] -> integer <> ".0" <> exponent
         _ -> original
-  S.Literal (S.String s)
-    | isAscii s -> D.text $ "<<\"" <> escapeErlString s <> "\">>"
-    | otherwise -> D.text $ "<<\"" <> escapeErlString s <> "\"/utf8>>"
   S.Literal (S.Char c) -> D.text $ "$" <> escapeNonprinting (escapeErlString (StringCU.singleton c))
   S.Literal (S.Atom a) -> D.text $ escapeAtom a
 
-  s@(S.BinaryAppend _ _) -> printBinaryAppend s
+  s@(S.BinaryAppend _ _) -> printBinaryLiteral s
+  s@(S.Literal (S.String _)) -> printBinaryLiteral s
 
   S.Var v -> D.text v
 
@@ -276,13 +271,16 @@ printUnaryOp = D.text <<< case _ of
   S.Positive ->             "+"
   S.Negate ->               "-"
 
-printBinaryAppend :: ErlExpr -> Doc Void
-printBinaryAppend = finish <<< go
+printBinaryLiteral :: ErlExpr -> Doc Void
+printBinaryLiteral = finish <<< go
   where
   finish items =
-    D.text "<<" <> Array.intercalate (D.text ", ") (items <#> \e -> printExpr e <> D.text "/binary") <> D.text ">>"
+    D.text "<<" <> Array.intercalate (D.text ", ") items <> D.text ">>"
   go (S.BinaryAppend e1 e2) = go e1 <> go e2
-  go s = [ s ]
+  go (S.Literal (S.String s))
+    | isAscii s = [ D.text $ "\"" <> escapeErlString s <> "\"" ]
+    | otherwise = [ D.text $ "\"" <> escapeErlString s <> "\"/utf8" ]
+  go s = [ printExpr s <> D.text "/binary" ]
 
 printField :: Tuple String ErlExpr -> Doc Void
 printField (Tuple f e) =

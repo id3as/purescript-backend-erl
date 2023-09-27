@@ -88,6 +88,7 @@ inlineListCons x (xs :: List Int) = x : xs
 inlineListSingleton = List.singleton 1
 inlineAtom = atom "an_atom"
 inlineVoid = void (pure 49 :: Effect _)
+stringAppend world = "Hello " <> world
 
 inlineUnsafeCoerce :: Int -> String
 inlineUnsafeCoerce = unsafeCoerce 42

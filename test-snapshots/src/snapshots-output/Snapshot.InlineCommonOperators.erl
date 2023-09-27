@@ -1,5 +1,5 @@
 -module(snapshot_inlineCommonOperators@ps).
--export([min/0, min/2, max/0, max/2, 'N'/0, 'N'/1, newtypeN_/0, inlineWrap/0, inlineVoid/0, inlineUnwrap/0, inlineUnsafeCoerce/0, inlineUnary/0, inlineUnary/3, inlineOver2/0, inlineOver/0, inlineOver/1, inlineListSingleton/0, inlineListCons/0, inlineListCons/2, inlineIntToNumber/0, inlineCoerce/0, inlineBinary/0, inlineBinary/5, inlineAtom/0]).
+-export([min/0, min/2, max/0, max/2, 'N'/0, 'N'/1, newtypeN_/0, stringAppend/0, stringAppend/1, inlineWrap/0, inlineVoid/0, inlineUnwrap/0, inlineUnsafeCoerce/0, inlineUnary/0, inlineUnary/3, inlineOver2/0, inlineOver/0, inlineOver/1, inlineListSingleton/0, inlineListCons/0, inlineListCons/2, inlineIntToNumber/0, inlineCoerce/0, inlineBinary/0, inlineBinary/5, inlineAtom/0]).
 -compile(no_auto_import).
 -define(IS_TAG(Tag, V), ((erlang:is_tuple(V)) andalso ((1 =< (erlang:tuple_size(V))) andalso (Tag =:= (erlang:element(1, V)))))).
 min() ->
@@ -70,6 +70,13 @@ newtypeN_() ->
     (_) ->
       undefined
   end)}.
+stringAppend() ->
+  (fun
+    (World@Local) ->
+      (stringAppend(World@Local))
+  end).
+stringAppend(World) ->
+  <<"Hello ", World/binary>>.
 inlineWrap() ->
   1.
 inlineVoid() ->

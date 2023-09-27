@@ -103,8 +103,7 @@ loadModuleMain
   -> Aff (Either ExecaError ExecaSuccess)
 loadModuleMain { modulePath, ebin, runMain } = do
   -- Console.log $ "compile " <> modulePath
-  spawned1 <- execa "erlc" [ "-W0", modulePath ]
-    _ { cwd = Just ebin }
+  spawned1 <- execa "erlc" [ "-o", ebin, "-W0", modulePath ] identity
   spawned1.result >>= case _, runMain of
     Left e, _ -> pure (Left e)
     Right r, Nothing -> pure (Right r)
