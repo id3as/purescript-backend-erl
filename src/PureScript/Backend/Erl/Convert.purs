@@ -345,7 +345,11 @@ codegenLetRec codegenEnv { lvl, bindings }
           { vars: toErlVarExpr <$> NEA.toArray vars
           , value
           , recName
-          , recCall: S.Var recName
+          , recCall:
+              -- We generate an uncurried function, but the callsites expect a curried function still
+              -- TODO: inline `S.FunCall _ (S.Fun _ _) _` afterwards
+              let recvars = S.Var <<< uncurry (toErlVarWith "RecLocal") <$> NEA.toArray vars in
+              S.curriedFun recvars (S.FunCall Nothing (S.Var recName) recvars)
           }
         _ ->
           let recName = toErlVarWith "Rec" (Just name) lvl in

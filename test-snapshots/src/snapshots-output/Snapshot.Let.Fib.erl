@@ -9,8 +9,17 @@ result() ->
           true ->
             V;
           _ ->
-            ((Fib((V - 1))) + (Fib((V - 2))))
+            (((fun
+              (V@RecLocal) ->
+                (Fib(V@RecLocal))
+            end)((V - 1))) + ((fun
+              (V@RecLocal) ->
+                (Fib(V@RecLocal))
+            end)((V - 2))))
         end
     end),
-    (Fib(6))
+    ((fun
+      (V@RecLocal) ->
+        (Fib(V@RecLocal))
+    end)(6))
   end.

@@ -3,7 +3,7 @@ module PureScript.Backend.Erl.Convert.Before where
 import Prelude
 
 import Control.Monad.Reader (ReaderT, asks, local, runReaderT)
-import Control.Monad.State (State, evalState, get, gets, modify_, put, state)
+import Control.Monad.State (State, evalState, gets, modify_, state)
 import Data.Array.NonEmpty as NEA
 import Data.Identity (Identity(..))
 import Data.Map (Map)
@@ -12,9 +12,8 @@ import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Newtype (unwrap, wrap)
 import Data.Profunctor (dimap)
 import Data.Set as Set
-import Data.Traversable (class Foldable, class Traversable, foldr, for, maximum, traverse)
+import Data.Traversable (class Foldable, class Traversable, for, maximum, traverse)
 import Data.Tuple (Tuple(..), fst, snd, uncurry)
-import Partial.Unsafe (unsafeCrashWith)
 import PureScript.Backend.Optimizer.CoreFn (Ident(..))
 import PureScript.Backend.Optimizer.Semantics (NeutralExpr)
 import PureScript.Backend.Optimizer.Syntax (BackendSyntax(..), Level(..))
@@ -67,7 +66,7 @@ chooseMany names = state \found ->
   let
     set = Set.toMap $ Set.fromFoldable names
     dups = found.duplicates <* set
-    lvl = fromMaybe 0 (maximum dups)
+    lvl = maybe 0 (add 1) (maximum dups)
     newDups = Map.union (lvl <$ set) found.duplicates
   in
     Tuple (Level lvl) found { duplicates = newDups }

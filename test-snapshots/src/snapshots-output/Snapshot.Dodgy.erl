@@ -1,12 +1,17 @@
 -module(snapshot_dodgy@ps).
--export(['PrivateProcessTTimeoutMsg__'/0, 'ThereToGetRidOfUnreachableWarning'/0, noInline/0, isSecretMsg/0, isSecretMsg/1, result/0]).
+-export(['PrivateProcessTTimeoutMsg__'/0, 'ThereToGetRidOfUnreachableWarning'/0, noInline/0, noInline/1, isSecretMsg/0, isSecretMsg/1, result/0]).
 -compile(no_auto_import).
 'PrivateProcessTTimeoutMsg__'() ->
   {privateProcessTTimeoutMsg__}.
 'ThereToGetRidOfUnreachableWarning'() ->
   {thereToGetRidOfUnreachableWarning}.
 noInline() ->
-  (unsafe_coerce@ps:unsafeCoerce()).
+  (fun
+    (V@0) ->
+      (noInline(V@0))
+  end).
+noInline(A) ->
+  A.
 isSecretMsg() ->
   (fun
     (V@0) ->
