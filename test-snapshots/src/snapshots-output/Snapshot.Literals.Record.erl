@@ -2,9 +2,11 @@
 -export([recordAccess/0, recordAccess/1]).
 -compile(no_auto_import).
 recordAccess() ->
-  (fun
+  fun
     (V@Local) ->
-      (recordAccess(V@Local))
-  end).
+      recordAccess(V@Local)
+  end.
+
 recordAccess(V) ->
-  (maps:get(fooBarBaz, V)).
+  erlang:map_get(fooBarBaz, V).
+

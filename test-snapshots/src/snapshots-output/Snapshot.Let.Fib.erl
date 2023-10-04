@@ -5,12 +5,13 @@ result() ->
   begin
     Fib = (fun
       Fib (V) ->
-        case (V < 2) of
-          true ->
+        if
+          V < 2 ->
             V;
-          _ ->
-            ((Fib((V - 1))) + (Fib((V - 2))))
+          true ->
+            (Fib(V - 1)) + (Fib(V - 2))
         end
     end),
-    (Fib(6))
+    Fib(6)
   end.
+

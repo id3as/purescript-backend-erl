@@ -61,7 +61,7 @@ codegenModule { name, bindings, imports, foreign: foreign_, exports: moduleExpor
           S.FunCall (Just (S.atomLiteral (erlModuleNameForeign name))) (S.atomLiteral decl) vars
 
     exports :: Array ErlExport
-    exports = Array.concatMap definitionExports definitions
+    exports = definitionExports <$> definitions
 
   in
     { moduleName: erlModuleNamePs name
@@ -70,9 +70,10 @@ codegenModule { name, bindings, imports, foreign: foreign_, exports: moduleExpor
     , comments: []
     }
 
-definitionExports :: ErlDefinition -> Array ErlExport
+definitionExports :: ErlDefinition -> ErlExport
 definitionExports = case _ of
-  FunctionDefinition f a _ -> [ Export f (Array.length a) ]
+  FunctionDefinition f a _ ->
+    Export f (Array.length a)
 
 codegenTopLevelBindingGroup
   :: CodegenEnv
@@ -130,6 +131,17 @@ codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
   _ | Just result <- codegenForeign (codegenExpr codegenEnv) s ->
     result
 
+  -- Currently disabled due to this bug (OTP 26.1):
+  --   Sub pass ssa_opt_type_start
+  --   internal error in pass beam_ssa_opt:
+  --   exception error: bad key
+  --     in call from beam_ssa_type:opt_local_return/4 (beam_ssa_type.erl, line 733)
+  --     in call from beam_ssa_type:opt_make_fun/4 (beam_ssa_type.erl, line 716)
+  --     in call from beam_ssa_type:opt_is/8 (beam_ssa_type.erl, line 580)
+  --     in call from beam_ssa_type:opt_bs/8 (beam_ssa_type.erl, line 527)
+  --     in call from beam_ssa_type:do_opt_function/6 (beam_ssa_type.erl, line 505)
+  --     in call from beam_ssa_type:opt_function/6 (beam_ssa_type.erl, line 478)
+  --     in call from beam_ssa_type:opt_start_1/5 (beam_ssa_type.erl, line 96)
   Var (Qualified (Just mn) (Ident i)) | true || mn /= currentModule ->
     S.FunCall (Just (S.atomLiteral $ erlModuleNamePs mn)) (S.atomLiteral i) []
 
@@ -155,7 +167,7 @@ codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
   UncurriedEffectAbs a e ->
     S.simpleFun (toErlVarExpr <$> a) (codegenChain effectChainMode codegenEnv e)
   Accessor e (GetProp i) ->
-    S.FunCall (Just $ atomLiteral C.maps) (atomLiteral C.get)
+    S.FunCall (Just $ atomLiteral C.erlang) (atomLiteral C.map_get)
       [ S.atomLiteral i, codegenExpr codegenEnv e ]
 
   Accessor e (GetIndex i) ->
@@ -186,8 +198,13 @@ codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
       goPair :: Pair NeutralExpr -> Tuple ErlExpr ErlExpr
       goPair (Pair c e) = Tuple (codegenExpr codegenEnv c) (codegenExpr codegenEnv e)
 
+      go (Tuple c e) ee | S.guardExpr c =
+        case ee of
+          S.If clauses ->
+            S.If (S.IfClause c e NEA.: clauses)
+          _ ->
+            S.If (S.IfClause c e NEA.: NEA.singleton (S.IfClause (S.Literal $ S.Atom "true") ee))
       go (Tuple c e) ee =
-        -- S.If (S.IfClause c Nothing e NEA.: NEA.singleton (S.IfClause (S.Literal $ S.Atom "true") Nothing ee))
         S.Case c
           ( S.CaseClause (S.atomLiteral C.true_) Nothing e NEA.:
               NEA.singleton (S.CaseClause (S.Var "_") Nothing ee)
@@ -457,6 +474,7 @@ codegenPrimOp codegenEnv = case _ of
         OpIntNum o' -> S.BinOp
           ( case o' of
               OpAdd -> S.Add
+              -- FIXME
               OpDivide -> S.IDivide
               OpMultiply -> S.Multiply
               OpSubtract -> S.Subtract

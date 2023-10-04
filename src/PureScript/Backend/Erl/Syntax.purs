@@ -2,6 +2,7 @@ module PureScript.Backend.Erl.Syntax where
 
 import Prelude
 
+import Data.Array (all)
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NEA
@@ -9,9 +10,11 @@ import Data.Bifoldable (bifoldMap)
 import Data.Bifunctor (lmap)
 import Data.Foldable (class Foldable, foldMap, foldl, foldr)
 import Data.Maybe (Maybe(..), maybe)
+import Data.Newtype (class Newtype)
 import Data.Set as Set
 import Data.Tuple (Tuple(..), snd, uncurry)
 import PureScript.Backend.Erl.Constants as C
+import Safe.Coerce (coerce)
 
 type ErlModule =
   { moduleName :: String
@@ -26,7 +29,7 @@ data ErlDefinition
   -- |
   -- Top-level function definition
   --
-  = FunctionDefinition {- (Maybe EType) (Maybe SourceSpan) -}  String (Array String) ErlExpr
+  = FunctionDefinition {- (Maybe EType) (Maybe SourceSpan) -} String (Array String) ErlExpr
 
 data ErlExpr
   = Literal ErlLiteral
@@ -60,9 +63,10 @@ data ErlExpr
 data FunHead = FunHead (Array ErlExpr) (Maybe Guard)
 data IfClause = IfClause ErlExpr ErlExpr
 
-data CaseClause = CaseClause ErlExpr (Maybe ErlExpr) ErlExpr
+data CaseClause = CaseClause ErlExpr (Maybe Guard) ErlExpr
 
 newtype Guard = Guard ErlExpr
+derive instance Newtype Guard _
 
 data ErlLiteral
   = Integer Int
@@ -133,14 +137,6 @@ data BinaryOperator
   | GreaterThanOrEqualTo
 
   -- |
-  -- Boolean and
-  --
-  | And
-  -- |
-  -- Boolean or
-  --
-  | Or
-  -- |
   -- Boolean short-circuit and
   --
   | AndAlso
@@ -209,9 +205,9 @@ visit f = go
   goes :: Array ErlExpr -> m
   goes es = foldMap go es
   goFunHead :: FunHead -> m
-  goFunHead (FunHead es mg) = goes es <> foldMap (\(Guard g) -> go g) mg
+  goFunHead (FunHead es mg) = goes es <> foldMap (coerce go) mg
   goIfClause (IfClause e1 e2) = go e1 <> go e2
-  goCaseClause (CaseClause e1 me2 e3) = go e1 <> foldMap go me2 <> go e3
+  goCaseClause (CaseClause e1 me2 e3) = go e1 <> foldMap (coerce go) me2 <> go e3
   go e0 = f e0 <> case e0 of
     Literal _ -> mempty
     Var _ -> mempty
@@ -299,3 +295,60 @@ predefMacros =
 
 mIS_TAG :: ErlExpr -> ErlExpr -> ErlExpr
 mIS_TAG tag v = Macro "IS_TAG" $ NEA.fromArray [ tag, v ]
+
+guardExpr :: ErlExpr -> Boolean
+guardExpr = case _ of
+  Literal _ -> true
+  Var _ -> true
+  List items -> all guardExpr items
+  ListCons items tail -> all guardExpr items && guardExpr tail
+  Tupled items -> all guardExpr items
+  Map items -> all (guardExpr <<< snd) items
+  MapUpdate e items -> guardExpr e && all (guardExpr <<< snd) items
+  FunCall (Just (Literal (Atom mod))) (Literal (Atom fn)) args ->
+    Array.elem (Tuple mod fn) guardFns && all guardExpr args
+  BinOp _ e1 e2 -> guardExpr e1 && guardExpr e2
+  UnaryOp _ e -> guardExpr e
+  BinaryAppend e1 e2 -> guardExpr e1 && guardExpr e2
+  _ -> false
+
+guardFns :: Array (Tuple String String)
+guardFns = map (Tuple C.erlang)
+  [ "abs"
+  , "binary_part"
+  , "bit_size"
+  , "byte_size"
+  , "ceil"
+  , "element"
+  , "float"
+  , "floor"
+  , "hd"
+  , "is_atom"
+  , "is_binary"
+  , "is_bitstring"
+  , "is_boolean"
+  , "is_float"
+  , "is_function"
+  , "is_integer"
+  , "is_list"
+  , "is_map"
+  , "is_map_key"
+  , "is_number"
+  , "is_pid"
+  , "is_port"
+  -- , "is_record" -- has some side-conditions
+  , "is_reference"
+  , "is_tuple"
+  , "length"
+  , "map_get"
+  , "map_size"
+  , "max"
+  , "min"
+  , "node"
+  , "round"
+  , "self"
+  , "size"
+  , "tl"
+  , "trunc"
+  , "tuple_size"
+  ]

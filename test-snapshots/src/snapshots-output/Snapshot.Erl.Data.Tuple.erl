@@ -1,41 +1,65 @@
 -module(snapshot_erl_data_tuple@ps).
--export([uncurriedMore/0, uncurried/0, tf2/0, t5/0, t2/0, sndt2/0, r5/0, result/0, fsttf2/0, fstt2/0]).
+-export([ uncurriedMore/0
+        , uncurried/0
+        , tf2/0
+        , t5/0
+        , t2/0
+        , sndt2/0
+        , r5/0
+        , result/0
+        , fsttf2/0
+        , fstt2/0
+        ]).
 -compile(no_auto_import).
 uncurriedMore() ->
-  (fun
+  fun
     ({A, B, C, D, E}) ->
-      (fun
+      fun
         (F) ->
-          (fun
+          fun
             ({G, H}) ->
-              {((A + B) + G), <<C/binary, D/binary, (F(E))/binary, H/binary>>}
-          end)
-      end)
-  end).
+              {(A + B) + G, <<C/binary, D/binary, (F(E))/binary, H/binary>>}
+          end
+      end
+  end.
+
 uncurried() ->
-  (fun
+  fun
     ({A, B, C, D, _}) ->
-      {(A + B), <<C/binary, D/binary>>}
-  end).
+      {A + B, <<C/binary, D/binary>>}
+  end.
+
 tf2() ->
-  {(fun
+  { fun
     (I) ->
-      (I - 5)
-  end), <<"7">>}.
+      I - 5
+  end
+  , <<"7">>
+  }.
+
 t5() ->
   {3, 4, <<"hi">>, <<"there">>, $V}.
+
 t2() ->
   {4, <<"hi">>}.
+
 sndt2() ->
   <<"hi">>.
+
 r5() ->
   {7, <<"hithere">>}.
+
 result() ->
-  ((((snapshot_erl_data_tuple@ps:uncurriedMore())({3, 4, <<"hi">>, <<"there">>, $V}))((fun
-    (_) ->
-      <<"">>
-  end)))({7, <<"hithere">>})).
+  (((uncurriedMore())({3, 4, <<"hi">>, <<"there">>, $V}))
+   (fun
+     (_) ->
+       <<"">>
+   end))
+  ({7, <<"hithere">>}).
+
 fsttf2() ->
-  (((erl_data_tuple@ps:fst())((snapshot_erl_data_tuple@ps:tf2())))(12)).
+  ((erl_data_tuple@ps:fst())(tf2()))(12).
+
 fstt2() ->
   4.
+

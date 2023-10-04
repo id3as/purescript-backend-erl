@@ -2,42 +2,48 @@
 -export([noInline/0, noInline/1, inline/0, inline/1, ex/0, ex/1]).
 -compile(no_auto_import).
 noInline() ->
-  (fun
+  fun
     (A@Local) ->
-      (noInline(A@Local))
-  end).
+      noInline(A@Local)
+  end.
+
 noInline(A) ->
   A.
+
 inline() ->
-  (fun
+  fun
     (N@Local) ->
-      (inline(N@Local))
-  end).
+      inline(N@Local)
+  end.
+
 inline(N) ->
   begin
-    A = ((snapshot_scoping@ps:noInline())(N)),
-    (A + A)
+    A = ((noInline())(N)),
+    A + A
   end.
+
 ex() ->
-  (fun
+  fun
     (N@Local) ->
-      (ex(N@Local))
-  end).
+      ex(N@Local)
+  end.
+
 ex(N) ->
   begin
-    A@1 = case (N =:= 0) of
-      true ->
+    A@1 = if
+      N =:= 0 ->
         begin
-          A = ((snapshot_scoping@ps:noInline())(N)),
-          (A + A)
+          A = ((noInline())(N)),
+          A + A
         end;
-      _ ->
+      true ->
         2
     end,
-    case (A@1 =:= 2) of
-      true ->
+    if
+      A@1 =:= 2 ->
         0;
-      _ ->
+      true ->
         A@1
     end
   end.
+

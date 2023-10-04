@@ -1,7 +1,5 @@
 module PureScript.Backend.Erl.Constants where
 
-import Prelude
-
 
 moduleForeign :: String
 moduleForeign = "foreign"
@@ -15,14 +13,14 @@ undefined = "undefined"
 erlExt :: String
 erlExt = ".erl"
 
-maps :: String
-maps = "maps"
-
 array :: String
 array = "array"
 
 get :: String
 get = "get"
+
+map_get :: String
+map_get = "map_get"
 
 erlang :: String
 erlang = "erlang"

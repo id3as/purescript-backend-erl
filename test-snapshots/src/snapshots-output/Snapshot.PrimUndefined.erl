@@ -2,11 +2,15 @@
 -export([testCase/0, testCase/1, main/0]).
 -compile(no_auto_import).
 testCase() ->
-  (fun
+  fun
     (DictRing@Local) ->
-      (testCase(DictRing@Local))
-  end).
+      testCase(DictRing@Local)
+  end.
+
 testCase(DictRing) ->
-  (maps:get(add, ((maps:get('Semiring0', DictRing))(undefined)))).
+  erlang:map_get(add, (erlang:map_get('Semiring0', DictRing))(undefined)).
+
 main() ->
-  ((test_assert@ps:assert())((((((snapshot_primUndefined@ps:testCase())((data_ring@ps:ringInt())))(1))(1)) =:= 2))).
+  (test_assert@ps:assert())
+  (((((testCase())(data_ring@ps:ringInt()))(1))(1)) =:= 2).
+

@@ -4,11 +4,13 @@ import Prelude
 
 import Data.Array (all, foldr)
 import Data.Array as Array
+import Data.Array.NonEmpty as NEA
 import Data.CodePoint.Unicode as CodePointU
 import Data.CodePoint.Unicode as U
 import Data.Enum (fromEnum)
 import Data.Foldable (class Foldable, fold, foldMap)
-import Data.Maybe (Maybe(..), maybe)
+import Data.Maybe (Maybe(..))
+import Data.Monoid as M
 import Data.Set as Set
 import Data.String (CodePoint, toCodePointArray)
 import Data.String as CodePoints
@@ -22,10 +24,11 @@ import Data.Tuple (Tuple(..))
 import Data.Tuple.Nested ((/\))
 import Dodo (Doc, flexAlt)
 import Dodo as D
-import Dodo.Common (trailingComma)
+import Dodo.Common (leadingComma, trailingComma)
 import Partial.Unsafe (unsafePartial)
-import PureScript.Backend.Erl.Syntax (BinaryOperator, CaseClause(..), ErlDefinition, ErlExport(..), ErlExpr, ErlModule, FunHead(..), IfClause(..), UnaryOperator)
+import PureScript.Backend.Erl.Syntax (BinaryOperator, CaseClause(..), ErlDefinition, ErlExport(..), ErlExpr, ErlModule, FunHead(..), Guard(..), IfClause(..), UnaryOperator)
 import PureScript.Backend.Erl.Syntax as S
+import Safe.Coerce (coerce)
 
 printWrap :: Doc Void -> Doc Void -> Doc Void -> Doc Void
 printWrap l r x = l <> x <> r
@@ -39,11 +42,55 @@ printBrackets = printWrap (D.text "[") (D.text "]")
 printBraces :: Doc Void -> Doc Void
 printBraces = printWrap (D.text "{") (D.text "}")
 
+printWrap' :: Doc Void -> Doc Void -> Array (Doc Void) -> Doc Void
+printWrap' l r [] = l <> r
+printWrap' l r [x] = l <> x <> r
+printWrap' l r xs = D.flexGroup $
+  D.alignCurrentColumn (l <> D.flexAlt mempty D.space <> commaSepLines xs <> D.softBreak <> r)
+
+printWrap_ :: Doc Void -> Doc Void -> Array (Doc Void) -> Doc Void
+printWrap_ l r [] = l <> r
+printWrap_ l r xs = D.flexGroup $
+  D.alignCurrentColumn (l <> D.space <> commaSepLines xs <> D.spaceBreak <> r)
+
+printParens' :: Array (Doc Void) -> Doc Void
+printParens' = printWrap' (D.text "(") (D.text ")")
+
+printOptParens' :: Array (Doc Void) -> Doc Void
+printOptParens' [x] = x
+printOptParens' xs = printWrap' (D.text "(") (D.text ")") xs
+
+printParens_ :: Array (Doc Void) -> Doc Void
+printParens_ = printWrap_ (D.text "(") (D.text ")")
+
+printBrackets' :: Array (Doc Void) -> Doc Void
+printBrackets' = printWrap' (D.text "[") (D.text "]")
+
+printBrackets_ :: Array (Doc Void) -> Doc Void
+printBrackets_ = printWrap_ (D.text "[") (D.text "]")
+
+printBraces' :: Array (Doc Void) -> Doc Void
+printBraces' = printWrap' (D.text "{") (D.text "}")
+
+printBraces_ :: Array (Doc Void) -> Doc Void
+printBraces_ = printWrap_ (D.text "{") (D.text "}")
+
 commaSep :: forall f. Foldable f => f (Doc Void) -> Doc Void
 commaSep = D.foldWithSeparator (D.text ", ")
 
+commaSepLines :: forall f. Foldable f => f (Doc Void) -> Doc Void
+commaSepLines = D.foldWithSeparator leadingComma
+
 commaSepMap :: forall f a. Traversable f => (a -> Doc Void) -> f a -> Doc Void
 commaSepMap f = commaSep <<< map f
+
+maybeSep :: forall a. (a -> Doc Void) -> Maybe a -> Doc Void -> Doc Void
+maybeSep _ Nothing _ = mempty
+maybeSep f (Just a) sep = f a <> sep
+
+sepMaybe :: forall a. Doc Void -> (a -> Doc Void) -> Maybe a -> Doc Void
+sepMaybe _ _ Nothing = mempty
+sepMaybe sep f (Just a) = sep <> f a
 
 linesSeparated :: Prim.Array (Doc Void) -> Doc Void
 linesSeparated = Array.intercalate twoLineBreaks
@@ -55,10 +102,11 @@ printModule :: ErlModule -> Doc Void
 printModule lib =
   flip append D.break
     $ D.lines $
-      [ printAttribute "module" (D.text (escapeAtom lib.moduleName))
-      , printAttribute "export" $ printBrackets $
-          commaSep $ (\(Export name arity) -> D.text (escapeAtom name) <> D.text "/" <> D.text (show arity)) <$> lib.exports
-      , printAttribute "compile" (D.text "no_auto_import")
+      [ printAttribute "module" [ D.text (escapeAtom lib.moduleName) ]
+      , printAttribute "export" $ pure $ printBrackets' $
+          lib.exports <#> \(Export name arity) ->
+            D.text (escapeAtom name) <> D.text "/" <> D.text (show arity)
+      , printAttribute "compile" [ D.text "no_auto_import" ]
       , printMacrosFor lib
       ]
       <>
@@ -69,24 +117,36 @@ printMacrosFor { definitions } =
   let used = foldMap (\(S.FunctionDefinition _ _ e) -> S.macros e) definitions in
   S.predefMacros # foldMap \(Tuple (Tuple name args) def) ->
     if not Set.member name used then mempty else
-    printAttribute "define" $ commaSep
-      [ D.text name <> foldMap (printParens <<< commaSepMap D.text) args
+    printAttribute "define"
+      [ D.text name <> foldMap (printParens' <<< NEA.toArray <<< map D.text) args
       , printExpr def
       ]
 
-printAttribute :: String -> Doc Void -> Doc Void
-printAttribute name a = D.text "-" <> D.text name <> printParens a <> D.text "."
+printAttribute :: String -> Array (Doc Void) -> Doc Void
+printAttribute name a = D.text "-" <> D.text name <> printParens' a <> D.text "."
 
 printDefinition :: ErlDefinition -> Doc Void
 printDefinition = case _ of
   S.FunctionDefinition name args e ->
     D.text (escapeAtom name) <> printParens (commaSep $ D.text <$> args) <> D.text " ->"
-      <> D.break <> D.indent (printExpr e)
-      <> D.text "."
+      <> D.break <> D.indent (printAtomic e)
+      <> D.text "." <> D.break
 
+type Precedence = Boolean
+atomic = true :: Precedence
+
+parenPrec :: Precedence -> Doc Void -> Doc Void
+parenPrec p d | p == atomic = d
+parenPrec _ d = D.flexGroup $ printParens d
 
 printExpr :: ErlExpr -> Doc Void
-printExpr = case _ of
+printExpr e = printExpr' false e
+
+printAtomic :: ErlExpr -> Doc Void
+printAtomic e = D.flexGroup $ printExpr' atomic e
+
+printExpr' :: Precedence -> ErlExpr -> Doc Void
+printExpr' prec = case _ of
   S.Literal (S.Integer n) -> D.text $ show n
   S.Literal (S.Float f) -> D.text $
     -- Erlang does not like scientific notation without a decimal point
@@ -102,31 +162,32 @@ printExpr = case _ of
 
   S.Var v -> D.text v
 
-  S.List a -> printBrackets $ commaSep $ printExpr <$> a
-  S.ListCons a rest -> printBrackets $ fold
-    [ commaSep $ printExpr <$> a
+  S.List a -> printBrackets' $ printAtomic <$> a
+  S.ListCons a rest -> D.flexGroup $ printBrackets $ fold
+    [ commaSep $ printAtomic <$> a
     , D.text "|"
-    , printExpr rest
+    , printAtomic rest
     ]
-  S.Tupled a -> printBraces $ commaSep $ printExpr <$> a
-  S.Map fields -> D.text "#{" <> D.foldWithSeparator (D.text "," <> D.spaceBreak) (printField <$> fields) <> D.text "}"
-  S.MapUpdate e fields -> D.text "(" <> printExpr e <> D.text ")#{" <> D.foldWithSeparator (D.text "," <> D.spaceBreak) (printField <$> fields) <> D.text "}"
+  S.Tupled a -> printBraces' $ printAtomic <$> a
+  S.Map fields -> D.text "#" <> printBraces_ (printField <$> fields)
+  S.MapUpdate e fields -> D.text "(" <> printExpr e <> D.text ")#" <> printBraces_ (printField <$> fields)
 
   S.Match e1 e2 -> printExpr e1 <> D.text " = " <> printExpr e2
 
   S.Block exprs ->
     D.text "begin" <> D.break <>
-      D.indent (D.foldWithSeparator trailingComma (printExpr <$> exprs)) <> D.break <>
+      D.indent (D.foldWithSeparator trailingComma (printAtomic <<< skipUnusedMatch <$> exprs)) <> D.break <>
     D.text "end"
 
-  S.Fun name heads -> printParens $ do
+  S.Fun name heads -> parenPrec prec $ do
     let
       printFunHead :: Tuple FunHead ErlExpr -> Doc Void
       printFunHead (Tuple (FunHead exprs g) e) =
-        maybe mempty (\n -> D.text n <> D.space) name <>
-          printParens (commaSep $ printExpr <$> exprs) <>
+        maybeSep D.text name D.space <>
+          printParens' (printExpr <$> exprs) <>
+          sepMaybe (D.text " when ") (coerce printAtomic) g <>
           D.text " ->" <> D.break <>
-          D.indent (printExpr e) <> D.break
+          D.indent (printAtomic e) <> D.break
 
     D.text "fun" <> D.break
       <> D.indent (
@@ -134,11 +195,17 @@ printExpr = case _ of
       )
       <> D.text "end"
 
-  S.FunCall qualifier function args ->
-    printParens $
-      maybe mempty (\q -> printExpr q <> D.text ":")  qualifier
+  S.FunCall qualifier function [] ->
+    parenPrec prec $
+      maybeSep printExpr qualifier (D.text ":")
       <> printExpr function
-      <> printParens (commaSep $ printExpr <$> args)
+      <> D.text "()"
+  S.FunCall qualifier function args ->
+    parenPrec prec $ D.alignCurrentColumn $
+      maybeSep printExpr qualifier (D.text ":")
+      <> printExpr function
+      <> M.guard (not tiny function) D.softBreak
+      <> printParens' (printAtomic <$> args)
 
   S.If clauses ->
     D.text "if" <> D.break <>
@@ -147,36 +214,43 @@ printExpr = case _ of
     D.text "end"
 
   S.Case expr clauses ->
-    D.text "case " <> printExpr expr <> D.text " of" <> D.break <>
+    -- extra indent to clear the indenting of each case clause
+    D.text "case " <> D.indent (printAtomic expr) <> D.text " of" <> D.break <>
       D.indent (D.foldWithSeparator trailingSemi (printCaseClause <$> clauses))
       <> D.break <>
     D.text "end"
 
   S.BinOp op e1 e2 ->
-    printParens $
-      printExpr e1 <> D.space <> printBinOp op <> D.space <> printExpr e2
+    parenPrec prec $
+      printExpr e1 <> D.spaceBreak <> D.indent (printBinOp op <> D.space <> printExpr e2)
 
   S.UnaryOp op e1 ->
-    printParens $
+    parenPrec prec $
       printUnaryOp op <> D.space <> printExpr e1
 
   S.Macro name args ->
-    D.text ("?" <> name) <> foldMap (printParens <<< commaSepMap printExpr) args
+    D.text ("?" <> name) <> foldMap (printParens <<< commaSepMap printAtomic) args
+
+tiny :: ErlExpr -> Boolean
+tiny (S.Var _) = true
+tiny (S.Literal (S.Integer _)) = true
+tiny (S.Literal (S.Atom _)) = true
+tiny _ = false
 
 printIfClause :: IfClause -> Doc Void
 printIfClause (IfClause guard e) =
-  printExpr guard <> D.text " ->"  <> D.break <> D.indent (printExpr e)
+  printAtomic guard <> D.text " ->"  <> D.break <> D.indent (printAtomic e)
 
 printCaseClause :: CaseClause -> Doc Void
 printCaseClause (CaseClause test guard e) =
-  printExpr test  <> maybe mempty (\g -> D.text " when " <> printExpr g) guard<> D.text " ->" <> D.break <> D.indent (printExpr e)
+  printAtomic test <> sepMaybe (D.text " when ") (coerce printAtomic) guard <> D.text " ->" <> D.break <> D.indent (printAtomic e)
 
 trailingSemi :: forall a. Doc a
 trailingSemi = flexAlt (D.text "; ") (D.text ";" <> D.break)
 
 escapeAtom :: String -> String
 escapeAtom a =
-  if isValidAtom a
+  if isValidAtom
     then a
     else "'" <> (foldMap replaceChar $ String.toCodePointArray a) <> "'"
   where
@@ -189,9 +263,16 @@ escapeAtom a =
   atomCP c | c == String.codePointFromChar '@' = true
   atomCP c = CodePointU.isDecDigit c || (CodePointU.isLatin1 c && CodePointU.isAlpha c)
 
-  isValidAtom a = case String.uncons a of
+  isValidAtom = case String.uncons a of
     Nothing -> false
-    Just { head, tail }-> CodePointU.isLower head && Array.all atomCP (String.toCodePointArray a) && not (nameIsErlReserved a)
+    Just { head } ->
+      CodePointU.isLower head
+        && Array.all atomCP (String.toCodePointArray a)
+        && not (nameIsErlReserved a)
+
+skipUnusedMatch :: ErlExpr -> ErlExpr
+skipUnusedMatch (S.Match (S.Var "_") e) = e
+skipUnusedMatch e = e
 
 nameIsErlReserved :: String -> Boolean
 nameIsErlReserved name =
@@ -237,7 +318,6 @@ printBinOp = D.text <<< case _ of
   S.Multiply             -> "*"
   S.Remainder            -> "rem"
   S.BitwiseAnd           -> "band"
-  S.And                  -> "and"
 
   S.Add                  -> "+"
   S.Subtract             -> "-"
@@ -245,7 +325,6 @@ printBinOp = D.text <<< case _ of
   S.BitwiseXor           -> "bxor"
   S.ShiftLeft            -> "bsl"
   S.ShiftRight           -> "bsr"
-  S.Or                   -> "or"
   S.XOr                  -> "xor"
 
   S.ListConcat           -> "++"
@@ -284,7 +363,7 @@ printBinaryLiteral = finish <<< go
 
 printField :: Tuple String ErlExpr -> Doc Void
 printField (Tuple f e) =
-  D.text (escapeAtom f) <> D.text " => " <> printExpr e
+  D.text (escapeAtom f) <> D.text " => " <> printAtomic e
 
 isAscii :: String -> Boolean
 isAscii = toCodePointArray >>> all U.isAscii

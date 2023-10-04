@@ -2,14 +2,17 @@
 -export([fortyTwo/0, result/0, addImpl/0]).
 -compile(no_auto_import).
 fortyTwo() ->
-  (((snapshot_import_impl@ps:addImpl())(21))(21)).
+  ((addImpl())(21))(21).
+
 result() ->
-  (snapshot_import_impl@ps:fortyTwo()).
+  fortyTwo().
+
 addImpl() ->
-  (fun
+  fun
     (V) ->
-      (fun
+      fun
         (V@1) ->
-          (snapshot_import_impl@foreign:addImpl(V, V@1))
-      end)
-  end).
+          snapshot_import_impl@foreign:addImpl(V, V@1)
+      end
+  end.
+

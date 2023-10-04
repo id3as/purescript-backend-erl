@@ -91,6 +91,12 @@ foreignSemantics = Map.union erlForeignSemantics $
       , Just (ModuleName "Control.Monad.ST.Internal")
       ]
 
+moreDirectives :: String
+moreDirectives = """
+Stetson.HandlerProxy.provide arity=1
+Stetson.HandlerProxy.accept arity=1
+"""
+
 runCompile :: MainArgs -> Aff Unit
 runCompile { compile, filter, cwd } = do
   liftEffect $ traverse_ Process.chdir cwd
@@ -108,7 +114,7 @@ runCompile { compile, filter, cwd } = do
     Right coreFnModules -> do
       when (List.null coreFnModules) do
         Console.log "No modules; try building"
-      let { directives } = parseDirectiveFile defaultDirectives
+      let { directives } = parseDirectiveFile (defaultDirectives <> moreDirectives)
       coreFnModules # buildModules
         { directives
         , analyzeCustom

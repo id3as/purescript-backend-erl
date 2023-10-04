@@ -1,45 +1,55 @@
 -module(snapshot_effect@ps).
--export(['don\'tInlineMeMe'/0, 'don\'tInlineMeMe'/1, lastComponentIsRun/0, lastPureIsUnwrapped/0, main/0]).
+-export([ 'don\'tInlineMeMe'/0
+        , 'don\'tInlineMeMe'/1
+        , lastComponentIsRun/0
+        , lastPureIsUnwrapped/0
+        , main/0
+        ]).
 -compile(no_auto_import).
 'don\'tInlineMeMe'() ->
-  (fun
+  fun
     (V@Local) ->
-      ('don\'tInlineMeMe'(V@Local))
-  end).
+      'don\'tInlineMeMe'(V@Local)
+  end.
+
 'don\'tInlineMeMe'(_) ->
-  (fun
+  fun
     () ->
       unit
-  end).
+  end.
+
 lastComponentIsRun() ->
   begin
-    V = ((snapshot_effect@ps:'don\'tInlineMeMe'())(<<"a">>)),
-    (fun
+    V = (('don\'tInlineMeMe'())(<<"a">>)),
+    fun
       () ->
         begin
-          _ = (V()),
-          _ = (((snapshot_effect@ps:'don\'tInlineMeMe'())(<<"b">>))()),
-          (((snapshot_effect@ps:'don\'tInlineMeMe'())(<<"c">>))())
+          V(),
+          (('don\'tInlineMeMe'())(<<"b">>))(),
+          (('don\'tInlineMeMe'())(<<"c">>))()
         end
-    end)
+    end
   end.
+
 lastPureIsUnwrapped() ->
   begin
-    V = ((snapshot_effect@ps:'don\'tInlineMeMe'())(<<"a">>)),
-    (fun
+    V = (('don\'tInlineMeMe'())(<<"a">>)),
+    fun
       () ->
         begin
           Value = (V()),
-          _ = (((snapshot_effect@ps:'don\'tInlineMeMe'())(<<"b">>))()),
+          (('don\'tInlineMeMe'())(<<"b">>))(),
           Value
         end
-    end)
+    end
   end.
+
 main() ->
-  (fun
+  fun
     () ->
       begin
-        _ = ((snapshot_effect@ps:lastComponentIsRun())()),
-        ((snapshot_effect@ps:lastPureIsUnwrapped())())
+        (lastComponentIsRun())(),
+        (lastPureIsUnwrapped())()
       end
-  end).
+  end.
+

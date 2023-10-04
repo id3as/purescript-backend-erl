@@ -1,155 +1,239 @@
 -module(snapshot_prime@ps).
--export(['NCtor'/0, 'NCtor'/1, 'NewtypeCtor\''/0, 'NewtypeCtor\''/1, 'F1'/0, 'F2'/0, 'DCtor'/0, 'Ctor\''/0, useNewtypeType/0, useNewtypeType/1, useNewtypeCtor/0, useNewtypeCtor/1, useDataType/0, useDataType/1, useDataCtor/0, useDataCtor/1, normal/0, normal/1, useNormal/0, useNormal/1, 'instanceName\''/0, useNormal1/0, useInstance/0, ignore/0, ignore/1, useClass/0, useClass/1, 'foo\'oo'/0, useFooPrime3/0, 'foo\'\''/0, useFooPrime2/0, 'foo\''/0, useFooPrime1/0, result/0, foo/0, 'classMember\''/0, 'classMember\''/1, useMember/0, useMember/1]).
+-export([ 'NCtor'/0
+        , 'NCtor'/1
+        , 'NewtypeCtor\''/0
+        , 'NewtypeCtor\''/1
+        , 'F1'/0
+        , 'F2'/0
+        , 'DCtor'/0
+        , 'Ctor\''/0
+        , useNewtypeType/0
+        , useNewtypeType/1
+        , useNewtypeCtor/0
+        , useNewtypeCtor/1
+        , useDataType/0
+        , useDataType/1
+        , useDataCtor/0
+        , useDataCtor/1
+        , normal/0
+        , normal/1
+        , useNormal/0
+        , useNormal/1
+        , 'instanceName\''/0
+        , useNormal1/0
+        , useInstance/0
+        , ignore/0
+        , ignore/1
+        , useClass/0
+        , useClass/1
+        , 'foo\'oo'/0
+        , useFooPrime3/0
+        , 'foo\'\''/0
+        , useFooPrime2/0
+        , 'foo\''/0
+        , useFooPrime1/0
+        , result/0
+        , foo/0
+        , 'classMember\''/0
+        , 'classMember\''/1
+        , useMember/0
+        , useMember/1
+        ]).
 -compile(no_auto_import).
--define(IS_TAG(Tag, V), ((erlang:is_tuple(V)) andalso ((1 =< (erlang:tuple_size(V))) andalso (Tag =:= (erlang:element(1, V)))))).
+-define( IS_TAG(Tag, V)
+       , ((erlang:is_tuple(V))
+         andalso ((1 =< (erlang:tuple_size(V)))
+           andalso (Tag =:= (erlang:element(1, V)))))
+       ).
 'NCtor'() ->
-  (fun
+  fun
     (X@Local) ->
-      ('NCtor'(X@Local))
-  end).
+      'NCtor'(X@Local)
+  end.
+
 'NCtor'(X) ->
   X.
+
 'NewtypeCtor\''() ->
-  (fun
+  fun
     (X@Local) ->
-      ('NewtypeCtor\''(X@Local))
-  end).
+      'NewtypeCtor\''(X@Local)
+  end.
+
 'NewtypeCtor\''(X) ->
   X.
+
 'F1'() ->
   {f1}.
+
 'F2'() ->
   {f2}.
+
 'DCtor'() ->
   {dCtor}.
+
 'Ctor\''() ->
-  (fun
+  fun
     (Value0) ->
-      (fun
+      fun
         (Value1) ->
           {'ctor\'', Value0, Value1}
-      end)
-  end).
+      end
+  end.
+
 useNewtypeType() ->
-  (fun
+  fun
     (I@Local) ->
-      (useNewtypeType(I@Local))
-  end).
+      useNewtypeType(I@Local)
+  end.
+
 useNewtypeType(I) ->
   I.
+
 useNewtypeCtor() ->
-  (fun
+  fun
     (I@Local) ->
-      (useNewtypeCtor(I@Local))
-  end).
+      useNewtypeCtor(I@Local)
+  end.
+
 useNewtypeCtor(I) ->
   I.
+
 useDataType() ->
-  (fun
+  fun
     (V@Local) ->
-      (useDataType(V@Local))
-  end).
+      useDataType(V@Local)
+  end.
+
 useDataType(_) ->
   {dCtor}.
+
 useDataCtor() ->
-  (fun
+  fun
     (S@Local) ->
-      (useDataCtor(S@Local))
-  end).
+      useDataCtor(S@Local)
+  end.
+
 useDataCtor(S) ->
   {'ctor\'', S, 4}.
+
 normal() ->
-  (fun
+  fun
     (Dict@Local) ->
-      (normal(Dict@Local))
-  end).
+      normal(Dict@Local)
+  end.
+
 normal(Dict) ->
-  (maps:get(normal, Dict)).
+  erlang:map_get(normal, Dict).
+
 useNormal() ->
-  (fun
+  fun
     (DictNormal@Local) ->
-      (useNormal(DictNormal@Local))
-  end).
+      useNormal(DictNormal@Local)
+  end.
+
 useNormal(DictNormal) ->
   begin
-    Normal1 = ((snapshot_prime@ps:normal())(DictNormal)),
-    (fun
+    Normal1 = ((normal())(DictNormal)),
+    fun
       (DictNormal1) ->
         begin
-          Normal2 = ((snapshot_prime@ps:normal())(DictNormal1)),
-          (fun
+          Normal2 = ((normal())(DictNormal1)),
+          fun
             (A) ->
-              (fun
+              fun
                 (B) ->
                   <<(Normal1(A))/binary, (Normal2(B))/binary>>
-              end)
-          end)
-        end
-    end)
-  end.
-'instanceName\''() ->
-  #{normal => (fun
-    (V) ->
-      case ?IS_TAG(f1, V) of
-        true ->
-          <<"F1">>;
-        _ ->
-          case ?IS_TAG(f2, V) of
-            true ->
-              <<"F2">>;
-            _ ->
-              (erlang:throw({fail, <<"Failed pattern match">>}))
+              end
           end
-      end
-  end)}.
+        end
+    end
+  end.
+
+'instanceName\''() ->
+  #{ normal => fun
+     (V) ->
+       case ?IS_TAG(f1, V) of
+         true ->
+           <<"F1">>;
+         _ ->
+           case ?IS_TAG(f2, V) of
+             true ->
+               <<"F2">>;
+             _ ->
+               erlang:throw({fail, <<"Failed pattern match">>})
+           end
+       end
+   end
+   }.
+
 useNormal1() ->
-  (((snapshot_prime@ps:useNormal())((snapshot_prime@ps:'instanceName\''())))((snapshot_prime@ps:'instanceName\''()))).
+  ((useNormal())('instanceName\''()))('instanceName\''()).
+
 useInstance() ->
-  (((snapshot_prime@ps:useNormal1())({f1}))({f2})).
+  ((useNormal1())({f1}))({f2}).
+
 ignore() ->
-  (fun
+  fun
     (Dict@Local) ->
-      (ignore(Dict@Local))
-  end).
+      ignore(Dict@Local)
+  end.
+
 ignore(Dict) ->
-  (maps:get(ignore, Dict)).
+  erlang:map_get(ignore, Dict).
+
 useClass() ->
-  (fun
+  fun
     (DictClassName_@prime@Local) ->
-      (useClass(DictClassName_@prime@Local))
-  end).
+      useClass(DictClassName_@prime@Local)
+  end.
+
 useClass(DictClassName_@prime) ->
-  ((snapshot_prime@ps:ignore())(DictClassName_@prime)).
+  (ignore())(DictClassName_@prime).
+
 'foo\'oo'() ->
   <<"foo\'oo">>.
+
 useFooPrime3() ->
-  (snapshot_prime@ps:'foo\'oo'()).
+  'foo\'oo'().
+
 'foo\'\''() ->
   <<"foo\'\'">>.
+
 useFooPrime2() ->
-  (snapshot_prime@ps:'foo\'\''()).
+  'foo\'\''().
+
 'foo\''() ->
   <<"foo\'">>.
+
 useFooPrime1() ->
-  (snapshot_prime@ps:'foo\''()).
+  'foo\''().
+
 result() ->
-  #{test1 => ((snapshot_prime@ps:'foo\''()) =:= (snapshot_prime@ps:'foo\''())),
-  test2 => ((snapshot_prime@ps:'foo\'\''()) =:= (snapshot_prime@ps:'foo\'\''())),
-  test3 => ((snapshot_prime@ps:'foo\'oo'()) =:= (snapshot_prime@ps:'foo\'oo'())),
-  useInstance => (((snapshot_prime@ps:useNormal1())({f1}))({f2}))}.
+  #{ test1 => ('foo\''()) =:= ('foo\''())
+   , test2 => ('foo\'\''()) =:= ('foo\'\''())
+   , test3 => ('foo\'oo'()) =:= ('foo\'oo'())
+   , useInstance => ((useNormal1())({f1}))({f2})
+   }.
+
 foo() ->
   <<"foo">>.
+
 'classMember\''() ->
-  (fun
+  fun
     (Dict@Local) ->
-      ('classMember\''(Dict@Local))
-  end).
+      'classMember\''(Dict@Local)
+  end.
+
 'classMember\''(Dict) ->
-  (maps:get('classMember\'', Dict)).
+  erlang:map_get('classMember\'', Dict).
+
 useMember() ->
-  (fun
+  fun
     (DictClassMember@Local) ->
-      (useMember(DictClassMember@Local))
-  end).
+      useMember(DictClassMember@Local)
+  end.
+
 useMember(DictClassMember) ->
-  ((snapshot_prime@ps:'classMember\''())(DictClassMember)).
+  ('classMember\''())(DictClassMember).
+

@@ -2,50 +2,58 @@
 -export([positionZero/0, onLet/0, onLet/1, onLetTest/0, basicTest/0, main/0]).
 -compile(no_auto_import).
 positionZero() ->
-  ((effect_ref@ps:new())(0)).
+  (effect_ref@ps:new())(0).
+
 onLet() ->
-  (fun
+  fun
     (X@Local) ->
-      (onLet(X@Local))
-  end).
+      onLet(X@Local)
+  end.
+
 onLet(X) ->
   begin
     A = (X + X),
-    ((effect_ref@ps:new())(((A + A) + X)))
+    (effect_ref@ps:new())((A + A) + X)
   end.
+
 onLetTest() ->
   begin
-    V = ((snapshot_effectRef@ps:onLet())(1)),
-    (fun
+    V = ((onLet())(1)),
+    fun
       () ->
         begin
           N = (V()),
           V@1 = (((effect_ref@ps:read())(N))()),
-          (((test_assert@ps:assert())((V@1 =:= 5)))())
+          ((test_assert@ps:assert())(V@1 =:= 5))()
         end
-    end)
+    end
   end.
+
 basicTest() ->
   begin
     V = ((effect_ref@ps:new())(0)),
-    (fun
+    fun
       () ->
         begin
           N = (V()),
-          _ = ((((effect_ref@ps:modify_())((fun
-            (V@1) ->
-              (V@1 + 1)
-          end)))(N))()),
+          (((effect_ref@ps:modify_())
+            (fun
+              (V@1) ->
+                V@1 + 1
+            end))
+           (N))(),
           V@1 = (((effect_ref@ps:read())(N))()),
-          (((test_assert@ps:assert())((V@1 =:= 1)))())
+          ((test_assert@ps:assert())(V@1 =:= 1))()
         end
-    end)
+    end
   end.
+
 main() ->
-  (fun
+  fun
     () ->
       begin
-        _ = ((snapshot_effectRef@ps:basicTest())()),
-        ((snapshot_effectRef@ps:onLetTest())())
+        (basicTest())(),
+        (onLetTest())()
       end
-  end).
+  end.
+
