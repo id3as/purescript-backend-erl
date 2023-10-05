@@ -38,5 +38,5 @@ isSecretMsg(V) ->
   ?IS_TAG(privateProcessTTimeoutMsg__, V).
 
 result() ->
-  ?IS_TAG(privateProcessTTimeoutMsg__, (noInline())(1)).
+  ?IS_TAG(privateProcessTTimeoutMsg__, (snapshot_dodgy@ps:noInline())(1)).
 

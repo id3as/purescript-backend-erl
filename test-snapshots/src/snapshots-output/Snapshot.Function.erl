@@ -23,5 +23,5 @@ g() ->
   end.
 
 g(X, Y) ->
-  ((f())(X))(Y).
+  ((snapshot_function@ps:f())(X))(Y).
 

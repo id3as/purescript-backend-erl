@@ -18,7 +18,7 @@ onLet(X) ->
 
 onLetTest() ->
   begin
-    V = ((onLet())(1)),
+    V = ((snapshot_effectRef@ps:onLet())(1)),
     fun
       () ->
         begin
@@ -52,8 +52,8 @@ main() ->
   fun
     () ->
       begin
-        (basicTest())(),
-        (onLetTest())()
+        (snapshot_effectRef@ps:basicTest())(),
+        (snapshot_effectRef@ps:onLetTest())()
       end
   end.
 

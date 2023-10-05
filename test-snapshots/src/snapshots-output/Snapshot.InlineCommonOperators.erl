@@ -235,8 +235,8 @@ inlineBinary(I, N, B, S, C) ->
    , lteInt => I =< I
    , gtInt => I > I
    , gteInt => I >= I
-   , minInt => ((min())(I))(I)
-   , maxInt => ((max())(I))(I)
+   , minInt => ((snapshot_inlineCommonOperators@ps:min())(I))(I)
+   , maxInt => ((snapshot_inlineCommonOperators@ps:max())(I))(I)
    }.
 
 inlineAtom() ->

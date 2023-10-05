@@ -50,7 +50,8 @@ r5() ->
   {7, <<"hithere">>}.
 
 result() ->
-  (((uncurriedMore())({3, 4, <<"hi">>, <<"there">>, $V}))
+  (((snapshot_erl_data_tuple@ps:uncurriedMore())
+    ({3, 4, <<"hi">>, <<"there">>, $V}))
    (fun
      (_) ->
        <<"">>
@@ -58,7 +59,7 @@ result() ->
   ({7, <<"hithere">>}).
 
 fsttf2() ->
-  ((erl_data_tuple@ps:fst())(tf2()))(12).
+  ((erl_data_tuple@ps:fst())(snapshot_erl_data_tuple@ps:tf2()))(12).
 
 fstt2() ->
   4.

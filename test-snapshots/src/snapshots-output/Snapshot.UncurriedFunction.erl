@@ -29,7 +29,7 @@ test4a(A) ->
 test4b() ->
   fun
     () ->
-      (test4a())(<<"test4b">>)
+      (snapshot_uncurriedFunction@ps:test4a())(<<"test4b">>)
   end.
 
 test3a() ->
@@ -42,7 +42,7 @@ test3a(_, B) ->
   B.
 
 test3b() ->
-  (test3a())(1, 2).
+  (snapshot_uncurriedFunction@ps:test3a())(1, 2).
 
 test2a() ->
   fun
@@ -54,7 +54,7 @@ test2a(A, _) ->
   A.
 
 test2b() ->
-  (test2a())(1, 2).
+  (snapshot_uncurriedFunction@ps:test2a())(1, 2).
 
 test1a() ->
   (data_function_uncurried@ps:mkFn0())
@@ -64,20 +64,23 @@ test1a() ->
   end).
 
 test1b() ->
-  (data_function_uncurried@ps:runFn0())(test1a()).
+  (data_function_uncurried@ps:runFn0())(snapshot_uncurriedFunction@ps:test1a()).
 
 main() ->
   begin
-    V = ((test_assert@ps:assert())((test1b()) =:= 1)),
+    V = ((test_assert@ps:assert())
+         ((snapshot_uncurriedFunction@ps:test1b()) =:= 1)),
     fun
       () ->
         begin
           V(),
-          ((test_assert@ps:assert())((test2b()) =:= 1))(),
-          ((test_assert@ps:assert())((test3b()) =:= 2))(),
-          V@1 = ((test4b())()),
+          ((test_assert@ps:assert())
+           ((snapshot_uncurriedFunction@ps:test2b()) =:= 1))(),
+          ((test_assert@ps:assert())
+           ((snapshot_uncurriedFunction@ps:test3b()) =:= 2))(),
+          V@1 = ((snapshot_uncurriedFunction@ps:test4b())()),
           ((test_assert@ps:assert())(V@1 =:= <<"test4b">>))(),
-          W = ((test4a())(<<"test4b">>)),
+          W = ((snapshot_uncurriedFunction@ps:test4a())(<<"test4b">>)),
           ((test_assert@ps:assert())(W =:= <<"test4b">>))()
         end
     end

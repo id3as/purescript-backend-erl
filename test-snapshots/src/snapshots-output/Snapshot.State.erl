@@ -123,11 +123,11 @@ exE(S) ->
 monadState() ->
   #{ 'Applicative0' => fun
      (_) ->
-       applicativeState()
+       snapshot_state@ps:applicativeState()
    end
    , 'Bind1' => fun
      (_) ->
-       bindState()
+       snapshot_state@ps:bindState()
    end
    }.
 
@@ -147,7 +147,7 @@ bindState() ->
    end
    , 'Apply0' => fun
      (_) ->
-       applyState()
+       snapshot_state@ps:applyState()
    end
    }.
 
@@ -161,7 +161,7 @@ applyState() ->
                begin
                  V1 = (F(S)),
                  V1@1 = (A(erlang:element(3, V1))),
-                 ((erlang:map_get(pure, applicativeState()))
+                 ((erlang:map_get(pure, snapshot_state@ps:applicativeState()))
                   ((erlang:element(2, V1))(erlang:element(2, V1@1))))
                  (erlang:element(3, V1@1))
                end
@@ -170,7 +170,7 @@ applyState() ->
    end
    , 'Functor0' => fun
      (_) ->
-       functorState()
+       snapshot_state@ps:functorState()
    end
    }.
 
@@ -184,7 +184,7 @@ applicativeState() ->
    end
    , 'Apply0' => fun
      (_) ->
-       applyState()
+       snapshot_state@ps:applyState()
    end
    }.
 

@@ -12,5 +12,6 @@ testCase(DictRing) ->
 
 main() ->
   (test_assert@ps:assert())
-  (((((testCase())(data_ring@ps:ringInt()))(1))(1)) =:= 2).
+  (((((snapshot_primUndefined@ps:testCase())(data_ring@ps:ringInt()))(1))(1))
+    =:= 2).
 

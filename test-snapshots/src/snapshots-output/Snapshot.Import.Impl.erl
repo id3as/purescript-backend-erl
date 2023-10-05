@@ -2,10 +2,10 @@
 -export([fortyTwo/0, result/0, addImpl/0]).
 -compile(no_auto_import).
 fortyTwo() ->
-  ((addImpl())(21))(21).
+  ((snapshot_import_impl@ps:addImpl())(21))(21).
 
 result() ->
-  fortyTwo().
+  snapshot_import_impl@ps:fortyTwo().
 
 addImpl() ->
   fun

@@ -64,7 +64,7 @@ zipWith4(F, As, Bs, Cs, Ds) ->
   end.
 
 result() ->
-  (((((zipWith4())
+  (((((snapshot_fnXLazyBug@ps:zipWith4())
       (fun
         (A) ->
           fun
