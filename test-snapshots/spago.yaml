@@ -6,6 +6,8 @@ package:
     - datetime
     - effect
     - erl-atom
+    - erl-binary
+    - erl-kernel
     - erl-lists
     - erl-tuples
     - functions
