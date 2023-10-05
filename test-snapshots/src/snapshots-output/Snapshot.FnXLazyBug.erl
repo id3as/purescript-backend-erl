@@ -45,10 +45,12 @@ zipWith4(F, As, Bs, Cs, Ds) ->
                     andalso (?IS_TAG(just, V1) andalso ?IS_TAG(just, V))) of
                 true ->
                   (Go@Rec())
-                  ( [(((F(erlang:map_get(head, erlang:element(2, V3))))
-                       (erlang:map_get(head, erlang:element(2, V2))))
-                      (erlang:map_get(head, erlang:element(2, V1))))
-                     (erlang:map_get(head, erlang:element(2, V)))|Acc]
+                  ( [ (((F(erlang:map_get(head, erlang:element(2, V3))))
+                        (erlang:map_get(head, erlang:element(2, V2))))
+                       (erlang:map_get(head, erlang:element(2, V1))))
+                      (erlang:map_get(head, erlang:element(2, V)))
+                    | Acc
+                    ]
                   , erlang:map_get(tail, erlang:element(2, V3))
                   , erlang:map_get(tail, erlang:element(2, V2))
                   , erlang:map_get(tail, erlang:element(2, V1))

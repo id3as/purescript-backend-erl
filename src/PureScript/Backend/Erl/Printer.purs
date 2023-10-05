@@ -9,6 +9,7 @@ import Data.CodePoint.Unicode as CodePointU
 import Data.CodePoint.Unicode as U
 import Data.Enum (fromEnum)
 import Data.Foldable (class Foldable, fold, foldMap)
+import Data.FunctorWithIndex (mapWithIndex)
 import Data.Maybe (Maybe(..))
 import Data.Monoid as M
 import Data.Set as Set
@@ -162,15 +163,16 @@ printExpr' prec = case _ of
 
   S.Var v -> D.text v
 
-  S.List a -> printBrackets' $ printAtomic <$> a
-  S.ListCons a rest -> D.flexGroup $ printBrackets $ fold
-    [ commaSep $ printAtomic <$> a
-    , D.text "|"
-    , printAtomic rest
-    ]
-  S.Tupled a -> printBraces' $ printAtomic <$> a
-  S.Map fields -> D.text "#" <> printBraces_ (printField <$> fields)
-  S.MapUpdate e fields -> D.text "(" <> printExpr e <> D.text ")#" <> printBraces_ (printField <$> fields)
+  S.List a -> printBrackets' $ D.indent <<< printAtomic <$> a
+  S.ListCons [] rest -> printExpr' prec rest
+  S.ListCons a rest -> printBrackets_ $ a # mapWithIndex \i item ->
+    D.indent (printAtomic item)
+      <> if i /= Array.length a - 1 then mempty else
+        D.flexAlt (D.space <> D.text "|") (D.break <> D.text "|") <> D.space <> D.indent (printAtomic rest)
+  S.Tupled a -> printBraces' $ D.indent <<< printAtomic <$> a
+  S.Map fields -> D.text "#" <> printBraces_ (D.indent <<< printField <$> fields)
+  S.MapUpdate e fields | tiny e -> printAtomic e <> D.text "#" <> printBraces_ (printField <$> fields)
+  S.MapUpdate e fields -> D.text "(" <> printAtomic e <> D.text ")#" <> printBraces_ (printField <$> fields)
 
   S.Match e1 e2 -> printExpr e1 <> D.text " = " <> printExpr e2
 
@@ -363,7 +365,7 @@ printBinaryLiteral = finish <<< go
 
 printField :: Tuple String ErlExpr -> Doc Void
 printField (Tuple f e) =
-  D.text (escapeAtom f) <> D.text " => " <> printAtomic e
+  D.text (escapeAtom f) <> D.text " =>" <> D.flexGroup (D.spaceBreak <> printAtomic e)
 
 isAscii :: String -> Boolean
 isAscii = toCodePointArray >>> all U.isAscii

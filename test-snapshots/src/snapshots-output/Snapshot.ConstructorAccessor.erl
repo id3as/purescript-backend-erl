@@ -169,20 +169,25 @@ test1(_) ->
   A.
 
 result() ->
-  #{ test1 => ((snapshot_constructorAccessor@ps:'don\'tInlineMeMe'())
-               (snapshot_constructorAccessor@ps:test1()))
-              ({noArgs})
-   , test2 => ((snapshot_constructorAccessor@ps:'don\'tInlineMeMe'())
-               (snapshot_constructorAccessor@ps:test2()))
-              ({hasArgs, 2, 1, 0})
-   , test3 => ((snapshot_constructorAccessor@ps:'don\'tInlineMeMe'())
-               (snapshot_constructorAccessor@ps:test3()))
-              ({hasArgs, 5, 3, 1})
-   , test4 => ((snapshot_constructorAccessor@ps:'don\'tInlineMeMe'())
-               (snapshot_constructorAccessor@ps:test4()))
-              ({last, 4})
-   , test5 => ((snapshot_constructorAccessor@ps:'don\'tInlineMeMe'())
-               (snapshot_constructorAccessor@ps:test51()))
-              ({first, 5})
+  #{ test1 =>
+     ((snapshot_constructorAccessor@ps:'don\'tInlineMeMe'())
+      (snapshot_constructorAccessor@ps:test1()))
+     ({noArgs})
+   , test2 =>
+     ((snapshot_constructorAccessor@ps:'don\'tInlineMeMe'())
+      (snapshot_constructorAccessor@ps:test2()))
+     ({hasArgs, 2, 1, 0})
+   , test3 =>
+     ((snapshot_constructorAccessor@ps:'don\'tInlineMeMe'())
+      (snapshot_constructorAccessor@ps:test3()))
+     ({hasArgs, 5, 3, 1})
+   , test4 =>
+     ((snapshot_constructorAccessor@ps:'don\'tInlineMeMe'())
+      (snapshot_constructorAccessor@ps:test4()))
+     ({last, 4})
+   , test5 =>
+     ((snapshot_constructorAccessor@ps:'don\'tInlineMeMe'())
+      (snapshot_constructorAccessor@ps:test51()))
+     ({first, 5})
    }.
 

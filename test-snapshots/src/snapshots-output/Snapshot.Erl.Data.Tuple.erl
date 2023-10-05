@@ -31,9 +31,9 @@ uncurried() ->
 
 tf2() ->
   { fun
-    (I) ->
-      I - 5
-  end
+      (I) ->
+        I - 5
+    end
   , <<"7">>
   }.
 

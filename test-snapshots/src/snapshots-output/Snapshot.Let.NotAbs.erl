@@ -8,15 +8,15 @@ result() ->
         { tuple
         , <<"fib">>
         , fun
-          (N) ->
-            if
-              N < 2 ->
-                N;
-              true ->
-                ((erlang:element(3, FibAnd@Rec()))(N - 1))
-                  + ((erlang:element(3, FibAnd@Rec()))(N - 2))
-            end
-        end
+            (N) ->
+              if
+                N < 2 ->
+                  N;
+                true ->
+                  ((erlang:element(3, FibAnd@Rec()))(N - 1))
+                    + ((erlang:element(3, FibAnd@Rec()))(N - 2))
+              end
+          end
         }
     end),
     { tuple

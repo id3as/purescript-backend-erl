@@ -114,7 +114,8 @@ runCompile { compile, filter, cwd } = do
     Right coreFnModules -> do
       when (List.null coreFnModules) do
         Console.log "No modules; try building"
-      let { directives } = parseDirectiveFile (defaultDirectives <> moreDirectives)
+      customDirectives <- map (either mempty identity) $ try $ FS.readTextFile UTF8 $ Path.concat [ currentDir, "directives.txt" ]
+      let { directives } = parseDirectiveFile (defaultDirectives <> moreDirectives <> customDirectives)
       coreFnModules # buildModules
         { directives
         , analyzeCustom

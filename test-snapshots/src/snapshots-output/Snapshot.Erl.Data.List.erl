@@ -66,17 +66,17 @@ concatSimple() ->
   end.
 
 concatSimple(L, R) ->
-  [1, 2|L] ++ [3|R].
+  [ 1, 2 | L ] ++ [ 3 | R ].
 
 concatNeut() ->
-  [1, 2, 3|snapshot_erl_data_list@ps:lit2()].
+  [ 1, 2, 3 | snapshot_erl_data_list@ps:lit2() ].
 
 concatLR() ->
   [1, 2, 3, 4].
 
 result() ->
   #{ hd => {just, 1}
-   , concatNeut => [1, 2, 3|snapshot_erl_data_list@ps:lit2()]
+   , concatNeut => [ 1, 2, 3 | snapshot_erl_data_list@ps:lit2() ]
    , concatLR => [1, 2, 3, 4]
    }.
 
@@ -87,7 +87,7 @@ concatL() ->
   end.
 
 concatL(L) ->
-  [1, 2, 3|L].
+  [ 1, 2, 3 | L ].
 
 concat() ->
   [1, 2, 3, 4, 5, 6].

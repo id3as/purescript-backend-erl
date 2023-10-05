@@ -199,9 +199,10 @@ result() ->
                                      , array:from_list([3])
                                      ]))
                   , (snapshot_arrayMatch@ps:nestedArrayViaRecord())
-                    (#{ q => array:from_list([ #{ r => array:from_list([1, 2]) }
-                                             , #{ r => array:from_list([3]) }
-                                             ])
+                    (#{ q =>
+                        array:from_list([ #{ r => array:from_list([1, 2]) }
+                                        , #{ r => array:from_list([3]) }
+                                        ])
                       })
                   , (snapshot_arrayMatch@ps:onlyArray())(array:from_list([1]))
                   , (snapshot_arrayMatch@ps:maybeArray())

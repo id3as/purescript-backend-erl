@@ -32,19 +32,20 @@
   X.
 
 functorState() ->
-  #{ map => fun
-     (F) ->
-       fun
-         (V) ->
-           fun
-             (S) ->
-               begin
-                 V1 = (V(S)),
-                 {tuple, F(erlang:element(2, V1)), erlang:element(3, V1)}
-               end
-           end
-       end
-   end
+  #{ map =>
+     fun
+       (F) ->
+         fun
+           (V) ->
+             fun
+               (S) ->
+                 begin
+                   V1 = (V(S)),
+                   {tuple, F(erlang:element(2, V1)), erlang:element(3, V1)}
+                 end
+             end
+         end
+     end
    }.
 
 freshMTL() ->
@@ -121,71 +122,79 @@ exE(S) ->
   end.
 
 monadState() ->
-  #{ 'Applicative0' => fun
-     (_) ->
-       snapshot_state@ps:applicativeState()
-   end
-   , 'Bind1' => fun
-     (_) ->
-       snapshot_state@ps:bindState()
-   end
+  #{ 'Applicative0' =>
+     fun
+       (_) ->
+         snapshot_state@ps:applicativeState()
+     end
+   , 'Bind1' =>
+     fun
+       (_) ->
+         snapshot_state@ps:bindState()
+     end
    }.
 
 bindState() ->
-  #{ bind => fun
-     (V) ->
-       fun
-         (F) ->
-           fun
-             (S) ->
-               begin
-                 V1 = (V(S)),
-                 (F(erlang:element(2, V1)))(erlang:element(3, V1))
-               end
-           end
-       end
-   end
-   , 'Apply0' => fun
-     (_) ->
-       snapshot_state@ps:applyState()
-   end
+  #{ bind =>
+     fun
+       (V) ->
+         fun
+           (F) ->
+             fun
+               (S) ->
+                 begin
+                   V1 = (V(S)),
+                   (F(erlang:element(2, V1)))(erlang:element(3, V1))
+                 end
+             end
+         end
+     end
+   , 'Apply0' =>
+     fun
+       (_) ->
+         snapshot_state@ps:applyState()
+     end
    }.
 
 applyState() ->
-  #{ apply => fun
-     (F) ->
-       fun
-         (A) ->
-           fun
-             (S) ->
-               begin
-                 V1 = (F(S)),
-                 V1@1 = (A(erlang:element(3, V1))),
-                 ((erlang:map_get(pure, snapshot_state@ps:applicativeState()))
-                  ((erlang:element(2, V1))(erlang:element(2, V1@1))))
-                 (erlang:element(3, V1@1))
-               end
-           end
-       end
-   end
-   , 'Functor0' => fun
-     (_) ->
-       snapshot_state@ps:functorState()
-   end
+  #{ apply =>
+     fun
+       (F) ->
+         fun
+           (A) ->
+             fun
+               (S) ->
+                 begin
+                   V1 = (F(S)),
+                   V1@1 = (A(erlang:element(3, V1))),
+                   ((erlang:map_get(pure, snapshot_state@ps:applicativeState()))
+                    ((erlang:element(2, V1))(erlang:element(2, V1@1))))
+                   (erlang:element(3, V1@1))
+                 end
+             end
+         end
+     end
+   , 'Functor0' =>
+     fun
+       (_) ->
+         snapshot_state@ps:functorState()
+     end
    }.
 
 applicativeState() ->
-  #{ pure => fun
-     (A) ->
-       fun
-         (S) ->
-           {tuple, A, S}
-       end
-   end
-   , 'Apply0' => fun
-     (_) ->
-       snapshot_state@ps:applyState()
-   end
+  #{ pure =>
+     fun
+       (A) ->
+         fun
+           (S) ->
+             {tuple, A, S}
+         end
+     end
+   , 'Apply0' =>
+     fun
+       (_) ->
+         snapshot_state@ps:applyState()
+     end
    }.
 
 ex() ->

@@ -151,20 +151,21 @@ useNormal(DictNormal) ->
   end.
 
 'instanceName\''() ->
-  #{ normal => fun
-     (V) ->
-       case ?IS_TAG(f1, V) of
-         true ->
-           <<"F1">>;
-         _ ->
-           case ?IS_TAG(f2, V) of
-             true ->
-               <<"F2">>;
-             _ ->
-               erlang:throw({fail, <<"Failed pattern match">>})
-           end
-       end
-   end
+  #{ normal =>
+     fun
+       (V) ->
+         case ?IS_TAG(f1, V) of
+           true ->
+             <<"F1">>;
+           _ ->
+             case ?IS_TAG(f2, V) of
+               true ->
+                 <<"F2">>;
+               _ ->
+                 erlang:throw({fail, <<"Failed pattern match">>})
+             end
+         end
+     end
    }.
 
 useNormal1() ->
@@ -212,10 +213,10 @@ useFooPrime1() ->
 
 result() ->
   #{ test1 => (snapshot_prime@ps:'foo\''()) =:= (snapshot_prime@ps:'foo\''())
-   , test2 => (snapshot_prime@ps:'foo\'\''())
-     =:= (snapshot_prime@ps:'foo\'\''())
-   , test3 => (snapshot_prime@ps:'foo\'oo'())
-     =:= (snapshot_prime@ps:'foo\'oo'())
+   , test2 =>
+     (snapshot_prime@ps:'foo\'\''()) =:= (snapshot_prime@ps:'foo\'\''())
+   , test3 =>
+     (snapshot_prime@ps:'foo\'oo'()) =:= (snapshot_prime@ps:'foo\'oo'())
    , useInstance => ((snapshot_prime@ps:useNormal1())({f1}))({f2})
    }.
 

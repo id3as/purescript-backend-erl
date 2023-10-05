@@ -102,10 +102,11 @@ max(X, Y) ->
   X.
 
 newtypeN_() ->
-  #{ 'Coercible0' => fun
-     (_) ->
-       undefined
-   end
+  #{ 'Coercible0' =>
+     fun
+       (_) ->
+         undefined
+     end
    }.
 
 stringAppend() ->
@@ -172,7 +173,7 @@ inlineListCons() ->
   end.
 
 inlineListCons(X, V) ->
-  [X|V].
+  [ X | V ].
 
 inlineIntToNumber() ->
   (data_int@ps:toNumber())(42).
@@ -208,13 +209,14 @@ inlineBinary(I, N, B, S, C) ->
    , divNum => N / N
    , andBool => B andalso B
    , orBool => B orelse B
-   , appendList => fun
-     (V) ->
-       fun
-         (L2) ->
-           V ++ L2
-       end
-   end
+   , appendList =>
+     fun
+       (V) ->
+         fun
+           (L2) ->
+             V ++ L2
+         end
+     end
    , addInt => I + I
    , mulInt => I * I
    , subInt => I - I
