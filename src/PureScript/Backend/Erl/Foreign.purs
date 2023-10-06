@@ -5,6 +5,7 @@ import Prelude
 import Data.Array as Array
 import Data.Array.NonEmpty as NonEmptyArray
 import Data.Bifunctor (lmap)
+import Data.Filterable (filterMap)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.Lazy (force)
 import Data.Lazy as Lazy
@@ -13,6 +14,7 @@ import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Tuple (Tuple(..))
 import Data.Tuple.Nested (type (/\), (/\))
+import PureScript.Backend.Erl.Calling (arg, arg', argMatch, curried, fosem, fosems, func, func', getEnv, many, uncurried)
 import PureScript.Backend.Optimizer.CoreFn (ConstructorType(..), Ident(..), Literal(..), ModuleName(..), Prop(..), ProperName(..), Qualified(..))
 import PureScript.Backend.Optimizer.Semantics (BackendSemantics(..), Env, EvalRef(..), ExternSpine(..), SemConditional(..), Spine, evalApp, evalPrimOp, liftInt, makeLet)
 import PureScript.Backend.Optimizer.Semantics.Foreign (ForeignEval, ForeignSemantics, qualified)
@@ -66,11 +68,15 @@ handler moduleName ident arity f = Tuple (qualified moduleName ident)
     _ -> Nothing
 
 data_array_indexImpl :: ForeignSemantics
-data_array_indexImpl = Tuple (qualified "Data.Array" "indexImpl") go
-  where
-  go env _ = case _ of
-    [ ExternUncurriedApp [ just, nothing, arr, ix ] ] ->
-      Just $ makeLet Nothing arr \arr' ->
+data_array_indexImpl = fosem $ func "Data.Array.indexImpl" $
+  uncurried ado
+    just <- arg
+    nothing <- arg
+    arr <- arg
+    ix <- arg
+    env <- getEnv
+    in
+      makeLet Nothing arr \arr' ->
         makeLet Nothing ix \ix' ->
           SemBranch
             ( NonEmptyArray.singleton $ SemConditional
@@ -85,8 +91,6 @@ data_array_indexImpl = Tuple (qualified "Data.Array" "indexImpl") go
                 )
             )
             (pure nothing)
-    _ ->
-      Nothing
 
 
 -- View a concrete list literal
@@ -138,18 +142,16 @@ mkList'' :: Array BackendSemantics -> Maybe BackendSemantics -> BackendSemantics
 mkList'' = flip (maybe mkList (flip mkList'))
 
 erl_data_list_types_appendImpl :: ForeignSemantics
-erl_data_list_types_appendImpl = handler "Erl.Data.List.Types" "appendImpl" 2
-  \_env -> case _ of
-    [ l, r ]
-      | Just ls <- viewList' l ->
-        case ls of
-          { init, tail: Nothing } ->
-            let rs = viewList'' r in
-            Just (mkList'' (init <> rs.init) rs.tail)
-          { init, tail: Just tail } ->
-            Just (mkList' init (NeutApp (NeutVar (qualified "Erl.Data.List.Types" "appendImpl")) [ tail, r ]))
-    _ ->
-      Nothing
+erl_data_list_types_appendImpl = fosem $ func "Erl.Data.List.Types.appendImpl" $
+  curried ado
+    ls <- filterMap viewList' arg
+    r <- arg
+    in case ls of
+      { init, tail: Nothing } ->
+        let rs = viewList'' r in
+        mkList'' (init <> rs.init) rs.tail
+      { init, tail: Just tail } ->
+        mkList' init (NeutApp (NeutVar (qualified "Erl.Data.List.Types" "appendImpl")) [ tail, r ])
 
 ctorArgs :: Array BackendSemantics -> Array (Tuple String BackendSemantics)
 ctorArgs = mapWithIndex \i -> Tuple ("value" <> show i)
@@ -164,43 +166,37 @@ mkNothing :: BackendSemantics
 mkNothing = ctor SumType "Data.Maybe" "Maybe" "Nothing" []
 
 erl_data_list_types_uncons :: ForeignSemantics
-erl_data_list_types_uncons =
+erl_data_list_types_uncons = fosems "Erl.Data.List.Types.uncons"
   let mkResult head tail = NeutLit (LitRecord [Prop "head" head, Prop "tail" tail]) in
-  handler "Erl.Data.List.Types" "uncons" 1 \_env -> case _ of
-    [ list ]
-      | Just [head, tail] <- helper "Erl.Data.List.Types" "cons" 2 list ->
-        Just (mkJust (mkResult head tail))
-      | Just [] <- helper "Erl.Data.List.Types" "nil" 0 list ->
-        Just mkNothing
-      | Just items <- viewList list ->
-        Just case Array.uncons items of
-          Nothing -> mkNothing
-          Just { head, tail } -> mkJust (mkResult head (mkList tail))
-    _ -> Nothing
+  [ argMatch $ func' "Erl.Data.List.Types.cons" ado
+      head <- arg
+      tail <- arg
+      in mkJust (mkResult head tail)
+  , argMatch $ func' "Erl.Data.List.Types.nil" ado
+      in mkNothing
+  , ado
+      items <- filterMap viewList arg
+      in case Array.uncons items of
+        Nothing -> mkNothing
+        Just { head, tail } -> mkJust (mkResult head (mkList tail))
+  ]
 
 erl_data_tuple_uncurryN :: Array ForeignSemantics
-erl_data_tuple_uncurryN = [1,2,3,4,5,6,7,8,9,10] <#> \n ->
-  handler "Erl.Data.Tuple" ("uncurry" <> show n) 2 \env -> case _ of
-    [ fn, tuple ]
-      | Just tupled <- helper "Erl.Data.Tuple" ("tuple" <> show n) n tuple ->
-        Just (evalApp env fn tupled)
-    _ -> Nothing
+erl_data_tuple_uncurryN = [1,2,3,4,5,6,7,8,9,10] <#> \n -> fosem $
+  func ("Erl.Data.Tuple.uncurry" <> show n) ado
+    fn <- arg
+    tupled <- argMatch $ func' ("Erl.Data.Tuple.tuple" <> show n) $
+      many $ Array.replicate n Just
+    env <- getEnv
+    in evalApp env fn tupled
 
 erl_data_tuple_fst :: ForeignSemantics
-erl_data_tuple_fst = handler "Erl.Data.Tuple" "fst" 1
-  \_env -> case _ of
-    [ tuple ]
-      | Just [l, _r] <- helper "Erl.Data.Tuple" "tuple2" 2 tuple ->
-        Just l
-    _ -> Nothing
+erl_data_tuple_fst = fosem $ func "Erl.Data.Tuple.fst" do
+  argMatch $ func' "Erl.Data.Tuple.tuple2" $ arg <* arg
 
 erl_data_tuple_snd :: ForeignSemantics
-erl_data_tuple_snd = handler "Erl.Data.Tuple" "snd" 1
-  \_env -> case _ of
-    [ tuple ]
-      | Just [_l, r] <- helper "Erl.Data.Tuple" "tuple2" 2 tuple ->
-        Just r
-    _ -> Nothing
+erl_data_tuple_snd = fosem $ func "Erl.Data.Tuple.snd" do
+  argMatch $ func' "Erl.Data.Tuple.tuple2" $ arg *> arg
 
 erl_atom :: Array ForeignSemantics
 erl_atom =
@@ -209,32 +205,20 @@ erl_atom =
   , erl_atom_eqImpl
   ]
   where
-  mn = "Erl.Atom"
   erl_atom_atom :: ForeignSemantics
-  erl_atom_atom = handler mn "atom" 1
-    \_env -> case _ of
-      [ toString ]
-        | Just [s] <- helper mn "toString" 1 toString ->
-          Just s
-      _ -> Nothing
+  erl_atom_atom = fosem $ func "Erl.Atom.atom" $ argMatch $ func' "Erl.Atom.toString" $ arg
 
   erl_atom_toString :: ForeignSemantics
-  erl_atom_toString = handler mn "toString" 1
-    \_env -> case _ of
-      [ atom ]
-        | Just [s] <- helper mn "atom" 1 atom ->
-          Just s
-      _ -> Nothing
+  erl_atom_toString = fosem $ func "Erl.Atom.toString" $ argMatch $ func' "Erl.Atom.atom" $ arg
+
+  literal = argMatch $ func' "Erl.Atom.atom" $ arg'
+    case _ of NeutLit (LitString s) -> Just s
 
   erl_atom_eqImpl :: ForeignSemantics
-  erl_atom_eqImpl = handler mn "eqImpl" 2
-    \_env -> case _ of
-      [ atom1, atom2 ]
-        | Just [NeutLit (LitString s1)] <- helper mn "atom" 1 atom1
-        , Just [NeutLit (LitString s2)] <- helper mn "atom" 1 atom2 ->
-          Just (NeutLit (LitBoolean (s1 == s2)))
-      _ -> Nothing
-
+  erl_atom_eqImpl = fosem $ func "Erl.Atom.eqImpl" ado
+    s1 <- literal
+    s2 <- literal
+    in NeutLit (LitBoolean (s1 == s2))
 
 coercions :: Array (String /\ String)
 coercions = join

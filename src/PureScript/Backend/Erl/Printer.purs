@@ -8,7 +8,7 @@ import Data.Array.NonEmpty as NEA
 import Data.CodePoint.Unicode as CodePointU
 import Data.CodePoint.Unicode as U
 import Data.Enum (fromEnum)
-import Data.Foldable (class Foldable, fold, foldMap)
+import Data.Foldable (class Foldable, foldMap)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.Maybe (Maybe(..))
 import Data.Monoid as M
