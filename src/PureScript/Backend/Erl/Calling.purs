@@ -11,7 +11,7 @@ import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NEA
 import Data.Bifunctor (class Bifunctor)
 import Data.Compactable (class Compactable, compact, separateDefault)
-import Data.Either (hush)
+import Data.Either (Either(..), hush)
 import Data.Filterable (class Filterable, filterDefault, partitionDefault, partitionMapDefault)
 import Data.Foldable (class Foldable, foldl, sum)
 import Data.Lazy (defer, force)
@@ -19,20 +19,20 @@ import Data.Lens (APrism', Prism', preview, prism', review, withPrism)
 import Data.List (List(..))
 import Data.List as List
 import Data.Map (SemigroupMap)
-import Data.Maybe (Maybe(..), isNothing)
-import Data.Newtype (class Newtype, unwrap, wrap)
+import Data.Maybe (Maybe(..), fromMaybe, isNothing)
+import Data.Newtype (class Newtype, un, unwrap, wrap)
 import Data.Profunctor (class Profunctor)
 import Data.Semigroup.Last (Last)
 import Data.String as String
-import Data.Traversable (class Traversable, for, traverse)
+import Data.Traversable (class Traversable, for, mapAccumR, sequence, traverse)
 import Data.Tuple (Tuple(..), fst, uncurry)
 import Effect.Exception (catchException)
 import Effect.Unsafe (unsafePerformEffect)
 import Partial.Unsafe (unsafeCrashWith, unsafePartial)
 import PureScript.Backend.Erl.Syntax (ErlExpr)
 import PureScript.Backend.Erl.Syntax as S
-import PureScript.Backend.Optimizer.CoreFn (Ident, Qualified(..))
-import PureScript.Backend.Optimizer.Semantics (BackendSemantics, EvalRef, ExternSpine(..))
+import PureScript.Backend.Optimizer.CoreFn (Ident, Literal, Qualified(..))
+import PureScript.Backend.Optimizer.Semantics (BackendSemantics, EvalRef, ExternSpine(..), NeutralExpr(..))
 import PureScript.Backend.Optimizer.Semantics as Sem
 import PureScript.Backend.Optimizer.Semantics.Foreign (ForeignSemantics, qualified)
 import PureScript.Backend.Optimizer.Syntax (BackendSyntax)
@@ -134,21 +134,61 @@ conventionWithBase :: forall a b. (a -> b) -> CWB CallingPS (Qualified Ident) a 
 conventionWithBase f (CWB (Qualified mmn ident) call) =
   CWB
     (GlobalErl { module: unwrap <$> mmn, name: unwrap ident })
-    (callingConvention f call)
+    (globalConvention f call)
 
-callingConvention :: forall a b. (a -> b) -> CallingPS a -> CallingErl b
-callingConvention f = \calls -> go calls empty
+globalConvention :: forall a b. (a -> b) -> CallingPS a -> CallingErl b
+globalConvention f = \calls -> go calls empty
   where
   go (CallingPS more call) acc =
     go more $ NEA.toArray (unwrap (callConvention f call)) <|> acc
   go BasePS acc =
     CallingErl (NEA.cons' (Call []) acc)
 
+localConvention :: forall a b. (a -> b) -> CallingPS a -> Maybe (CallingErl b)
+localConvention f = \calls -> go calls empty
+  where
+  go (CallingPS more call) acc =
+    go more $ NEA.toArray (unwrap (callConvention f call)) <|> acc
+  go BasePS acc =
+    CallingErl <$> NEA.fromArray acc
+
 callConvention :: forall a b. (a -> b) -> CallPS a -> CallingErl b
 callConvention f = case _ of
   Curried calls -> CallingErl $ Call <<< Array.singleton <<< f <$> calls
   Uncurried call -> CallingErl $ NEA.singleton $ Call $ f <$> call
   UncurriedEffect call -> CallingErl $ NEA.singleton $ Call $ f <$> call
+
+popPS :: forall a. CallingPS a -> Maybe { last :: a, init :: CallingPS a }
+popPS BasePS = Nothing
+popPS (CallingPS calls (Curried args)) =
+  Just case NEA.unsnoc args of
+    { last, init } | Just args' <- NEA.fromArray init ->
+      { last, init: CallingPS calls (Curried args') }
+    { last } ->
+      { last, init: calls }
+popPS (CallingPS calls (Uncurried args)) =
+  case Array.unsnoc args of
+    Just { last, init } ->
+      Just { last, init: CallingPS calls (Uncurried init) }
+    Nothing -> popPS calls
+popPS (CallingPS calls (UncurriedEffect args)) =
+  case Array.unsnoc args of
+    Just { last, init } ->
+      Just { last, init: CallingPS calls (UncurriedEffect init) }
+    Nothing -> popPS calls
+
+customConvention :: forall a b c. (a -> b -> c) -> CallingPS a -> CallingErl b -> Maybe (CallingErl c)
+customConvention f available expected = do
+  let
+    popOne :: Maybe (CallingPS a) -> b -> { value :: Maybe c, accum :: Maybe (CallingPS a) }
+    popOne s b = case s >>= popPS of
+      Just { last, init } -> { value: Just (f last b), accum: Just init }
+      Nothing -> { value: Nothing, accum: Nothing }
+  case mapAccumR popOne (Just available) expected of
+    { accum: Just remaining, value } -> do
+      guard $ isNothing $ popPS remaining
+      sequence value
+    _ -> Nothing
 
 class Calling :: (Type -> Type) -> Constraint
 class Functor call <= Calling call where
@@ -229,6 +269,14 @@ zipExact :: forall call a b. Calling call => call a -> call b -> Maybe (call (Tu
 zipExact l r = case zipAgainst l r of
   Just { matched, unmatched: Nothing } -> Just matched
   _ -> Nothing
+
+zipEither :: forall call a b. Calling call => call a -> call b -> Maybe { matched :: call (Tuple a b), unmatched :: Maybe (Either (call a) (call b)) }
+zipEither l r = case zipAgainst l r of
+  Just { matched, unmatched } -> Just { matched, unmatched: Left <$> unmatched }
+  Nothing -> case zipAgainst r l of
+    Just { matched, unmatched } -> Just
+      { matched: uncurry (flip Tuple) <$> matched, unmatched: Right <$> unmatched }
+    Nothing -> Nothing
 
 type MatchWithBase call expr base a =
   { matched :: CWB call base (Tuple expr a)
@@ -315,32 +363,50 @@ instance CallingExprBase CallErl ErlExpr base env => CallingExprBase CallingErl 
     -- At the end we have a single base call and a stack of calls
     consCall baseCall acc = NEA.cons' baseCall (Array.fromFoldable acc)
 
+-- PureScript calls on BackendSyntax
 instance
   ( Newtype s (BackendSyntax s)
-  , TypeEquals (BackendSyntax s) base
+  , Inj base (BackendSyntax s)
   ) => CallingExprBase CallPS (BackendSyntax s) base env where
   applyCWB _ (CWB expr (Curried args)) =
-    Syn.App (coerce expr) (wrap <$> args)
+    Syn.App (wrap (review inj expr)) (wrap <$> args)
   applyCWB _ (CWB expr (Uncurried args)) =
-    Syn.UncurriedApp (wrap (from expr)) (wrap <$> args)
+    Syn.UncurriedApp (wrap (review inj expr)) (wrap <$> args)
   applyCWB _ (CWB expr (UncurriedEffect args)) =
-    Syn.UncurriedEffectApp (wrap (from expr)) (wrap <$> args)
-  matchCall _ (Syn.App fn call) (Curried callSpec) | NEA.length call >= NEA.length callSpec =
+    Syn.UncurriedEffectApp (wrap (review inj expr)) (wrap <$> args)
+  matchCall _ (Syn.App fn call) (Curried callSpec) | NEA.length call >= NEA.length callSpec = do
+    base <- preview inj (unwrap fn)
     Just
-      { matched: CWB (coerce fn) (Curried (NEA.zip (coerce call) callSpec))
+      { matched: CWB base (Curried (NEA.zip (coerce call) callSpec))
       , unmatched: NEA.fromArray (NEA.drop (NEA.length callSpec) call) <#> coerce >>> Curried
       }
-  matchCall _ (Syn.UncurriedApp fn call) (Uncurried callSpec) | Array.length call == Array.length callSpec =
+  matchCall _ (Syn.UncurriedApp fn call) (Uncurried callSpec) | Array.length call == Array.length callSpec = do
+    base <- preview inj (unwrap fn)
     Just
-      { matched: CWB (coerce fn) (Uncurried (Array.zip (coerce call) callSpec))
+      { matched: CWB base (Uncurried (Array.zip (coerce call) callSpec))
       , unmatched: Nothing
       }
-  matchCall _ (Syn.UncurriedEffectApp fn call) (UncurriedEffect callSpec) | Array.length call == Array.length callSpec =
+  matchCall _ (Syn.UncurriedEffectApp fn call) (UncurriedEffect callSpec) | Array.length call == Array.length callSpec = do
+    base <- preview inj (unwrap fn)
     Just
-      { matched: CWB (coerce fn) (UncurriedEffect (Array.zip (coerce call) callSpec))
+      { matched: CWB base (UncurriedEffect (Array.zip (coerce call) callSpec))
       , unmatched: Nothing
       }
   matchCall _ _ _ = Nothing
+
+
+instance
+  ( Inj base NeutralExpr
+  ) => CallingExprBase CallPS NeutralExpr base env where
+    applyCWB env (CWB base call) = NeutralExpr $
+      applyCWB env (CWB (un NeutralExpr (review inj base)) (un NeutralExpr <$> call))
+    matchCall env expr spec = do
+      { matched: CWB base call, unmatched } <- matchCall env (un NeutralExpr expr) spec
+      base' <- preview inj (NeutralExpr base)
+      pure
+        { matched: CWB base' (coerce call)
+        , unmatched: coerce unmatched
+        }
 
 fromEvalRef :: EvalRef -> BackendSemantics
 fromEvalRef r =
@@ -399,20 +465,38 @@ instance
       matchCall' false env (force more) spec
     matchCall' _ _ _ _ = Nothing
 
+class Inj a b where
+  inj :: Prism' b a
+
+instance Inj (Qualified Ident) BackendSemantics where
+  inj = prism' (fromEvalRef <<< Sem.EvalExtern) case _ of
+    Sem.SemRef (Sem.EvalExtern qi') [] _ -> Just qi'
+    _ -> Nothing
+else instance Inj (Literal BackendSemantics) BackendSemantics where
+  inj = prism' Sem.NeutLit case _ of
+    Sem.NeutLit l -> Just l
+    _ -> Nothing
+else instance Inj (Qualified Ident) NeutralExpr where
+  inj = prism' (NeutralExpr <<< Syn.Var) case _ of
+    NeutralExpr (Syn.Var qi') -> Just qi'
+    _ -> Nothing
+else instance Inj a a where
+  inj = identity
+
 instance
-  ( CallingExprBase CallPS expr base env
-  , TypeEquals expr base
+  ( CallingExprBase CallPS expr expr env
+  , Inj base expr
   ) => CallingExprBase CallingPS expr base env where
-  applyCWB _ (CWB base BasePS) = coerce base
+  applyCWB _ (CWB base BasePS) = review inj base
   applyCWB env (CWB base (CallingPS calls call)) =
-    applyCWB env (CWB (to (applyCWB env (CWB base calls))) call)
-  matchCall _ base BasePS = Just
-    { matched: CWB (to base) BasePS
+    applyCWB env (CWB (applyCWB env (CWB base calls)) call)
+  matchCall _ base BasePS = preview inj base <#> \base' ->
+    { matched: CWB base' BasePS
     , unmatched: Nothing
     }
   matchCall env expr (CallingPS callSpecs callSpec) = do
     { matched: CWB mid call, unmatched } <- matchCall env expr callSpec
-    case matchCall env (from mid) callSpecs of
+    case matchCall env mid callSpecs of
       Just { matched: CWB base calls, unmatched: Nothing } -> Just
         { matched: CWB base (CallingPS calls call)
         , unmatched: unmatched <#> CallingPS BasePS
@@ -422,7 +506,7 @@ instance
 
 
 
-class Structure call where
+class Functor call <= Structure call where
   hasEmpty :: forall a. Maybe (call a)
   hasOne :: forall a. Prism' (call a) a
 
@@ -478,9 +562,17 @@ match env inputs (Pattern shape parse) = do
   result <- parse env (map fst matched)
   pure { result, unmatched }
 
-match' :: forall env call b i o. CallingExprBase call i b env => env -> i -> Pattern env (CWB call b) i o -> Maybe o
+match' :: forall env call b i o. Eq b => CallingExprBase call i b env => env -> i -> Pattern env (CWB call b) i o -> Maybe o
 match' _env _unmatched (Pure _o) = Nothing
-match' env input (Pattern (CWB _ shape) parse) = do
+match' env input (Pattern (CWB base shape) parse) = do
+  { matched, unmatched } <- matchCall env input shape
+  guard $ base == baseOf matched
+  guard $ isNothing unmatched
+  parse env (map fst matched)
+
+match'' :: forall env call b i o. CallingExprBase call i b env => env -> i -> Pattern env (CWB call b) i o -> Maybe o
+match'' _env _unmatched (Pure _o) = Nothing
+match'' env input (Pattern (CWB _ shape) parse) = do
   { matched, unmatched } <- matchCall env input shape
   guard $ isNothing unmatched
   parse env (map fst matched)
@@ -514,17 +606,30 @@ instance filterablePattern :: Functor call => Filterable (Pattern env call i) wh
   filter x = filterDefault x
 
 arg :: forall env call i. Structure call => Pattern env call i i
-arg = arg' Just
+arg = arg' identity
 
-arg' :: forall env call i o. Structure call => (Partial => i -> Maybe o) -> Pattern env call i o
-arg' f = Pattern (review hasOne unit) \_env -> preview hasOne >=> \i ->
-  unsafePerformEffect $ catchException (const (pure Nothing)) (pure unit >>= \_ -> pure (unsafePartial f i))
+_absorb :: forall a b. (Partial => a -> Maybe b) -> a -> Maybe b
+_absorb f i = unsafePerformEffect $ catchException (const (pure Nothing)) do
+  pure unit
+  pure (unsafePartial f i)
 
-argMatch :: forall env call1 call2 b i o. Structure call2 => CallingExprBase call1 i b env => Pattern env (CWB call1 b) i o -> Pattern env call2 i o
+partial :: forall env call i o. (Partial => Pattern env call i o) -> Pattern env call i o
+partial pat = unsafePartial pat
+
+arg' :: forall env call i o. Structure call => (Partial => i -> o) -> Pattern env call i o
+arg' f = Pattern (review hasOne unit) \_env -> preview hasOne >=> _absorb \i -> Just (f i)
+
+argMatch :: forall env call1 call2 b i o. Eq b => Structure call2 => CallingExprBase call1 i b env => Pattern env (CWB call1 b) i o -> Pattern env call2 i o
 argMatch pat = Pattern (review hasOne unit) \env -> preview hasOne >=> match' env <@> pat
 
-many :: forall f env call i o. Traversable f => Alt call => Calling call => Structure call => f (i -> Maybe o) -> Pattern env call i (f o)
+many :: forall f env call i o. Traversable f => Alt call => Calling call => Structure call => f (i -> o) -> Pattern env call i (f o)
 many fs = traverse (\f -> arg' f) fs
+
+noArgs :: forall env i. Pattern env CallingPS i Unit
+noArgs = Pattern BasePS \_ _ -> Just unit
+
+codegenArg :: forall call i o. Structure call => Pattern (i -> o) call i o
+codegenArg = withEnv (map (#) arg)
 
 func :: forall env i o. String -> Pattern env CallingPS i o -> Pattern env (CWB CallingPS (Qualified Ident)) i o
 func _ (Pure o) = Pure o
@@ -532,14 +637,6 @@ func name (Pattern shape parser) =
   let qi = qualPS name in
   Pattern (CWB qi shape) \env -> case _ of
     CWB qi' inputs | qi == qi' -> parser env inputs
-    _ -> Nothing
-
-func' :: forall env i o. String -> Pattern env CallingPS i o -> Pattern env (CWB CallingPS BackendSemantics) i o
-func' _ (Pure o) = Pure o
-func' name (Pattern shape parser) =
-  let qi = qualPS name in
-  Pattern (CWB (fromEvalRef (Sem.EvalExtern qi)) shape) \env -> case _ of
-    CWB (Sem.SemRef (Sem.EvalExtern qi') [] _) inputs | qi == qi' -> parser env inputs
     _ -> Nothing
 
 getEnv :: forall env call i. Calling call => Alt call => Pattern env call i env
@@ -599,15 +696,61 @@ ofExternSpine = Array.toUnfoldable >>> go BasePS
     , unconverted: List.toUnfoldable unconverted
     }
 
-fosem :: Pattern Sem.Env (CWB CallingPS (Qualified Ident)) BackendSemantics BackendSemantics -> ForeignSemantics
-fosem pat = Tuple (baseOf (shapeOf pat)) \env qual spine -> do
+evaluator :: Pattern Sem.Env (CWB CallingPS (Qualified Ident)) BackendSemantics BackendSemantics -> ForeignSemantics
+evaluator pat = Tuple (baseOf (shapeOf pat)) \env qual spine -> do
   { converted, unconverted } <- Just (ofExternSpine spine)
   { result, unmatched } <- match env (CWB qual converted) pat
   pure (Sem.evalSpine env (applyCallMaybe env result (noBase <$> unmatched)) unconverted)
 
-fosems :: String -> Array (Pattern Sem.Env CallingPS BackendSemantics BackendSemantics) -> ForeignSemantics
-fosems name pats =
+evaluators :: String -> Array (Pattern Sem.Env CallingPS BackendSemantics BackendSemantics) -> ForeignSemantics
+evaluators name pats =
   Tuple (qualPS name) \env _qual spine -> pats # Array.findMap \pat -> do
     { converted, unconverted } <- Just (ofExternSpine spine)
     { result, unmatched } <- match env converted pat
     pure (Sem.evalSpine env (applyCallMaybe env result unmatched) unconverted)
+
+popTrivial :: forall a. CallingPS a -> Tuple (CallingPS a) (CallingPS Void)
+popTrivial (CallingPS a (Uncurried [])) = CallingPS <$> popTrivial a <@> Uncurried []
+popTrivial (CallingPS a (UncurriedEffect [])) = CallingPS <$> popTrivial a <@> UncurriedEffect []
+popTrivial a = Tuple a BasePS
+
+abstractTrivial :: ErlExpr -> CallingPS Void -> ErlExpr
+abstractTrivial e BasePS = e
+abstractTrivial e (CallingPS more _) = S.thunk (abstractTrivial e more)
+
+callConverters :: Array { ps :: Qualified Ident, arity :: ArityPS, erl :: GlobalErl, call :: ArityErl } -> (NeutralExpr -> ErlExpr) -> NeutralExpr -> Maybe ErlExpr
+callConverters options codegenExpr focus = options # Array.findMap \option -> do
+  case arity option.arity == arity option.call of
+    true -> pure unit
+    false -> unsafeCrashWith $ "Arity of call did not match"
+  -- `option.arity` may come with some thunks, that we do not want to require
+  -- to complete a match. so we pop these off:
+  let Tuple required trivial = popTrivial option.arity
+  -- and match the actual required bits:
+  { matched: CWB base matched, unmatched: unmatched1 } <- matchCall unit focus required
+  guard $ base == option.ps
+  -- we know how to codegen the matched bits
+  calls <- customConvention (fst >>> codegenExpr >>> const) matched option.call
+  let converted = applyCall unit option.erl calls
+  -- then we check what was unmatched from the first step against what was trivial:
+  { matched: _handled :: _ (Tuple _ Void), unmatched: unmatchedEither } <- zipEither (fromMaybe BasePS unmatched1) trivial
+  -- then we might have unmatched bits left over, or trivial bits that did not match
+  case unmatchedEither of
+    Nothing -> pure converted
+    Just (Left unmatched) -> do
+      unmatched' <- localConvention codegenExpr unmatched
+      pure $ applyCall unit converted unmatched'
+    Just (Right trivial) -> do
+      pure $ abstractTrivial converted trivial
+
+type Converter =
+  Pattern (NeutralExpr -> ErlExpr) (CWB CallingPS (Qualified Ident)) NeutralExpr ErlExpr
+
+convert :: Converter -> (NeutralExpr -> ErlExpr) -> NeutralExpr -> Maybe ErlExpr
+convert pat codegenExpr expr = do
+  match' codegenExpr expr pat
+
+-- TODO: organize a map by identifier
+converts :: Array Converter -> (NeutralExpr -> ErlExpr) -> NeutralExpr -> Maybe ErlExpr
+converts pats codegenExpr expr = pats # Array.findMap \pat ->
+  match' codegenExpr expr pat

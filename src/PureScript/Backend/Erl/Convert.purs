@@ -243,49 +243,6 @@ codegenLiteral codegenEnv = case _ of
       [ S.List $ codegenExpr codegenEnv <$> a ]
   LitRecord r -> S.Map $ (\(Prop f e) -> Tuple f (codegenExpr codegenEnv e)) <$> r
 
--- jsonToErlString :: String -> String
--- jsonToErlString str = unicodeReplace str
---   where
---   unicodeRegex :: R.Regex
---   unicodeRegex = R.Unsafe.unsafeRegex """\\u([A-F\d]{4})""" R.Flags.global
-
---   unicodeReplace :: String -> String
---   unicodeReplace s = R.replace' unicodeRegex unicodeReplaceMatch s
-
---   unicodeReplaceMatch
---     :: String
---     -> Array (Maybe String)
---     -> String
---   unicodeReplaceMatch _ = case _ of
---     [ (Just x) ] -> "\\x" <> x <> ";"
---     _ -> unsafeCrashWith "Error matching at unicodeReplaceMatch in jsonToErlString"
-
--- -- > In addition to the standard named characters
--- -- > #\alarm, #\backspace, #\delete, #\esc, #\linefeed, #\newline, #\page, #\return, #\space, and #\tab,
--- -- > Erl Scheme recognizes #\bel, #\ls, #\nel, #\nul, #\rubout, and #\vt (or #\vtab).
--- --
--- -- Source: https://cisco.github.io/ErlScheme/csug9.5/intro.html#./intro:h1, 6th paragraph
--- codegenChar :: Char -> ErlExpr
--- codegenChar c = S.Char $ append """#\""" $ escapeChar $ toCharCode c
---   where
---   escapeChar code
---     | code == toCharCode '\x0000' = "nul"
---     | code == toCharCode '\x0007' = "alarm" -- bel
---     | code == toCharCode '\x0008' = "backspace"
---     | code == toCharCode '\t' = "tab"
---     | code == toCharCode '\n' = "linefeed" -- nel/newline; per R6Rs, newline is deprecated
---     | code == toCharCode '\x000B' = "vtab"
---     | code == toCharCode '\x000C' = "page"
---     | code == toCharCode '\r' = "return"
---     | code == toCharCode '\x001B' = "esc"
---     | code == toCharCode ' ' = "space"
---     | code == toCharCode '\x007F' = "delete" -- rubout
---     | code == toCharCode '\x2028' = "ls"
---     | code < 20 || code > 127 = "x" <> (padLeft "0" 4 $ Int.toStringAs Int.hexadecimal code)
---     | otherwise = CodeUnits.singleton c
-
---   padLeft char i s = power char (i - String.length s) <> s
-
 type ChainMode = { effect :: Boolean }
 
 pureChainMode :: ChainMode

@@ -1,19 +1,51 @@
-module PureScript.Backend.Erl.Convert.Foreign where
+module PureScript.Backend.Erl.Convert.Foreign ( codegenForeign ) where
 
 import Prelude
 
+import Control.Apply (lift2)
 import Data.Array as Array
 import Data.Array.NonEmpty as NEA
 import Data.Maybe (Maybe(..), fromMaybe', maybe)
 import Data.Newtype (unwrap)
+import Data.Traversable (sequence)
 import Data.Tuple (Tuple(..))
-import Data.Tuple.Nested (type (/\), (/\))
+import PureScript.Backend.Erl.Calling (ArityErl, ArityPS, CallErl(..), CallPS(..), CallingErl(..), CallingPS(..), Converter, GlobalErl, arg', callConverters, codegenArg, converts, func, noArgs, qualErl, qualPS, withEnv)
 import PureScript.Backend.Erl.Convert.Common (toErlVarExpr)
-import PureScript.Backend.Erl.Syntax (ErlExpr, FunHead(..), atomLiteral)
+import PureScript.Backend.Erl.Syntax (ErlExpr, FunHead(..))
 import PureScript.Backend.Erl.Syntax as S
 import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal(..), ModuleName(..), Qualified(..))
 import PureScript.Backend.Optimizer.Semantics (NeutralExpr(..))
 import PureScript.Backend.Optimizer.Syntax (BackendSyntax(..))
+
+codegenForeign :: (NeutralExpr -> ErlExpr) -> NeutralExpr -> Maybe ErlExpr
+codegenForeign codegenExpr s = case unwrap s of
+  Var _ -> codegenForeign' codegenExpr s
+  App (NeutralExpr (Var _)) _ -> codegenForeign' codegenExpr s
+  _ -> Nothing
+
+codegenForeign' :: (NeutralExpr -> ErlExpr) -> NeutralExpr -> Maybe ErlExpr
+codegenForeign' codegenExpr s
+  | Just result <- codegenList codegenExpr s =
+    Just result
+  | Just result <- converts specificCalls codegenExpr s =
+    Just result
+  | Just result <- converts tupleCalls codegenExpr s =
+    Just result
+  | Just result <- callConverters ffiSpecs codegenExpr s =
+    Just result
+  | otherwise =
+    Nothing
+
+tupleCalls :: Array Converter
+tupleCalls = [1,2,3,4,5,6,7,8,9,10] >>= \arity ->
+  -- `tupleN` with N arguments applied
+  [ func ("Erl.Data.Tuple.tuple" <> show arity) $ S.Tupled <$> sequence (Array.replicate arity codegenArg)
+  -- `uncurryN` with 1 argument applied
+  , func ("Erl.Data.Tuple.uncurry" <> show arity) $ withEnv $ arg' case _ of
+      NeutralExpr (Abs a e) | NEA.length a >= arity -> \codegenExpr ->
+        S.Fun Nothing $ Array.singleton $ Tuple (FunHead [ S.Tupled (toErlVarExpr <$> NEA.take arity a) ] Nothing) $
+          codegenExpr (maybe e (\a' -> NeutralExpr (Abs a' e)) (NEA.fromArray $ NEA.drop arity a))
+  ]
 
 helper :: String -> String -> Int -> NeutralExpr -> Maybe (Array NeutralExpr)
 helper moduleName ident = case _, _ of
@@ -26,77 +58,6 @@ helper moduleName ident = case _, _ of
         then Just (NEA.toArray args)
         else Nothing
   _, _ -> Nothing
-
-tryMany :: forall a b. Array (a -> Maybe b) -> a -> Maybe b
-tryMany options input = options # Array.findMap \fn -> fn input
-
-tryMany' :: forall i a b. Array (Tuple i (a -> Maybe b)) -> a -> Maybe (Tuple i b)
-tryMany' options input = options # Array.findMap \(Tuple i fn) -> Tuple i <$> fn input
-
-codegenForeign :: (NeutralExpr -> ErlExpr) -> NeutralExpr -> Maybe ErlExpr
-codegenForeign codegenExpr s = case unwrap s of
-  Var _ -> codegenForeign' codegenExpr s
-  App (NeutralExpr (Var _)) _ -> codegenForeign' codegenExpr s
-  _ -> Nothing
-
-codegenForeign' :: (NeutralExpr -> ErlExpr) -> NeutralExpr -> Maybe ErlExpr
-codegenForeign' codegenExpr s = case unwrap s of
-  _ | Just result <- codegenList codegenExpr s ->
-    Just result
-
-  _ | Just [] <- helper "Data.Unit" "unit" 0 s ->
-    Just (S.Literal (S.Atom "unit"))
-
-  _ | Just [NeutralExpr (Lit (LitString value))] <- helper "Erl.Atom" "atom" 1 s ->
-    Just (S.Literal (S.Atom value))
-
-  _ | Just [] <- helper "Erl.Data.Binary.Type" "mempty_" 0 s ->
-    Just (S.Literal (S.String ""))
-
-  _ | Just [a, b] <- helper "Erl.Data.Binary.Type" "append_" 2 s ->
-    Just (S.BinaryAppend (codegenExpr a) (codegenExpr b))
-
-  _ | Just [] <- helper "Erl.Data.Binary.IOData" "mempty_" 0 s ->
-    Just (S.List [])
-
-  _ | Just [a, b] <- helper "Erl.Data.Binary.IOData" "append_" 2 s ->
-    Just (S.List [ codegenExpr a, codegenExpr b ])
-
-  _ | Just [] <- helper "Erl.Data.Binary.IOList" "mempty_" 0 s ->
-    Just (S.List [])
-
-  _ | Just [a, b] <- helper "Erl.Data.Binary.IOList" "append_" 2 s ->
-    Just (S.List [ codegenExpr a, codegenExpr b ])
-
-  _ | Just [a] <- helper "Erl.Data.Binary.IOList" "fromBinary" 1 s ->
-    Just (S.List [ codegenExpr a ])
-
-  _ | Just args <- recognizeTuples s ->
-    Just (S.Tupled (codegenExpr <$> args))
-
-  _ | Just ffi <- recognizeFfis codegenExpr s ->
-    Just ffi
-
-  _ | Just (Tuple arity args) <- recognizeUncurry1s s ->
-    case Array.uncons args of
-      Just { head: NeutralExpr (Abs a e), tail } | NEA.length a >= arity ->
-        Just $ more tail $ S.Fun Nothing $ Array.singleton $ Tuple (FunHead [ S.Tupled (toErlVarExpr <$> NEA.take arity a) ] Nothing) $
-          codegenExpr (maybe e (\a' -> NeutralExpr (Abs a' e)) (NEA.fromArray $ NEA.drop arity a))
-      _ -> Nothing
-
-  _ -> Nothing
-  where
-  more args e = S.curriedApp e (codegenExpr <$> args)
-
--- `tupleN` with N arguments applied
-recognizeTuples :: NeutralExpr -> Maybe (Array NeutralExpr)
-recognizeTuples = tryMany $ [1,2,3,4,5,6,7,8,9,10] <#>
-  \i -> helper "Erl.Data.Tuple" ("tuple" <> show i) i
-
--- `uncurryN` with 1 argument applied
-recognizeUncurry1s :: NeutralExpr -> Maybe (Tuple Int (Array NeutralExpr))
-recognizeUncurry1s = tryMany' $ [1,2,3,4,5,6,7,8,9,10] <#>
-  \i -> Tuple i $ helper "Erl.Data.Tuple" ("uncurry" <> show i) 1
 
 codegenList :: (NeutralExpr -> ErlExpr) -> NeutralExpr -> Maybe ErlExpr
 codegenList codegenExpr = gather [] <@> finish where
@@ -134,32 +95,44 @@ codegenList codegenExpr = gather [] <@> finish where
     _ ->
       end.cons acc s
 
-ffis :: Array ((String /\ String) /\ (String /\ String) /\ Boolean)
-ffis =
-  let
-    mk a b c d = (a /\ b) /\ (c /\ d) /\ false
-    bif a b d = mk a b "erlang" d
-    eff a b c d = (a /\ b) /\ (c /\ d) /\ true
-  in
-  [ bif "Erl.Data.Bitstring" "isBinary" "is_binary"
-  , bif "Erl.Data.Bitstring" "bitSize" "bit_size"
-  , bif "Erl.Data.Bitstring" "byteSize" "byte_size"
-  , bif "Erl.Data.Binary" "byteSize" "byte_size"
-  , bif "Erl.Data.Binary.IOList" "byteSize" "iolist_size"
-  , bif "Erl.Data.Binary.IOData" "byteSize" "iolist_size"
-  , bif "Erl.Data.Binary.IOList" "toBinary" "iolist_to_binary"
-  , bif "Erl.Data.Binary.IOData" "toBinary" "iolist_to_binary"
-  , bif "Erl.Kernel.Erlang" "listToBinary" "list_to_binary"
-  -- Effectful, thus wrapped in a thunk
-  , eff "Erl.Kernel.Exceptions" "throw" "erlang" "throw"
-  , eff "Erl.Kernel.Exceptions" "error" "erlang" "error"
-  , eff "Erl.Kernel.Exceptions" "exit" "erlang" "exit"
-  , eff "Effect.Exception" "throwException" "erlang" "error"
+specificCalls :: Array Converter
+specificCalls =
+  [ func "Erl.Atom.atom" $ arg' \(NeutralExpr (Lit (LitString s))) -> S.Literal (S.Atom s)
+  , func "Data.Unit.unit" noArgs $> S.Literal (S.Atom "unit")
+  , func "Erl.Data.Binary.Type.mempty_" noArgs $> S.Literal (S.String "")
+  , func "Erl.Data.Binary.IOData.mempty_" noArgs $> S.List []
+  , func "Erl.Data.Binary.IOList.mempty_" noArgs $> S.List []
+  , func "Erl.Data.Binary.Type.append_" $ lift2 S.BinaryAppend codegenArg codegenArg
+  , func "Erl.Data.Binary.IOData.append_" $ S.List <$> sequence [ codegenArg, codegenArg ]
+  , func "Erl.Data.Binary.IOList.append_" $ S.List <$> sequence [ codegenArg, codegenArg ]
+  , func "Erl.Data.Binary.IOList.fromBinary" $ S.List <$> sequence [ codegenArg ]
   ]
 
-recognizeFfis :: (NeutralExpr -> ErlExpr) -> NeutralExpr -> Maybe ErlExpr
-recognizeFfis codegenExpr = tryMany $ ffis <#> \((a /\ b) /\ (c /\ d) /\ thunked) ->
-  helper a b 1 >=> case _ of
-    [arg] -> Just $ (if thunked then S.thunk else identity) $
-      S.FunCall (Just (atomLiteral c)) (atomLiteral d) [codegenExpr arg]
-    _ -> Nothing
+ffiSpecs :: Array { ps :: Qualified Ident, arity :: ArityPS, erl :: GlobalErl, call :: ArityErl }
+ffiSpecs =
+  let
+    -- Note: this does not handle swapping orders of arguments ... yet
+    calling arity call ps erl =
+      { ps: qualPS ps, arity, erl: qualErl erl, call }
+    pure1 = calling
+      (CallingPS BasePS (Curried (NEA.singleton unit)))
+      (CallingErl (NEA.singleton (Call [unit])))
+    eff1 = calling
+      (CallingPS (CallingPS BasePS (Curried (NEA.singleton unit))) (UncurriedEffect []))
+      (CallingErl (NEA.singleton (Call [unit])))
+  in
+    [ pure1 "Erl.Data.Bitstring.isBinary" "erlang:is_binary"
+    , pure1 "Erl.Data.Bitstring.bitSize" "erlang:bit_size"
+    , pure1 "Erl.Data.Bitstring.byteSize" "erlang:byte_size"
+    , pure1 "Erl.Data.Binary.byteSize" "erlang:byte_size"
+    , pure1 "Erl.Data.Binary.IOList.byteSize" "erlang:iolist_size"
+    , pure1 "Erl.Data.Binary.IOData.byteSize" "erlang:iolist_size"
+    , pure1 "Erl.Data.Binary.IOList.toBinary" "erlang:iolist_to_binary"
+    , pure1 "Erl.Data.Binary.IOData.toBinary" "erlang:iolist_to_binary"
+    , pure1 "Erl.Kernel.Erlang.listToBinary" "erlang:list_to_binary"
+    -- Effectful, thus wrapped in a thunk
+    , eff1 "Erl.Kernel.Exceptions.throw" "erlang:throw"
+    , eff1 "Erl.Kernel.Exceptions.error" "erlang:error"
+    , eff1 "Erl.Kernel.Exceptions.exit" "erlang:exit"
+    , eff1 "Effect.Exception.throwException" "erlang:error"
+    ]

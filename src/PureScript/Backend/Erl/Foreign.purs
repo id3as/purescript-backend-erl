@@ -4,7 +4,6 @@ import Prelude
 
 import Data.Array as Array
 import Data.Array.NonEmpty as NonEmptyArray
-import Data.Bifunctor (lmap)
 import Data.Filterable (filterMap)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.Lazy (force)
@@ -13,10 +12,9 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Tuple (Tuple(..))
-import Data.Tuple.Nested (type (/\), (/\))
-import PureScript.Backend.Erl.Calling (arg, arg', argMatch, curried, fosem, fosems, func, func', getEnv, many, uncurried)
+import PureScript.Backend.Erl.Calling (arg, arg', argMatch, curried, evaluator, evaluators, func, getEnv, many, uncurried)
 import PureScript.Backend.Optimizer.CoreFn (ConstructorType(..), Ident(..), Literal(..), ModuleName(..), Prop(..), ProperName(..), Qualified(..))
-import PureScript.Backend.Optimizer.Semantics (BackendSemantics(..), Env, EvalRef(..), ExternSpine(..), SemConditional(..), Spine, evalApp, evalPrimOp, liftInt, makeLet)
+import PureScript.Backend.Optimizer.Semantics (BackendSemantics(..), EvalRef(..), ExternSpine(..), SemConditional(..), evalApp, evalPrimOp, liftInt, makeLet)
 import PureScript.Backend.Optimizer.Semantics.Foreign (ForeignEval, ForeignSemantics, qualified)
 import PureScript.Backend.Optimizer.Syntax (BackendOperator(..), BackendOperator1(..), BackendOperator2(..), BackendOperatorOrd(..))
 
@@ -61,14 +59,8 @@ helper' shouldForce moduleName ident = case _, _ of
     helper' false moduleName ident arity (force value)
   _, _ -> Nothing
 
-handler :: String -> String -> Int -> (Env -> Spine BackendSemantics -> Maybe BackendSemantics) -> ForeignSemantics
-handler moduleName ident arity f = Tuple (qualified moduleName ident)
-  \env _qual -> case _ of
-    [ ExternApp as ] | Array.length as >= arity -> f env as
-    _ -> Nothing
-
 data_array_indexImpl :: ForeignSemantics
-data_array_indexImpl = fosem $ func "Data.Array.indexImpl" $
+data_array_indexImpl = evaluator $ func "Data.Array.indexImpl" $
   uncurried ado
     just <- arg
     nothing <- arg
@@ -142,7 +134,7 @@ mkList'' :: Array BackendSemantics -> Maybe BackendSemantics -> BackendSemantics
 mkList'' = flip (maybe mkList (flip mkList'))
 
 erl_data_list_types_appendImpl :: ForeignSemantics
-erl_data_list_types_appendImpl = fosem $ func "Erl.Data.List.Types.appendImpl" $
+erl_data_list_types_appendImpl = evaluator $ func "Erl.Data.List.Types.appendImpl" $
   curried ado
     ls <- filterMap viewList' arg
     r <- arg
@@ -166,13 +158,13 @@ mkNothing :: BackendSemantics
 mkNothing = ctor SumType "Data.Maybe" "Maybe" "Nothing" []
 
 erl_data_list_types_uncons :: ForeignSemantics
-erl_data_list_types_uncons = fosems "Erl.Data.List.Types.uncons"
+erl_data_list_types_uncons = evaluators "Erl.Data.List.Types.uncons"
   let mkResult head tail = NeutLit (LitRecord [Prop "head" head, Prop "tail" tail]) in
-  [ argMatch $ func' "Erl.Data.List.Types.cons" ado
+  [ argMatch $ func "Erl.Data.List.Types.cons" ado
       head <- arg
       tail <- arg
       in mkJust (mkResult head tail)
-  , argMatch $ func' "Erl.Data.List.Types.nil" ado
+  , argMatch $ func "Erl.Data.List.Types.nil" ado
       in mkNothing
   , ado
       items <- filterMap viewList arg
@@ -182,21 +174,21 @@ erl_data_list_types_uncons = fosems "Erl.Data.List.Types.uncons"
   ]
 
 erl_data_tuple_uncurryN :: Array ForeignSemantics
-erl_data_tuple_uncurryN = [1,2,3,4,5,6,7,8,9,10] <#> \n -> fosem $
+erl_data_tuple_uncurryN = [1,2,3,4,5,6,7,8,9,10] <#> \n -> evaluator $
   func ("Erl.Data.Tuple.uncurry" <> show n) ado
     fn <- arg
-    tupled <- argMatch $ func' ("Erl.Data.Tuple.tuple" <> show n) $
-      many $ Array.replicate n Just
+    tupled <- argMatch $ func ("Erl.Data.Tuple.tuple" <> show n) $
+      many $ Array.replicate n identity
     env <- getEnv
     in evalApp env fn tupled
 
 erl_data_tuple_fst :: ForeignSemantics
-erl_data_tuple_fst = fosem $ func "Erl.Data.Tuple.fst" do
-  argMatch $ func' "Erl.Data.Tuple.tuple2" $ arg <* arg
+erl_data_tuple_fst = evaluator $ func "Erl.Data.Tuple.fst" do
+  argMatch $ func "Erl.Data.Tuple.tuple2" $ arg <* arg
 
 erl_data_tuple_snd :: ForeignSemantics
-erl_data_tuple_snd = fosem $ func "Erl.Data.Tuple.snd" do
-  argMatch $ func' "Erl.Data.Tuple.tuple2" $ arg *> arg
+erl_data_tuple_snd = evaluator $ func "Erl.Data.Tuple.snd" do
+  argMatch $ func "Erl.Data.Tuple.tuple2" $ arg *> arg
 
 erl_atom :: Array ForeignSemantics
 erl_atom =
@@ -206,38 +198,25 @@ erl_atom =
   ]
   where
   erl_atom_atom :: ForeignSemantics
-  erl_atom_atom = fosem $ func "Erl.Atom.atom" $ argMatch $ func' "Erl.Atom.toString" $ arg
+  erl_atom_atom = evaluator $ func "Erl.Atom.atom" $ argMatch $ func "Erl.Atom.toString" $ arg
 
   erl_atom_toString :: ForeignSemantics
-  erl_atom_toString = fosem $ func "Erl.Atom.toString" $ argMatch $ func' "Erl.Atom.atom" $ arg
+  erl_atom_toString = evaluator $ func "Erl.Atom.toString" $ argMatch $ func "Erl.Atom.atom" $ arg
 
-  literal = argMatch $ func' "Erl.Atom.atom" $ arg'
-    case _ of NeutLit (LitString s) -> Just s
+  literal = argMatch $ func "Erl.Atom.atom" $ arg' \(NeutLit (LitString s)) -> s
 
   erl_atom_eqImpl :: ForeignSemantics
-  erl_atom_eqImpl = fosem $ func "Erl.Atom.eqImpl" ado
+  erl_atom_eqImpl = evaluator $ func "Erl.Atom.eqImpl" ado
     s1 <- literal
     s2 <- literal
     in NeutLit (LitBoolean (s1 == s2))
 
-coercions :: Array (String /\ String)
-coercions = join
-  let dir prefix items = lmap (prefix <> _) <$> items in
-  [ dir "Erl.Data.Binary."
-    [ "IOList" /\ "concat"
-    , "IOData" /\ "fromIOList"
-    , "IOData" /\ "fromBinary"
-    , "IOData" /\ "fromString"
-    , "IOData" /\ "concat"
-    ]
-  , [ "Erl.Data.Bitstring" /\ "fromBinary"
-    ]
-  ]
-
 recognizeCoercions :: Array ForeignSemantics
-recognizeCoercions = coercions <#> \(mn /\ id) ->
-  handler mn id 1 (const only1)
-
-only1 :: forall a. Array a -> Maybe a
-only1 [a] = Just a
-only1 _ = Nothing
+recognizeCoercions = evaluator <$>
+  [ func "Erl.Data.Binary.IOList.concat" arg
+  , func "Erl.Data.Binary.IOData.concat" arg
+  , func "Erl.Data.Binary.IOData.fromIOList" arg
+  , func "Erl.Data.Binary.IOData.fromBinary" arg
+  , func "Erl.Data.Binary.IOData.fromString" arg
+  , func "Erl.Data.Bitstring.fromBinary" arg
+  ]
