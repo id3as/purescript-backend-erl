@@ -106,6 +106,7 @@ runCompile { compile, filter, cwd } = do
   mkdirp outputDir
   mkdirp ebin
   erls <- liftEffect $ Ref.new []
+  conventionsRef <- liftEffect $ Ref.new mempty
   coreFnModulesFromOutput "output" filter >>= case _ of
     Left errors -> do
       for_ errors \(Tuple filePath err) -> do
@@ -139,11 +140,13 @@ runCompile { compile, filter, cwd } = do
                 Left err -> Left $ "No foreigns file for " <> name <> " " <> Aff.message err
                 Right content -> lmap parseErrorMessage $ parseFile content
             foreigns <- either (throwError <<< Aff.error) pure foreignsE
+            prevConventions <- liftEffect $ Ref.read conventionsRef
             let
+              Tuple codegened nextConventions = codegenModule backend foreigns prevConventions
               formatted =
                 Dodo.print plainText Dodo.twoSpaces
-                  $ P.printModule
-                  $ codegenModule backend foreigns
+                  $ P.printModule codegened
+            liftEffect $ Ref.write nextConventions conventionsRef
             mkdirp moduleOutputDir
             FS.writeTextFile UTF8 moduleOutputPath formatted
             for_ foreignFile \x -> do
@@ -159,7 +162,7 @@ runCompile { compile, filter, cwd } = do
         }
       when compile do
         filesToCompile <- liftEffect $ Ref.read erls
-        spawned <- execa "erlc" ([ "-o", ebin, "-W0" ] <> filesToCompile) identity
+        spawned <- execa "erlc" ([ "+no_ssa_opt", "-o", ebin, "-W0" ] <> filesToCompile) identity
         spawned.result >>= case _ of
           Left { message } -> do
             Console.log $ withGraphics (foreground Red) "✗ failed to compile."

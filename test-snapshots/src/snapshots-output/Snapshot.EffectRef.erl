@@ -18,7 +18,7 @@ onLet(X) ->
 
 onLetTest() ->
   begin
-    V = ((snapshot_effectRef@ps:onLet())(1)),
+    V = (onLet(1)),
     fun
       () ->
         begin
@@ -36,12 +36,12 @@ basicTest() ->
       () ->
         begin
           N = (V()),
-          (((effect_ref@ps:modify_())
-            (fun
-              (V@1) ->
-                V@1 + 1
-            end))
-           (N))(),
+          (effect_ref@ps:modify_( fun
+                                  (V@1) ->
+                                    V@1 + 1
+                                end
+                                , N
+                                ))(),
           V@1 = (((effect_ref@ps:read())(N))()),
           ((test_assert@ps:assert())(V@1 =:= 1))()
         end
@@ -52,8 +52,8 @@ main() ->
   fun
     () ->
       begin
-        (snapshot_effectRef@ps:basicTest())(),
-        (snapshot_effectRef@ps:onLetTest())()
+        (basicTest())(),
+        (onLetTest())()
       end
   end.
 

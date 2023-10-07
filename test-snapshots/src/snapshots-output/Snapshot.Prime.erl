@@ -134,11 +134,11 @@ useNormal() ->
 
 useNormal(DictNormal) ->
   begin
-    Normal1 = ((snapshot_prime@ps:normal())(DictNormal)),
+    Normal1 = (normal(DictNormal)),
     fun
       (DictNormal1) ->
         begin
-          Normal2 = ((snapshot_prime@ps:normal())(DictNormal1)),
+          Normal2 = (normal(DictNormal1)),
           fun
             (A) ->
               fun
@@ -169,11 +169,10 @@ useNormal(DictNormal) ->
    }.
 
 useNormal1() ->
-  ((snapshot_prime@ps:useNormal())(snapshot_prime@ps:'instanceName\''()))
-  (snapshot_prime@ps:'instanceName\''()).
+  (useNormal('instanceName\''()))('instanceName\''()).
 
 useInstance() ->
-  ((snapshot_prime@ps:useNormal1())({f1}))({f2}).
+  ((useNormal1())({f1}))({f2}).
 
 ignore() ->
   fun
@@ -191,33 +190,31 @@ useClass() ->
   end.
 
 useClass(DictClassName_@prime) ->
-  (snapshot_prime@ps:ignore())(DictClassName_@prime).
+  ignore(DictClassName_@prime).
 
 'foo\'oo'() ->
   <<"foo\'oo">>.
 
 useFooPrime3() ->
-  snapshot_prime@ps:'foo\'oo'().
+  'foo\'oo'().
 
 'foo\'\''() ->
   <<"foo\'\'">>.
 
 useFooPrime2() ->
-  snapshot_prime@ps:'foo\'\''().
+  'foo\'\''().
 
 'foo\''() ->
   <<"foo\'">>.
 
 useFooPrime1() ->
-  snapshot_prime@ps:'foo\''().
+  'foo\''().
 
 result() ->
-  #{ test1 => (snapshot_prime@ps:'foo\''()) =:= (snapshot_prime@ps:'foo\''())
-   , test2 =>
-     (snapshot_prime@ps:'foo\'\''()) =:= (snapshot_prime@ps:'foo\'\''())
-   , test3 =>
-     (snapshot_prime@ps:'foo\'oo'()) =:= (snapshot_prime@ps:'foo\'oo'())
-   , useInstance => ((snapshot_prime@ps:useNormal1())({f1}))({f2})
+  #{ test1 => ('foo\''()) =:= ('foo\''())
+   , test2 => ('foo\'\''()) =:= ('foo\'\''())
+   , test3 => ('foo\'oo'()) =:= ('foo\'oo'())
+   , useInstance => ((useNormal1())({f1}))({f2})
    }.
 
 foo() ->
@@ -239,5 +236,5 @@ useMember() ->
   end.
 
 useMember(DictClassMember) ->
-  (snapshot_prime@ps:'classMember\''())(DictClassMember).
+  'classMember\''(DictClassMember).
 

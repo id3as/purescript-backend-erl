@@ -14,13 +14,13 @@ pure_() ->
 
 renamed() ->
   begin
-    V = ((snapshot_nestedDo@ps:pure_())(unit)),
+    V = ((pure_())(unit)),
     fun
       () ->
         begin
           A0 = (V()),
-          A1 = (((snapshot_nestedDo@ps:pure_())(A0))()),
-          ((snapshot_nestedDo@ps:pure_())(A1))(),
+          A1 = (((pure_())(A0))()),
+          ((pure_())(A1))(),
           ((effect_console@ps:log())(<<"Oh no">>))()
         end
     end
@@ -28,13 +28,13 @@ renamed() ->
 
 renamed0() ->
   begin
-    V = ((snapshot_nestedDo@ps:pure_())(unit)),
+    V = ((pure_())(unit)),
     fun
       () ->
         begin
           A0 = (V()),
-          A = (((snapshot_nestedDo@ps:pure_())(A0))()),
-          ((snapshot_nestedDo@ps:pure_())(A))(),
+          A = (((pure_())(A0))()),
+          ((pure_())(A))(),
           ((effect_console@ps:log())(<<"Oh no">>))()
         end
     end
@@ -42,13 +42,13 @@ renamed0() ->
 
 renamed1() ->
   begin
-    V = ((snapshot_nestedDo@ps:pure_())(unit)),
+    V = ((pure_())(unit)),
     fun
       () ->
         begin
           A = (V()),
-          A@1 = (((snapshot_nestedDo@ps:pure_())(A))()),
-          ((snapshot_nestedDo@ps:pure_())(A@1))(),
+          A@1 = (((pure_())(A))()),
+          ((pure_())(A@1))(),
           ((effect_console@ps:log())(<<"Oh no">>))()
         end
     end
@@ -56,13 +56,13 @@ renamed1() ->
 
 renamed2() ->
   begin
-    V = ((snapshot_nestedDo@ps:pure_())(unit)),
+    V = ((pure_())(unit)),
     fun
       () ->
         begin
           A = (V()),
-          A1 = (((snapshot_nestedDo@ps:pure_())(A))()),
-          ((snapshot_nestedDo@ps:pure_())(A1))(),
+          A1 = (((pure_())(A))()),
+          ((pure_())(A1))(),
           ((effect_console@ps:log())(<<"Oh no">>))()
         end
     end
@@ -70,12 +70,12 @@ renamed2() ->
 
 do1() ->
   begin
-    V = ((snapshot_nestedDo@ps:pure_())(unit)),
+    V = ((pure_())(unit)),
     fun
       () ->
         begin
           A = (V()),
-          ((snapshot_nestedDo@ps:pure_())(A))(),
+          ((pure_())(A))(),
           ((effect_console@ps:log())(<<"Oh no">>))()
         end
     end
@@ -83,7 +83,7 @@ do1() ->
 
 do0() ->
   begin
-    V = ((snapshot_nestedDo@ps:pure_())(unit)),
+    V = ((pure_())(unit)),
     fun
       () ->
         begin
@@ -95,13 +95,13 @@ do0() ->
 
 bug26() ->
   begin
-    V = ((snapshot_nestedDo@ps:pure_())(unit)),
+    V = ((pure_())(unit)),
     fun
       () ->
         begin
           A = (V()),
-          A@1 = (((snapshot_nestedDo@ps:pure_())(A))()),
-          ((snapshot_nestedDo@ps:pure_())(A@1))(),
+          A@1 = (((pure_())(A))()),
+          ((pure_())(A@1))(),
           ((effect_console@ps:log())(<<"Oh no">>))()
         end
     end

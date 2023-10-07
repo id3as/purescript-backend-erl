@@ -84,6 +84,5 @@ foldr(F, B) ->
   end.
 
 result() ->
-  (((snapshot_let_goArity@ps:foldr())(data_semiring@ps:intAdd()))(1))
-  ({cons, 2, {cons, 3, {cons, 4, {nil}}}}).
+  (foldr(data_semiring@ps:intAdd(), 1))({cons, 2, {cons, 3, {cons, 4, {nil}}}}).
 

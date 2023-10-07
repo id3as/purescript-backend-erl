@@ -5,5 +5,5 @@ fortyThree() ->
   ((snapshot_import_impl@ps:addImpl())(21))(22).
 
 result() ->
-  snapshot_import@ps:fortyThree().
+  fortyThree().
 

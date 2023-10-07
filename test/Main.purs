@@ -124,6 +124,7 @@ runSnapshotTests { accept, compile, run, filter } = do
   -- let runtimeContents = Dodo.print plainText Dodo.twoSpaces $ P.printModule $ runtimeModule
   -- FS.writeTextFile UTF8 runtimeFilePath runtimeContents
   cpr vendorDirectory testOut
+  conventionsRef <- liftEffect $ Ref.new mempty
   coreFnModulesFromOutput "output" filter >>= case _ of
     Left errors -> do
       for_ errors \(Tuple filePath err) -> do
@@ -153,11 +154,13 @@ runSnapshotTests { accept, compile, run, filter } = do
             foreignFile <- try $ FS.readTextFile UTF8 snapshotDirFileForeign
             let foreignsE = either (Right <<< mempty) parseFile foreignFile
             foreigns <- either (throwError <<< Aff.error <<< parseErrorMessage) pure foreignsE
+            prevConventions <- liftEffect $ Ref.read conventionsRef
             let
+              Tuple codegened nextConventions = codegenModule backend foreigns prevConventions
               formatted =
                 Dodo.print plainText Dodo.twoSpaces
-                  $ P.printModule
-                  $ codegenModule backend foreigns
+                  $ P.printModule codegened
+            liftEffect $ Ref.write nextConventions conventionsRef
             -- liftEffect $ debugModule backend  -- show backend
             mkdirp testFileDir
             FS.writeTextFile UTF8 testFilePath formatted

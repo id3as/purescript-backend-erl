@@ -20,25 +20,25 @@
 
 lastComponentIsRun() ->
   begin
-    V = ((snapshot_effect@ps:'don\'tInlineMeMe'())(<<"a">>)),
+    V = ('don\'tInlineMeMe'(<<"a">>)),
     fun
       () ->
         begin
           V(),
-          ((snapshot_effect@ps:'don\'tInlineMeMe'())(<<"b">>))(),
-          ((snapshot_effect@ps:'don\'tInlineMeMe'())(<<"c">>))()
+          ('don\'tInlineMeMe'(<<"b">>))(),
+          ('don\'tInlineMeMe'(<<"c">>))()
         end
     end
   end.
 
 lastPureIsUnwrapped() ->
   begin
-    V = ((snapshot_effect@ps:'don\'tInlineMeMe'())(<<"a">>)),
+    V = ('don\'tInlineMeMe'(<<"a">>)),
     fun
       () ->
         begin
           Value = (V()),
-          ((snapshot_effect@ps:'don\'tInlineMeMe'())(<<"b">>))(),
+          ('don\'tInlineMeMe'(<<"b">>))(),
           Value
         end
     end
@@ -48,8 +48,8 @@ main() ->
   fun
     () ->
       begin
-        (snapshot_effect@ps:lastComponentIsRun())(),
-        (snapshot_effect@ps:lastPureIsUnwrapped())()
+        (lastComponentIsRun())(),
+        (lastPureIsUnwrapped())()
       end
   end.
 

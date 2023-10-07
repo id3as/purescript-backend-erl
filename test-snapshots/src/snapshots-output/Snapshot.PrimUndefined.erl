@@ -11,7 +11,5 @@ testCase(DictRing) ->
   erlang:map_get(add, (erlang:map_get('Semiring0', DictRing))(undefined)).
 
 main() ->
-  (test_assert@ps:assert())
-  (((((snapshot_primUndefined@ps:testCase())(data_ring@ps:ringInt()))(1))(1))
-    =:= 2).
+  (test_assert@ps:assert())((((testCase(data_ring@ps:ringInt()))(1))(1)) =:= 2).
 

@@ -66,22 +66,22 @@ zipWith4(F, As, Bs, Cs, Ds) ->
   end.
 
 result() ->
-  (((((snapshot_fnXLazyBug@ps:zipWith4())
-      (fun
-        (A) ->
-          fun
-            (B) ->
+  zipWith4( fun
+            (A) ->
               fun
-                (C) ->
+                (B) ->
                   fun
-                    (D) ->
-                      (A * B) + (C * D)
+                    (C) ->
+                      fun
+                        (D) ->
+                          (A * B) + (C * D)
+                      end
                   end
               end
           end
-      end))
-     ([1, 2, 9]))
-    ([0, 1]))
-   ([3, 4]))
-  ([5, 6, 7, 8]).
+          , [1, 2, 9]
+          , [0, 1]
+          , [3, 4]
+          , [5, 6, 7, 8]
+          ).
 

@@ -18,7 +18,7 @@ inline() ->
 
 inline(N) ->
   begin
-    A = ((snapshot_scoping@ps:noInline())(N)),
+    A = (noInline(N)),
     A + A
   end.
 
@@ -33,7 +33,7 @@ ex(N) ->
     A@1 = if
       N =:= 0 ->
         begin
-          A = ((snapshot_scoping@ps:noInline())(N)),
+          A = (noInline(N)),
           A + A
         end;
       true ->

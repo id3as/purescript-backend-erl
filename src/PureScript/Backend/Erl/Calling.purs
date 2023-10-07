@@ -14,24 +14,27 @@ import Data.Compactable (class Compactable, compact, separateDefault)
 import Data.Either (Either(..), hush)
 import Data.Filterable (class Filterable, filterDefault, partitionDefault, partitionMapDefault)
 import Data.Foldable (class Foldable, foldl, sum)
+import Data.FoldableWithIndex (foldMapWithIndex)
 import Data.Lazy (defer, force)
 import Data.Lens (APrism', Prism', preview, prism', review, withPrism)
 import Data.List (List(..))
 import Data.List as List
-import Data.Map (SemigroupMap)
+import Data.Map (SemigroupMap(..))
+import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, isNothing)
 import Data.Newtype (class Newtype, un, unwrap, wrap)
 import Data.Profunctor (class Profunctor)
-import Data.Semigroup.Last (Last)
+import Data.Semigroup.Last (Last(..))
 import Data.String as String
 import Data.Traversable (class Traversable, for, mapAccumR, sequence, traverse)
 import Data.Tuple (Tuple(..), fst, uncurry)
 import Effect.Exception (catchException)
 import Effect.Unsafe (unsafePerformEffect)
 import Partial.Unsafe (unsafeCrashWith, unsafePartial)
+import PureScript.Backend.Erl.Convert.Common (erlModuleNamePs)
 import PureScript.Backend.Erl.Syntax (ErlExpr)
 import PureScript.Backend.Erl.Syntax as S
-import PureScript.Backend.Optimizer.CoreFn (Ident, Literal, Qualified(..))
+import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal, ModuleName(..), Qualified(..))
 import PureScript.Backend.Optimizer.Semantics (BackendSemantics, EvalRef, ExternSpine(..), NeutralExpr(..))
 import PureScript.Backend.Optimizer.Semantics as Sem
 import PureScript.Backend.Optimizer.Semantics.Foreign (ForeignSemantics, qualified)
@@ -121,19 +124,34 @@ derive instance foldableCallingErl :: Foldable CallingErl
 derive instance traversableCallingErl :: Traversable CallingErl
 type ArityErl = CallingErl Unit
 newtype GlobalErl = GlobalErl { module :: Maybe String, name :: String }
+derive instance newtypeGlobalErl :: Newtype GlobalErl _
+
+callErl :: forall a. Array a -> CallingErl a
+callErl = CallingErl <<< pure <<< Call
 
 -- A map of calling conventions, from PS names and arities to global Erlang
 -- functions and arities (the arities must match)
 type Conventions =
   SemigroupMap (Qualified Ident)
   ( SemigroupMap ArityPS
-    (Last (CWB CallingErl Unit Unit))
+    (Last (CWB CallingErl GlobalErl Unit))
   )
+callAs :: Qualified Ident -> ArityPS -> ArityErl -> Conventions
+callAs qi arity call =
+  SemigroupMap $ Map.singleton qi $ SemigroupMap $ Map.singleton arity $ Last $
+    CWB (toGlobalErl qi) call
+
+toGlobalErl :: Qualified Ident -> GlobalErl
+toGlobalErl (Qualified mmn (Ident ident)) = GlobalErl
+  { module: mmn <#> erlModuleNamePs
+  , name: ident
+  }
+
 
 conventionWithBase :: forall a b. (a -> b) -> CWB CallingPS (Qualified Ident) a -> CWB CallingErl GlobalErl b
-conventionWithBase f (CWB (Qualified mmn ident) call) =
+conventionWithBase f (CWB qi call) =
   CWB
-    (GlobalErl { module: unwrap <$> mmn, name: unwrap ident })
+    (toGlobalErl qi)
     (globalConvention f call)
 
 globalConvention :: forall a b. (a -> b) -> CallingPS a -> CallingErl b
@@ -436,13 +454,13 @@ instance
           { matched: CWB (to (fromEvalRef r)) (Uncurried (Array.zip call callSpec))
           , unmatched: Nothing
           }
-    -- There is no dedicated ExternUncurriedEffectApp
-    matchCall' _ _ (Sem.SemRef r [Sem.ExternUncurriedApp call] _) (UncurriedEffect callSpec)
-      | Array.length call == Array.length callSpec =
-        Just
-          { matched: CWB (to (fromEvalRef r)) (Uncurried (Array.zip call callSpec))
-          , unmatched: Nothing
-          }
+    -- -- There is no dedicated ExternUncurriedEffectApp
+    -- matchCall' _ _ (Sem.SemRef r [Sem.ExternUncurriedApp call] _) (UncurriedEffect callSpec)
+    --   | Array.length call == Array.length callSpec =
+    --     Just
+    --       { matched: CWB (to (fromEvalRef r)) (Uncurried (Array.zip call callSpec))
+    --       , unmatched: Nothing
+    --       }
     matchCall' _ env (Sem.NeutApp fn []) spec = matchCall env fn spec
     matchCall' _ _ (Sem.NeutApp fn call') (Curried callSpec)
       | Just call <- NEA.fromArray call'
@@ -742,6 +760,12 @@ callConverters options codegenExpr focus = options # Array.findMap \option -> do
       pure $ applyCall unit converted unmatched'
     Just (Right trivial) -> do
       pure $ abstractTrivial converted trivial
+
+applyConventions :: Conventions -> (NeutralExpr -> ErlExpr) -> NeutralExpr -> Maybe ErlExpr
+applyConventions conventions = callConverters $
+  conventions # foldMapWithIndex \ps -> foldMapWithIndex \arity (Last (CWB erl call)) ->
+    pure { ps, arity, erl, call }
+
 
 type Converter =
   Pattern (NeutralExpr -> ErlExpr) (CWB CallingPS (Qualified Ident)) NeutralExpr ErlExpr
