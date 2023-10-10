@@ -25,8 +25,8 @@ import PureScript.Backend.Erl.Parser (ForeignDecls)
 import PureScript.Backend.Erl.Syntax (ErlDefinition(..), ErlExport(..), ErlExpr, ErlModule, atomLiteral)
 import PureScript.Backend.Erl.Syntax as S
 import PureScript.Backend.Optimizer.Convert (BackendModule, BackendBindingGroup)
-import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal(..), ModuleName(..), Prop(..), Qualified(..))
-import PureScript.Backend.Optimizer.Semantics (NeutralExpr(..))
+import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal(..), ModuleName, Prop(..), Qualified(..))
+import PureScript.Backend.Optimizer.Semantics (NeutralExpr)
 import PureScript.Backend.Optimizer.Syntax (BackendAccessor(..), BackendOperator(..), BackendOperator1(..), BackendOperator2(..), BackendOperatorNum(..), BackendOperatorOrd(..), BackendSyntax(..), Level(..), Pair(..))
 
 type CodegenEnv =
@@ -41,8 +41,9 @@ codegenModule :: BackendModule -> ForeignDecls -> Conventions -> Tuple ErlModule
 codegenModule { name, bindings, imports, foreign: foreign_, exports: moduleExports } foreigns initialConventions =
   let
     Tuple thisModuleConventions thisModuleBindings = foldMap (codegenTopLevelBindingGroup name) bindings
-    localConventions = thisModuleConventions <#> (map <<< map <<< lmap) (over GlobalErl _ { module = Nothing })
     callingConventions = initialConventions <> thisModuleConventions
+    -- We do not qualify same-module bindings
+    localConventions = thisModuleConventions <#> (map <<< map <<< lmap) (over GlobalErl _ { module = Nothing })
     localCallingConventions = initialConventions <> localConventions
     codegenEnv = { currentModule: name, substitutions: Map.empty, callingConventions: localCallingConventions }
 
@@ -129,6 +130,12 @@ codegenTopLevelBinding currentModule (Tuple (Ident i) n) =
   where
   callThisAs x y = Tuple (callAs (Qualified (Just currentModule) (Ident i)) x y)
 
+-- When we recurse in the function side of applications, we don't need to
+-- consider calling conventions: they were already handled
+codegenExpr0 :: CodegenEnv -> NeutralExpr -> ErlExpr
+codegenExpr0 codegenEnv | Map.isEmpty (unwrap codegenEnv.callingConventions) = codegenExpr codegenEnv
+codegenExpr0 codegenEnv = codegenExpr codegenEnv { callingConventions = mempty }
+
 codegenExpr :: CodegenEnv -> NeutralExpr -> ErlExpr
 codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
   _ | Just result <- codegenForeign (codegenExpr codegenEnv) s ->
@@ -161,15 +168,15 @@ codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
   Lit l ->
     codegenLiteral codegenEnv l
   App f p ->
-    S.curriedApp (codegenExpr codegenEnv f) (codegenExpr codegenEnv <$> p)
+    S.curriedApp (codegenExpr0 codegenEnv f) (codegenExpr codegenEnv <$> p)
   Abs a e -> do
     S.curriedFun (toErlVarExpr <$> a) (codegenExpr codegenEnv e)
   UncurriedApp f p ->
-    S.FunCall Nothing (codegenExpr codegenEnv f) (codegenExpr codegenEnv <$> p)
+    S.FunCall Nothing (codegenExpr0 codegenEnv f) (codegenExpr codegenEnv <$> p)
   UncurriedAbs a e ->
     S.simpleFun (toErlVarExpr <$> a) (codegenExpr codegenEnv e)
   UncurriedEffectApp f p ->
-    S.thunk $ S.FunCall Nothing (codegenExpr codegenEnv f) (codegenExpr codegenEnv <$> p)
+    S.thunk $ S.FunCall Nothing (codegenExpr0 codegenEnv f) (codegenExpr codegenEnv <$> p)
   UncurriedEffectAbs a e ->
     S.simpleFun (toErlVarExpr <$> a) (codegenChain effectChainMode codegenEnv e)
   Accessor e (GetProp i) ->

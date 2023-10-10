@@ -9,11 +9,12 @@ import Control.Plus (empty)
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NEA
-import Data.Bifunctor (class Bifunctor)
+import Data.Bifunctor (class Bifunctor, bimap)
 import Data.Compactable (class Compactable, compact, separateDefault)
 import Data.Either (Either(..), hush)
 import Data.Filterable (class Filterable, filterDefault, partitionDefault, partitionMapDefault)
 import Data.Foldable (class Foldable, foldl, sum)
+import Data.Foldable as Foldable
 import Data.FoldableWithIndex (foldMapWithIndex)
 import Data.Lazy (defer, force)
 import Data.Lens (APrism', Prism', preview, prism', review, withPrism)
@@ -23,14 +24,16 @@ import Data.Map (SemigroupMap(..))
 import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, isNothing)
 import Data.Newtype (class Newtype, un, unwrap, wrap)
-import Data.Profunctor (class Profunctor)
+import Data.Profunctor (class Profunctor, dimap)
 import Data.Semigroup.Last (Last(..))
 import Data.String as String
 import Data.Traversable (class Traversable, for, mapAccumR, sequence, traverse)
 import Data.Tuple (Tuple(..), fst, uncurry)
+import Data.Unfoldable (unfoldr)
 import Effect.Exception (catchException)
 import Effect.Unsafe (unsafePerformEffect)
 import Partial.Unsafe (unsafeCrashWith, unsafePartial)
+import Prim.Coerce (class Coercible)
 import PureScript.Backend.Erl.Convert.Common (erlModuleNamePs)
 import PureScript.Backend.Erl.Syntax (ErlExpr)
 import PureScript.Backend.Erl.Syntax as S
@@ -69,7 +72,16 @@ data CallingPS a
   = BasePS
   | CallingPS (CallingPS a) (CallPS a)
 derive instance eqCallingPS :: Eq a => Eq (CallingPS a)
-derive instance ordCallingPS :: Ord a => Ord (CallingPS a)
+instance ordCallingPS :: Ord a => Ord (CallingPS a) where
+  compare c1 c2 =
+    case compare (arity c1) (arity c2) of
+      EQ ->
+        compare (Array.reverse (go c1)) (Array.reverse (go c2))
+      r -> r
+    where
+    go = unfoldr case _ of
+      BasePS -> Nothing
+      CallingPS calls call -> Just (Tuple call calls)
 derive instance functorCallingPS :: Functor CallingPS
 derive instance foldableCallingPS :: Foldable CallingPS
 derive instance traversableCallingPS :: Traversable CallingPS
@@ -106,6 +118,11 @@ canonicalize (CallingPS (CallingPS more (Curried as)) (Curried bs)) =
   canonicalize (CallingPS more (Curried (as <> bs)))
 canonicalize (CallingPS more as) = CallingPS (canonicalize more) as
 canonicalize BasePS = BasePS
+
+canonicalize1 :: CallingPS ~> CallingPS
+canonicalize1 (CallingPS (CallingPS more (Curried as)) (Curried bs)) =
+  CallingPS more (Curried (as <> bs))
+canonicalize1 r = r
 
 -- There is only one way a function can be called in Erlang
 newtype CallErl a
@@ -319,6 +336,51 @@ applyCallMaybe env base (Just call) = applyCall env base call
 applyCalls :: forall env call expr. CallingExprBase call expr expr env => env -> expr -> Array (call expr) -> expr
 applyCalls env = foldl (applyCall env)
 
+class ToBase call expr base env where
+  toBase :: env -> expr -> Maybe (CWB call base expr)
+
+matchBase ::
+  forall call expr base env a r.
+    Ord (call a) =>
+    Ord base =>
+    Calling call =>
+    ToBase call expr base env =>
+  SemigroupMap base (SemigroupMap (call a) r) ->
+  env ->
+  expr ->
+  Maybe (Tuple (MatchWithBase call expr base a) r)
+matchBase (SemigroupMap bases) env expr = do
+  CWB base calls <- toBase env expr
+  SemigroupMap arities <- Map.lookup base bases
+  Map.toUnfoldable arities # Array.reverse # Array.findMap \(Tuple arity r) -> do
+    { matched, unmatched } <- zipAgainst calls arity
+    Just $ Tuple
+      { matched: CWB base matched
+      , unmatched: unmatched
+      }
+      r
+
+matchBasePattern ::
+  forall call expr base env o.
+    Ord (call Unit) =>
+    Ord base =>
+    Calling call =>
+    ToBase call expr base env =>
+  (env -> o -> call expr -> o) ->
+  SemigroupMap base (SemigroupMap (call Unit) (Last (Pattern env (CWB call base) expr o))) ->
+  env ->
+  expr ->
+  Maybe o
+matchBasePattern conv bases env expr = do
+  Tuple { matched, unmatched } (Last pat) <- matchBase bases env expr
+  case pat of
+    Pure _ -> Nothing
+    Pattern _ parse -> do
+      r <- parse env (map fst matched)
+      Just case unmatched of
+        Nothing -> r
+        Just unm -> conv env r unm
+
 -- Call a global Erlang function (module name, function name)
 instance CallingExprBase CallErl ErlExpr GlobalErl env where
   applyCWB _ (CWB (GlobalErl ref) (Call args)) =
@@ -381,6 +443,7 @@ instance CallingExprBase CallErl ErlExpr base env => CallingExprBase CallingErl 
     -- At the end we have a single base call and a stack of calls
     consCall baseCall acc = NEA.cons' baseCall (Array.fromFoldable acc)
 
+
 -- PureScript calls on BackendSyntax
 instance
   ( Newtype s (BackendSyntax s)
@@ -412,6 +475,15 @@ instance
       }
   matchCall _ _ _ = Nothing
 
+instance
+  ( Newtype s (BackendSyntax s)
+  , Inj base (BackendSyntax s)
+  ) => ToBase CallPS (BackendSyntax s) base env where
+  -- TODO: handle nested Syn.App for canonicalization?
+  toBase _ (Syn.App fn call) = CWB <$> preview inj (unwrap fn) <@> Curried (coerce call)
+  toBase _ (Syn.UncurriedApp fn call) = CWB <$> preview inj (unwrap fn) <@> Uncurried (coerce call)
+  toBase _ (Syn.UncurriedEffectApp fn call) = CWB <$> preview inj (unwrap fn) <@> UncurriedEffect (coerce call)
+  toBase _ _ = Nothing
 
 instance
   ( Inj base NeutralExpr
@@ -425,6 +497,13 @@ instance
         { matched: CWB base' (coerce call)
         , unmatched: coerce unmatched
         }
+
+instance
+  ( Inj base NeutralExpr
+  ) => ToBase CallPS NeutralExpr base env where
+  toBase env expr = do
+    CWB base call <- toBase env (unwrap expr)
+    CWB <$> preview inj (base :: NeutralExpr) <@> map wrap call
 
 fromEvalRef :: EvalRef -> BackendSemantics
 fromEvalRef r =
@@ -498,8 +577,8 @@ else instance Inj (Qualified Ident) NeutralExpr where
   inj = prism' (NeutralExpr <<< Syn.Var) case _ of
     NeutralExpr (Syn.Var qi') -> Just qi'
     _ -> Nothing
-else instance Inj a a where
-  inj = identity
+else instance Coercible a b => Inj a b where
+  inj = dimap coerce coerce
 
 instance
   ( CallingExprBase CallPS expr expr env
@@ -521,8 +600,17 @@ instance
         }
       _ -> Nothing
 
-
-
+instance
+  ( ToBase CallPS expr expr env
+  , Inj base expr
+  ) => ToBase CallingPS expr base env where
+  toBase env expr =
+    case toBase env expr :: Maybe (CWB CallPS expr expr) of
+      Just (CWB expr' call) ->
+        toBase env expr' <#> \(CWB base calls) ->
+          CWB base (canonicalize1 (CallingPS calls call))
+      Nothing ->
+        CWB <$> preview inj expr <@> BasePS
 
 class Functor call <= Structure call where
   hasEmpty :: forall a. Maybe (call a)
@@ -762,13 +850,26 @@ callConverters options codegenExpr focus = options # Array.findMap \option -> do
       pure $ abstractTrivial converted trivial
 
 applyConventions :: Conventions -> (NeutralExpr -> ErlExpr) -> NeutralExpr -> Maybe ErlExpr
-applyConventions conventions = callConverters $
-  conventions # foldMapWithIndex \ps -> foldMapWithIndex \arity (Last (CWB erl call)) ->
-    pure { ps, arity, erl, call }
+applyConventions conventions codegenExpr expr = matchBase conventions codegenExpr expr >>=
+  \(Tuple { matched: CWB _old matched, unmatched } (Last (CWB erlBase convention))) -> do
+    calls <- customConvention (fst >>> codegenExpr >>> const) matched convention
+    let converted = applyCall unit erlBase calls
+    pure $ applyCallMaybe unit converted $ localConvention codegenExpr =<< unmatched
 
 
 type Converter =
   Pattern (NeutralExpr -> ErlExpr) (CWB CallingPS (Qualified Ident)) NeutralExpr ErlExpr
+
+indexPatterns ::
+  forall env call base i o.
+    Ord base =>
+    Ord (call Unit) =>
+  Array (Pattern env (CWB call base) i o) ->
+  SemigroupMap base (SemigroupMap (call Unit) (Last (Pattern env (CWB call base) i o)))
+indexPatterns pats = pats # Array.foldMap \pat -> case pat of
+  Pure _ -> mempty
+  Pattern (CWB base arity) _ -> do
+    SemigroupMap $ Map.singleton base $ SemigroupMap $ Map.singleton arity $ Last pat
 
 convert :: Converter -> (NeutralExpr -> ErlExpr) -> NeutralExpr -> Maybe ErlExpr
 convert pat codegenExpr expr = do
@@ -776,5 +877,4 @@ convert pat codegenExpr expr = do
 
 -- TODO: organize a map by identifier
 converts :: Array Converter -> (NeutralExpr -> ErlExpr) -> NeutralExpr -> Maybe ErlExpr
-converts pats codegenExpr expr = pats # Array.findMap \pat ->
-  match' codegenExpr expr pat
+converts = indexPatterns >>> matchBasePattern \conv o calls -> applyCallMaybe conv o (localConvention conv calls)
