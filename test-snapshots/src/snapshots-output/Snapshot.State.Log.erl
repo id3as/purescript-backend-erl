@@ -26,8 +26,8 @@ freshE(DictMonadState) ->
     fun
       () ->
         begin
-          ((effect_console@ps:log())((data_show@ps:showIntImpl())(S)))(),
-          ((effect_console@ps:log())((data_show@ps:showIntImpl())(V)))(),
+          (effect_console@foreign:log(data_show@foreign:showIntImpl(S)))(),
+          (effect_console@foreign:log(data_show@foreign:showIntImpl(V)))(),
           {tuple, #{ a => S, b => V }, V + 1}
         end
     end
@@ -45,8 +45,8 @@ exE(S) ->
     fun
       () ->
         begin
-          ((effect_console@ps:log())((data_show@ps:showIntImpl())(S)))(),
-          ((effect_console@ps:log())((data_show@ps:showIntImpl())(V)))(),
+          (effect_console@foreign:log(data_show@foreign:showIntImpl(S)))(),
+          (effect_console@foreign:log(data_show@foreign:showIntImpl(V)))(),
           {tuple, #{ a => S, b => V }, V + 1}
         end
     end

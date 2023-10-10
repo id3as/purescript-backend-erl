@@ -16,7 +16,7 @@ import Data.Newtype (over, unwrap)
 import Data.Set as Set
 import Data.Tuple (Tuple(..), fst, snd, uncurry)
 import Partial.Unsafe (unsafeCrashWith)
-import PureScript.Backend.Erl.Calling (CallPS(..), Conventions, GlobalErl(..), applyConventions, callAs, callErl, callPS)
+import PureScript.Backend.Erl.Calling (CallPS(..), CallingPS(..), Conventions, GlobalErl(..), applyConventions, callAs, callAs', callErl, callPS)
 import PureScript.Backend.Erl.Constants as C
 import PureScript.Backend.Erl.Convert.Before (renameRoot)
 import PureScript.Backend.Erl.Convert.Common (erlModuleNameForeign, erlModuleNamePs, tagAtom, toAtomName, toErlVar, toErlVarExpr, toErlVarName, toErlVarWith)
@@ -38,41 +38,50 @@ type CodegenEnv =
   }
 
 codegenModule :: BackendModule -> ForeignDecls -> Conventions -> Tuple ErlModule Conventions
-codegenModule { name, bindings, imports, foreign: foreign_, exports: moduleExports } foreigns initialConventions =
+codegenModule { name: currentModule, bindings, imports, foreign: foreign_, exports: moduleExports } foreigns initialConventions =
   let
-    Tuple thisModuleConventions thisModuleBindings = foldMap (codegenTopLevelBindingGroup name) bindings
-    callingConventions = initialConventions <> thisModuleConventions
+    Tuple thisModuleConventions thisModuleBindings = foldMap (codegenTopLevelBindingGroup currentModule) bindings
+    withForeignConventions = initialConventions <> foldMap fst reexportForeigns
+    callingConventions = withForeignConventions <> thisModuleConventions
     -- We do not qualify same-module bindings
     localConventions = thisModuleConventions <#> (map <<< map <<< lmap) (over GlobalErl _ { module = Nothing })
-    localCallingConventions = initialConventions <> localConventions
-    codegenEnv = { currentModule: name, substitutions: Map.empty, callingConventions: localCallingConventions }
+    localCallingConventions = withForeignConventions <> localConventions
+    codegenEnv = { currentModule, substitutions: Map.empty, callingConventions: localCallingConventions }
 
     definitions :: Array ErlDefinition
     definitions = Array.concat
       [ thisModuleBindings <@> codegenEnv
-      , reexports
+      , reexportForeigns <#> snd
       ]
 
-    reexports :: Array ErlDefinition
-    reexports = foreigns.exported >>= \(Tuple decl arity) -> do
+    reexportForeigns :: Array (Tuple Conventions ErlDefinition)
+    reexportForeigns = foreigns.exported >>= \(Tuple decl arity) -> do
       guard $ Ident decl `Set.member` foreign_
       let
         vars =
           Array.replicate arity unit
             # mapWithIndex \i _ ->
               toErlVarExpr (Tuple Nothing (Level i))
-      -- Uhh this is definitely wrong, at least in some cases
-      -- (EffectFn?)
-      pure $ FunctionDefinition decl [] $
+        calling =
+          case NEA.fromArray (void vars) of
+            Nothing ->
+              callAs' (Qualified (Just currentModule) (Ident decl)) BasePS
+                (GlobalErl { module: Just $ erlModuleNameForeign currentModule, name: decl })
+                (callErl []) Nothing
+            Just vars' ->
+              callAs' (Qualified (Just currentModule) (Ident decl)) (callPS (Curried vars'))
+                (GlobalErl { module: Just $ erlModuleNameForeign currentModule, name: decl })
+                (callErl (void vars)) Nothing
+      pure $ Tuple calling $ FunctionDefinition decl [] $
         S.curriedFun vars $
-          S.FunCall (Just (S.atomLiteral (erlModuleNameForeign name))) (S.atomLiteral decl) vars
+          S.FunCall (Just (S.atomLiteral (erlModuleNameForeign currentModule))) (S.atomLiteral decl) vars
 
     exports :: Array ErlExport
     exports = definitionExports <$> definitions
 
   in
     Tuple
-      { moduleName: erlModuleNamePs name
+      { moduleName: erlModuleNamePs currentModule
       , definitions
       , exports
       , comments: []
@@ -103,23 +112,21 @@ codegenTopLevelBinding currentModule (Tuple (Ident i) n) =
             S.Tupled $ [ tagAtom tag ] <> vars
       ]
     Abs vars e ->
-      callThisAs (callPS (Curried (void vars))) (callErl (void (NEA.toArray vars)))
+      callThisAs (callPS (Curried (void vars))) (callErl (void (NEA.toArray vars))) Nothing
       let evars = locals vars in
       [ const $ FunctionDefinition i [] $ S.curriedFun evars $
           S.FunCall Nothing (S.Literal (S.Atom i)) evars
       , \codegenEnv -> FunctionDefinition i (uncurry toErlVar <$> NEA.toArray vars) $ codegenExpr codegenEnv e
       ]
     UncurriedAbs vars e | Array.length vars > 0 ->
-      callThisAs (callPS (Uncurried (void vars))) (callErl (void vars))
+      callThisAs (callPS (Uncurried (void vars))) (callErl (void vars)) Nothing
       let evars = locals vars in
       [ const $ FunctionDefinition i [] $ S.simpleFun evars $
           S.FunCall Nothing (S.Literal (S.Atom i)) evars
       , \codegenEnv -> FunctionDefinition i (uncurry toErlVar <$> vars) $ codegenExpr codegenEnv e
       ]
     UncurriedEffectAbs vars e | Array.length vars > 0 ->
-      -- FIXME
-      -- callThisAs (callPS (UncurriedEffect (void vars))) (callErl (void vars))
-      pure
+      callThisAs (callPS (UncurriedEffect (void vars))) (callErl (void vars)) (Just (callErl []))
       let evars = locals vars in
       [ const $ FunctionDefinition i [] $ S.simpleFun evars $
           S.FunCall Nothing (S.Literal (S.Atom i)) evars
@@ -128,7 +135,7 @@ codegenTopLevelBinding currentModule (Tuple (Ident i) n) =
     _ -> pure
       [ \codegenEnv -> FunctionDefinition i [] $ codegenExpr codegenEnv n ]
   where
-  callThisAs x y = Tuple (callAs (Qualified (Just currentModule) (Ident i)) x y)
+  callThisAs x y z = Tuple (callAs (Qualified (Just currentModule) (Ident i)) x y z)
 
 -- When we recurse in the function side of applications, we don't need to
 -- consider calling conventions: they were already handled
@@ -288,7 +295,7 @@ codegenChain chainMode codegenEnv0 = collect [] codegenEnv0.substitutions
   finish shouldUnthunk bindings substitutions expression = do
     let
       maybeUnthunk :: ErlExpr -> ErlExpr
-      maybeUnthunk = if shouldUnthunk then S.unthunk else identity
+      maybeUnthunk = if shouldUnthunk then S.unthunk' else identity
     S.assignments bindings $ maybeUnthunk $ codegenExpr (codegenEnv substitutions) expression
 
   collect :: Array _ -> Map _ ErlExpr -> NeutralExpr -> ErlExpr

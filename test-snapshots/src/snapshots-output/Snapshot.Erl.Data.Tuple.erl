@@ -58,7 +58,7 @@ result() ->
   ({7, <<"hithere">>}).
 
 fsttf2() ->
-  ((erl_data_tuple@ps:fst())(tf2()))(12).
+  (erl_data_tuple@foreign:fst(tf2()))(12).
 
 fstt2() ->
   4.

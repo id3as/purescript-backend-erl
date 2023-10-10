@@ -2,7 +2,7 @@
 -export([positionZero/0, onLet/0, onLet/1, onLetTest/0, basicTest/0, main/0]).
 -compile(no_auto_import).
 positionZero() ->
-  (effect_ref@ps:new())(0).
+  effect_ref@foreign:new(0).
 
 onLet() ->
   fun
@@ -13,7 +13,7 @@ onLet() ->
 onLet(X) ->
   begin
     A = (X + X),
-    (effect_ref@ps:new())((A + A) + X)
+    effect_ref@foreign:new((A + A) + X)
   end.
 
 onLetTest() ->
@@ -23,7 +23,7 @@ onLetTest() ->
       () ->
         begin
           N = (V()),
-          V@1 = (((effect_ref@ps:read())(N))()),
+          V@1 = ((effect_ref@foreign:read(N))()),
           ((test_assert@ps:assert())(V@1 =:= 5))()
         end
     end
@@ -31,7 +31,7 @@ onLetTest() ->
 
 basicTest() ->
   begin
-    V = ((effect_ref@ps:new())(0)),
+    V = (effect_ref@foreign:new(0)),
     fun
       () ->
         begin
@@ -42,7 +42,7 @@ basicTest() ->
                                 end
                                 , N
                                 ))(),
-          V@1 = (((effect_ref@ps:read())(N))()),
+          V@1 = ((effect_ref@foreign:read(N))()),
           ((test_assert@ps:assert())(V@1 =:= 1))()
         end
     end

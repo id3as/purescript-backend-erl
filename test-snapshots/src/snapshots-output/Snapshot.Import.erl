@@ -2,7 +2,7 @@
 -export([fortyThree/0, result/0]).
 -compile(no_auto_import).
 fortyThree() ->
-  ((snapshot_import_impl@ps:addImpl())(21))(22).
+  snapshot_import_impl@foreign:addImpl(21, 22).
 
 result() ->
   fortyThree().

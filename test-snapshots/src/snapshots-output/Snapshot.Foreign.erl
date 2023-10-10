@@ -30,7 +30,7 @@ exceptions() ->
    , throwException =>
      fun
        () ->
-         erlang:error((effect_exception@ps:error())(<<"throwException">>))
+         erlang:error(effect_exception@foreign:error(<<"throwException">>))
      end
    }.
 

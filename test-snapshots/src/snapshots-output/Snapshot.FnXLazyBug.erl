@@ -57,7 +57,7 @@ zipWith4(F, As, Bs, Cs, Ds) ->
                   , erlang:map_get(tail, erlang:element(2, V))
                   );
                 _ ->
-                  (erl_data_list@ps:reverse())(Acc)
+                  erl_data_list@foreign:reverse(Acc)
               end
             end
         end

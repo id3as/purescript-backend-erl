@@ -176,7 +176,7 @@ inlineListCons(X, V) ->
   [ X | V ].
 
 inlineIntToNumber() ->
-  (data_int@ps:toNumber())(42).
+  data_int@foreign:toNumber(42).
 
 inlineCoerce() ->
   42.

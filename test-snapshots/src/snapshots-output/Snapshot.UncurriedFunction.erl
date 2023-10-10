@@ -21,7 +21,7 @@ test4a() ->
 
 test4a(A) ->
   begin
-    V = ((effect_console@ps:log())(A)),
+    V = (effect_console@foreign:log(A)),
     V(),
     A
   end.
@@ -29,7 +29,7 @@ test4a(A) ->
 test4b() ->
   fun
     () ->
-      (test4a())(<<"test4b">>)
+      test4a(<<"test4b">>)
   end.
 
 test3a() ->
@@ -57,14 +57,13 @@ test2b() ->
   test2a(1, 2).
 
 test1a() ->
-  (data_function_uncurried@ps:mkFn0())
-  (fun
+  data_function_uncurried@foreign:mkFn0(fun
     (_) ->
       1
   end).
 
 test1b() ->
-  (data_function_uncurried@ps:runFn0())(test1a()).
+  data_function_uncurried@foreign:runFn0(test1a()).
 
 main() ->
   begin

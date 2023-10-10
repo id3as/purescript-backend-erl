@@ -2,7 +2,7 @@
 -export([fortyTwo/0, result/0, addImpl/0]).
 -compile(no_auto_import).
 fortyTwo() ->
-  ((addImpl())(21))(21).
+  snapshot_import_impl@foreign:addImpl(21, 21).
 
 result() ->
   fortyTwo().

@@ -10,7 +10,8 @@ import Data.Bifoldable (bifoldMap)
 import Data.Bifunctor (lmap)
 import Data.Foldable (class Foldable, foldMap, foldl, foldr)
 import Data.Maybe (Maybe(..), maybe)
-import Data.Newtype (class Newtype)
+import Data.Monoid.Disj (Disj(..))
+import Data.Newtype (class Newtype, unwrap)
 import Data.Set as Set
 import Data.Tuple (Tuple(..), snd, uncurry)
 import PureScript.Backend.Erl.Constants as C
@@ -232,6 +233,14 @@ macros = visit case _ of
   Macro name _ -> Set.singleton name
   _ -> mempty
 
+-- A conservative check for free variables
+-- (since we kind of destroy the binding structure ...)
+noFreeVars :: ErlExpr -> Boolean
+noFreeVars = unwrap <<< visit case _ of
+  Match (Var "_") _ -> mempty
+  Match e1 _ -> Disj true
+  _ -> mempty
+
 curriedApp :: forall f. Foldable f => ErlExpr -> f ErlExpr -> ErlExpr
 curriedApp f es = foldl (\e e' -> FunCall Nothing e [ e' ]) f es
 
@@ -272,6 +281,10 @@ thunk = simpleFun []
 
 unthunk :: ErlExpr -> ErlExpr
 unthunk e = FunCall Nothing e []
+
+unthunk' :: ErlExpr -> ErlExpr
+unthunk' (Fun Nothing [ Tuple (FunHead [] Nothing) e ]) = e
+unthunk' e = FunCall Nothing e []
 
 binops :: ErlExpr -> BinaryOperator -> Array ErlExpr -> ErlExpr
 binops z op = NEA.fromArray >>> maybe z (binops' op)
