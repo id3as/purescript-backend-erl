@@ -154,16 +154,13 @@ useNormal(DictNormal) ->
   #{ normal =>
      fun
        (V) ->
-         case ?IS_TAG(f1, V) of
-           true ->
+         if
+           ?IS_TAG(f1, V) ->
              <<"F1">>;
-           _ ->
-             case ?IS_TAG(f2, V) of
-               true ->
-                 <<"F2">>;
-               _ ->
-                 erlang:throw({fail, <<"Failed pattern match">>})
-             end
+           ?IS_TAG(f2, V) ->
+             <<"F2">>;
+           true ->
+             erlang:throw({fail, <<"Failed pattern match">>})
          end
      end
    }.

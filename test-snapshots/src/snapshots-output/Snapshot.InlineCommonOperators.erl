@@ -44,21 +44,15 @@ min() ->
 min(X, Y) ->
   begin
     V = (((erlang:map_get(compare, data_ord@ps:ordInt()))(X))(Y)),
-    case ?IS_TAG(lT, V) of
-      true ->
+    if
+      ?IS_TAG(lT, V) ->
         X;
-      _ ->
-        case ?IS_TAG(eQ, V) of
-          true ->
-            X;
-          _ ->
-            case ?IS_TAG(gT, V) of
-              true ->
-                Y;
-              _ ->
-                erlang:throw({fail, <<"Failed pattern match">>})
-            end
-        end
+      ?IS_TAG(eQ, V) ->
+        X;
+      ?IS_TAG(gT, V) ->
+        Y;
+      true ->
+        erlang:throw({fail, <<"Failed pattern match">>})
     end
   end.
 
@@ -74,21 +68,15 @@ max() ->
 max(X, Y) ->
   begin
     V = (((erlang:map_get(compare, data_ord@ps:ordInt()))(X))(Y)),
-    case ?IS_TAG(lT, V) of
-      true ->
+    if
+      ?IS_TAG(lT, V) ->
         Y;
-      _ ->
-        case ?IS_TAG(eQ, V) of
-          true ->
-            X;
-          _ ->
-            case ?IS_TAG(gT, V) of
-              true ->
-                X;
-              _ ->
-                erlang:throw({fail, <<"Failed pattern match">>})
-            end
-        end
+      ?IS_TAG(eQ, V) ->
+        X;
+      ?IS_TAG(gT, V) ->
+        X;
+      true ->
+        erlang:throw({fail, <<"Failed pattern match">>})
     end
   end.
 

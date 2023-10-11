@@ -323,6 +323,7 @@ guardExpr = case _ of
   BinOp _ e1 e2 -> guardExpr e1 && guardExpr e2
   UnaryOp _ e -> guardExpr e
   BinaryAppend e1 e2 -> guardExpr e1 && guardExpr e2
+  Macro "IS_TAG" margs -> maybe false (all guardExpr <<< NEA.toArray) margs
   _ -> false
 
 guardFns :: Array (Tuple String String)

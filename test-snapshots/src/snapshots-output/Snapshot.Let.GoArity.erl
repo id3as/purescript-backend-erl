@@ -19,24 +19,21 @@ foldr(F, B) ->
   begin
     Go = (fun
       Go (B@1, V) ->
-        case ?IS_TAG(nil, V) of
-          true ->
+        if
+          ?IS_TAG(nil, V) ->
             B@1;
-          _ ->
-            case ?IS_TAG(cons, V) of
-              true ->
-                ((fun
-                   (B@Local) ->
-                     fun
-                       (V@Local@1) ->
-                         Go(B@Local, V@Local@1)
-                     end
-                 end)
-                 ((F(erlang:element(2, V)))(B@1)))
-                (erlang:element(3, V));
-              _ ->
-                erlang:throw({fail, <<"Failed pattern match">>})
-            end
+          ?IS_TAG(cons, V) ->
+            ((fun
+               (B@Local) ->
+                 fun
+                   (V@Local@1) ->
+                     Go(B@Local, V@Local@1)
+                 end
+             end)
+             ((F(erlang:element(2, V)))(B@1)))
+            (erlang:element(3, V));
+          true ->
+            erlang:throw({fail, <<"Failed pattern match">>})
         end
     end),
     V = ((fun
@@ -49,24 +46,21 @@ foldr(F, B) ->
          (B)),
     Go@1 = (fun
       Go@1 (V@1, V1) ->
-        case ?IS_TAG(nil, V1) of
-          true ->
+        if
+          ?IS_TAG(nil, V1) ->
             V@1;
-          _ ->
-            case ?IS_TAG(cons, V1) of
-              true ->
-                ((fun
-                   (V@Local) ->
-                     fun
-                       (V1@Local@1) ->
-                         Go@1(V@Local, V1@Local@1)
-                     end
-                 end)
-                 ({cons, erlang:element(2, V1), V@1}))
-                (erlang:element(3, V1));
-              _ ->
-                erlang:throw({fail, <<"Failed pattern match">>})
-            end
+          ?IS_TAG(cons, V1) ->
+            ((fun
+               (V@Local) ->
+                 fun
+                   (V1@Local@1) ->
+                     Go@1(V@Local, V1@Local@1)
+                 end
+             end)
+             ({cons, erlang:element(2, V1), V@1}))
+            (erlang:element(3, V1));
+          true ->
+            erlang:throw({fail, <<"Failed pattern match">>})
         end
     end),
     V@1 = ((fun

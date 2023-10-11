@@ -14,6 +14,7 @@ import Data.Compactable (class Compactable, compact, separateDefault)
 import Data.Either (Either(..), hush)
 import Data.Filterable (class Filterable, filterDefault, partitionDefault, partitionMapDefault)
 import Data.Foldable (class Foldable, foldl, sum)
+import Data.FunctorWithIndex (mapWithIndex)
 import Data.Lazy (defer, force)
 import Data.Lens (APrism', Prism', preview, prism', review, withPrism)
 import Data.List (List(..))
@@ -28,6 +29,7 @@ import Data.String as String
 import Data.Traversable (class Traversable, for, mapAccumR, sequence, traverse)
 import Data.Tuple (Tuple(..), fst, uncurry)
 import Data.Unfoldable (unfoldr)
+import Debug (spy)
 import Effect.Exception (catchException)
 import Effect.Unsafe (unsafePerformEffect)
 import Partial.Unsafe (unsafeCrashWith, unsafePartial)
@@ -889,39 +891,26 @@ abstractTrivial :: ErlExpr -> CallingPS Void -> ErlExpr
 abstractTrivial e BasePS = e
 abstractTrivial e (CallingPS more _) = S.thunk (abstractTrivial e more)
 
-callConverters :: Array { ps :: Qualified Ident, arity :: ArityPS, erl :: GlobalErl, call :: ArityErl } -> (NeutralExpr -> ErlExpr) -> NeutralExpr -> Maybe ErlExpr
-callConverters options codegenExpr focus = options # Array.findMap \option -> do
-  case arity option.arity == arity option.call of
-    true -> pure unit
-    false -> unsafeCrashWith $ "Arity of call did not match"
-  -- `option.arity` may come with some thunks, that we do not want to require
-  -- to complete a match. so we pop these off:
-  let Tuple required trivial = popTrivial option.arity
-  -- and match the actual required bits:
-  { matched: CWB base matched, unmatched: unmatched1 } <- matchCall unit focus required
-  guard $ base == option.ps
-  -- we know how to codegen the matched bits
-  calls <- customConvention (fst >>> codegenExpr >>> const) matched option.call
-  let converted = applyCall unit option.erl calls
-  -- then we check what was unmatched from the first step against what was trivial:
-  { matched: _handled :: _ (Tuple _ Void), unmatched: unmatchedEither } <- zipEither (fromMaybe BasePS unmatched1) trivial
-  -- then we might have unmatched bits left over, or trivial bits that did not match
-  case unmatchedEither of
-    Nothing -> pure converted
-    Just (Left unmatched) -> do
-      unmatched' <- localConvention codegenExpr unmatched
-      pure $ applyCall unit converted unmatched'
-    Just (Right trivial) -> do
-      pure $ abstractTrivial converted trivial
+callConverters :: Array { ps :: Qualified Ident, arity :: ArityPS, erl :: GlobalErl, call :: ArityErl } -> Conventions
+callConverters options = options # Array.foldMap \option ->
+  let Tuple arity triv = popTrivial option.arity in
+  callAs' option.ps option.arity option.erl option.call Nothing <> case localConvention identity triv of
+    Nothing -> mempty
+    Just r ->
+      callAs' option.ps arity option.erl option.call (Just r)
 
-applyConventions :: Conventions -> (NeutralExpr -> ErlExpr) -> NeutralExpr -> Maybe ErlExpr
-applyConventions conventions codegenExpr expr = matchBase conventions codegenExpr expr >>=
-  \(Tuple { matched: CWB _old matched, unmatched } (Last (CWB erlBase (CallUncall convention uncall)))) -> do
-    calls <- customConvention (fst >>> codegenExpr >>> const) matched convention
-    let converted = unCallMaybe (applyCall unit erlBase calls) uncall
-    pure $ applyCallMaybe unit converted $ localConvention codegenExpr =<< unmatched
+applyConventions :: Conventions -> Converters
+applyConventions = mapWithIndex \qi -> mapWithIndex \arity (Last (CWB erlBase (CallUncall convention uncall))) ->
+  Last $ Pattern (CWB qi arity) \codegenExpr (CWB _old matched) -> do
+    calls <- customConvention (codegenExpr >>> const) matched convention
+    pure $ unCallMaybe (applyCall unit erlBase calls) uncall
 
-
+type Converters =
+  SemigroupMap (Qualified Ident)
+  ( SemigroupMap ArityPS
+    ( Last Converter
+    )
+  )
 type Converter =
   Pattern (NeutralExpr -> ErlExpr) (CWB CallingPS (Qualified Ident)) NeutralExpr ErlExpr
 
@@ -936,9 +925,8 @@ indexPatterns pats = pats # Array.foldMap \pat -> case pat of
   Pattern (CWB base arity) _ -> do
     SemigroupMap $ Map.singleton base $ SemigroupMap $ Map.singleton arity $ Last pat
 
-convert :: Converter -> (NeutralExpr -> ErlExpr) -> NeutralExpr -> Maybe ErlExpr
-convert pat codegenExpr expr = do
-  match' codegenExpr expr pat
-
 converts :: Array Converter -> (NeutralExpr -> ErlExpr) -> NeutralExpr -> Maybe ErlExpr
-converts = indexPatterns >>> matchBasePattern \conv o calls -> applyCallMaybe conv o (localConvention conv calls)
+converts = indexPatterns >>> converts'
+
+converts' :: Converters -> (NeutralExpr -> ErlExpr) -> NeutralExpr -> Maybe ErlExpr
+converts' = matchBasePattern \conv o calls -> applyCallMaybe conv o (localConvention conv calls)

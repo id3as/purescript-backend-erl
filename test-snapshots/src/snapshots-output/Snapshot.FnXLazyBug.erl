@@ -40,10 +40,10 @@ zipWith4(F, As, Bs, Cs, Ds) ->
               V1 = ((erl_data_list_types@ps:uncons())(Cs1)),
               V2 = ((erl_data_list_types@ps:uncons())(Bs1)),
               V3 = ((erl_data_list_types@ps:uncons())(As1)),
-              case ?IS_TAG(just, V3)
+              if
+                ?IS_TAG(just, V3)
                   andalso (?IS_TAG(just, V2)
-                    andalso (?IS_TAG(just, V1) andalso ?IS_TAG(just, V))) of
-                true ->
+                    andalso (?IS_TAG(just, V1) andalso ?IS_TAG(just, V))) ->
                   (Go@Rec())
                   ( [ (((F(erlang:map_get(head, erlang:element(2, V3))))
                         (erlang:map_get(head, erlang:element(2, V2))))
@@ -56,7 +56,7 @@ zipWith4(F, As, Bs, Cs, Ds) ->
                   , erlang:map_get(tail, erlang:element(2, V1))
                   , erlang:map_get(tail, erlang:element(2, V))
                   );
-                _ ->
+                true ->
                   erl_data_list@foreign:reverse(Acc)
               end
             end

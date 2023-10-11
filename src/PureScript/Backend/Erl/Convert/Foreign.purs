@@ -2,6 +2,7 @@ module PureScript.Backend.Erl.Convert.Foreign ( codegenForeign ) where
 
 import Prelude
 
+import Control.Alt ((<|>))
 import Control.Apply (lift2)
 import Data.Array as Array
 import Data.Array.NonEmpty as NEA
@@ -9,9 +10,9 @@ import Data.Maybe (Maybe(..), fromMaybe', maybe)
 import Data.Newtype (unwrap)
 import Data.Traversable (sequence)
 import Data.Tuple (Tuple(..))
-import PureScript.Backend.Erl.Calling (ArityErl, ArityPS, CallErl(..), CallPS(..), CallingErl(..), CallingPS(..), Converter, GlobalErl, arg', callConverters, codegenArg, converts, func, noArgs, qualErl, qualPS, withEnv)
+import PureScript.Backend.Erl.Calling (ArityErl, ArityPS, CallErl(..), CallPS(..), CallingErl(..), CallingPS(..), Conventions, Converter, Converters, GlobalErl, applyConventions, arg', callConverters, callErl, callPS, codegenArg, converts, converts', func, indexPatterns, noArgs, qualErl, qualPS, thunkErl, withEnv)
 import PureScript.Backend.Erl.Convert.Common (toErlVarExpr)
-import PureScript.Backend.Erl.Syntax (ErlExpr, FunHead(..))
+import PureScript.Backend.Erl.Syntax (ErlExpr, FunHead(..), thunk)
 import PureScript.Backend.Erl.Syntax as S
 import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal(..), ModuleName(..), Qualified(..))
 import PureScript.Backend.Optimizer.Semantics (NeutralExpr(..))
@@ -25,16 +26,15 @@ codegenForeign codegenExpr s = case unwrap s of
 
 codegenForeign' :: (NeutralExpr -> ErlExpr) -> NeutralExpr -> Maybe ErlExpr
 codegenForeign' codegenExpr s
+  | Just result <- converts' converters codegenExpr s =
+    Just result
   | Just result <- codegenList codegenExpr s =
-    Just result
-  | Just result <- converts specificCalls codegenExpr s =
-    Just result
-  | Just result <- converts tupleCalls codegenExpr s =
-    Just result
-  | Just result <- callConverters ffiSpecs codegenExpr s =
     Just result
   | otherwise =
     Nothing
+
+converters :: Converters
+converters = applyConventions ffiSpecs <> indexPatterns (tupleCalls <> specificCalls)
 
 tupleCalls :: Array Converter
 tupleCalls = [1,2,3,4,5,6,7,8,9,10] >>= \arity ->
@@ -108,18 +108,18 @@ specificCalls =
   , func "Erl.Data.Binary.IOList.fromBinary" $ S.List <$> sequence [ codegenArg ]
   ]
 
-ffiSpecs :: Array { ps :: Qualified Ident, arity :: ArityPS, erl :: GlobalErl, call :: ArityErl }
-ffiSpecs =
+ffiSpecs :: Conventions
+ffiSpecs = callConverters
   let
     -- Note: this does not handle swapping orders of arguments ... yet
     calling arity call ps erl =
       { ps: qualPS ps, arity, erl: qualErl erl, call }
     pure1 = calling
-      (CallingPS BasePS (Curried (NEA.singleton unit)))
-      (CallingErl (NEA.singleton (Call [unit])))
+      (callPS (Curried (NEA.singleton unit)))
+      (callErl [unit])
     eff1 = calling
-      (CallingPS (CallingPS BasePS (Curried (NEA.singleton unit))) (UncurriedEffect []))
-      (CallingErl (NEA.singleton (Call [unit])))
+      (callPS (Curried (NEA.singleton unit)))
+      (callErl [unit] <|> thunkErl)
   in
     [ pure1 "Erl.Data.Bitstring.isBinary" "erlang:is_binary"
     , pure1 "Erl.Data.Bitstring.bitSize" "erlang:bit_size"

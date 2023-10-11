@@ -9,14 +9,14 @@ import Data.Array.NonEmpty as NEA
 import Data.Bifunctor (lmap)
 import Data.Foldable (class Foldable, foldMap, foldr)
 import Data.FunctorWithIndex (mapWithIndex)
-import Data.Map (Map)
+import Data.Map (Map, SemigroupMap(..))
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (over, unwrap)
 import Data.Set as Set
 import Data.Tuple (Tuple(..), fst, snd, uncurry)
 import Partial.Unsafe (unsafeCrashWith)
-import PureScript.Backend.Erl.Calling (CallPS(..), CallingPS(..), Conventions, GlobalErl(..), applyConventions, callAs, callAs', callErl, callPS)
+import PureScript.Backend.Erl.Calling (CallPS(..), CallingPS(..), Conventions, Converters, GlobalErl(..), applyConventions, callAs, callAs', callErl, callPS, converts')
 import PureScript.Backend.Erl.Constants as C
 import PureScript.Backend.Erl.Convert.Before (renameRoot)
 import PureScript.Backend.Erl.Convert.Common (erlModuleNameForeign, erlModuleNamePs, tagAtom, toAtomName, toErlVar, toErlVarExpr, toErlVarName, toErlVarWith)
@@ -34,7 +34,8 @@ type CodegenEnv =
   -- A local identifier can be replaced with an expression. This is used in
   -- the generation of LetRec, where recursive calls need to be modified
   , substitutions :: Map (Tuple (Maybe Ident) Level) ErlExpr
-  , callingConventions :: Conventions
+  , callingConventions :: Converters
+  , callsHandled :: Boolean
   }
 
 codegenModule :: BackendModule -> ForeignDecls -> Conventions -> Tuple ErlModule Conventions
@@ -46,7 +47,15 @@ codegenModule { name: currentModule, bindings, imports, foreign: foreign_, expor
     -- We do not qualify same-module bindings
     localConventions = thisModuleConventions <#> (map <<< map <<< lmap) (over GlobalErl _ { module = Nothing })
     localCallingConventions = withForeignConventions <> localConventions
-    codegenEnv = { currentModule, substitutions: Map.empty, callingConventions: localCallingConventions }
+    narrowToImports = over SemigroupMap $ Map.filterKeys case _ of
+      Qualified (Just mn) _ -> Set.member mn imports || mn == currentModule
+      _ -> true
+    codegenEnv =
+      { currentModule
+      , substitutions: Map.empty
+      , callingConventions: applyConventions $ narrowToImports localCallingConventions
+      , callsHandled: false
+      }
 
     definitions :: Array ErlDefinition
     definitions = Array.concat
@@ -140,15 +149,18 @@ codegenTopLevelBinding currentModule (Tuple (Ident i) n) =
 -- When we recurse in the function side of applications, we don't need to
 -- consider calling conventions: they were already handled
 codegenExpr0 :: CodegenEnv -> NeutralExpr -> ErlExpr
-codegenExpr0 codegenEnv | Map.isEmpty (unwrap codegenEnv.callingConventions) = codegenExpr codegenEnv
-codegenExpr0 codegenEnv = codegenExpr codegenEnv { callingConventions = mempty }
+codegenExpr0 codegenEnv = codegenExpr (setCallsHandled true codegenEnv)
+
+setCallsHandled :: Boolean -> CodegenEnv -> CodegenEnv
+setCallsHandled callsHandled codegenEnv | codegenEnv.callsHandled == callsHandled = codegenEnv
+setCallsHandled callsHandled codegenEnv = codegenEnv { callsHandled = callsHandled }
 
 codegenExpr :: CodegenEnv -> NeutralExpr -> ErlExpr
-codegenExpr codegenEnv@{ currentModule } s = case unwrap s of
-  _ | Just result <- codegenForeign (codegenExpr codegenEnv) s ->
+codegenExpr codegenEnv0@{ currentModule } s | codegenEnv <- setCallsHandled false codegenEnv0 = case unwrap s of
+  _ | not codegenEnv.callsHandled, Just result <- codegenForeign (codegenExpr codegenEnv) s ->
     result
 
-  _ | Just result <- applyConventions codegenEnv.callingConventions (codegenExpr codegenEnv) s ->
+  _ | not codegenEnv.callsHandled, Just result <- converts' codegenEnv.callingConventions (codegenExpr codegenEnv) s ->
     result
 
   -- Currently disabled due to this bug (OTP 26.1):

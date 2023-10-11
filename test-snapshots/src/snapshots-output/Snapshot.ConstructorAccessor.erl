@@ -87,10 +87,10 @@ test5() ->
   end.
 
 test5(_, V) ->
-  case ?IS_TAG(first, V) of
-    true ->
+  if
+    ?IS_TAG(first, V) ->
       erlang:element(2, V);
-    _ ->
+    true ->
       erlang:throw({fail, <<"Failed pattern match">>})
   end.
 
@@ -101,10 +101,10 @@ test51() ->
   end.
 
 test51(V) ->
-  case ?IS_TAG(first, V) of
-    true ->
+  if
+    ?IS_TAG(first, V) ->
       erlang:element(2, V);
-    _ ->
+    true ->
       erlang:throw({fail, <<"Failed pattern match">>})
   end.
 
@@ -115,16 +115,13 @@ test4() ->
   end.
 
 test4(V) ->
-  case ?IS_TAG(first, V) of
-    true ->
+  if
+    ?IS_TAG(first, V) ->
       erlang:element(2, V);
-    _ ->
-      case ?IS_TAG(last, V) of
-        true ->
-          erlang:element(2, V);
-        _ ->
-          erlang:throw({fail, <<"Failed pattern match">>})
-      end
+    ?IS_TAG(last, V) ->
+      erlang:element(2, V);
+    true ->
+      erlang:throw({fail, <<"Failed pattern match">>})
   end.
 
 test3() ->
