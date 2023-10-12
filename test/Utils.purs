@@ -33,16 +33,18 @@ import Effect.Class.Console as Console
 import Foreign.Object as FO
 import Node.Buffer (Buffer, freeze)
 import Node.Buffer.Immutable as ImmutableBuffer
-import Node.ChildProcess (ExecResult, Exit(..), defaultExecOptions, defaultSpawnOptions, inherit)
+import Node.ChildProcess (ExecResult)
 import Node.ChildProcess as ChildProcess
+import Node.ChildProcess.Types (Exit(..))
 import Node.Encoding (Encoding(..))
+import Node.EventEmitter as EE
 import Node.FS.Aff as FS
 import Node.FS.Perms (mkPerms)
 import Node.FS.Perms as Perms
 import Node.FS.Stats as Stats
 import Node.FS.Stream (createReadStream, createWriteStream)
 import Node.Glob.Basic (expandGlobs)
-import Node.Library.Execa (ExecaError, ExecaSuccess, execa)
+import Node.Library.Execa (ExecaResult, execa)
 import Node.Path (FilePath)
 import Node.Process as Process
 import Node.Stream as Stream
@@ -56,22 +58,22 @@ import PureScript.CST.Types as CSTT
 
 spawnFromParent :: String -> Array String -> Aff Unit
 spawnFromParent command args = makeAff \k -> do
-  childProc <- ChildProcess.spawn command args defaultSpawnOptions { stdio = inherit }
-  ChildProcess.onExit childProc case _ of
+  childProc <- ChildProcess.spawn command args
+  childProc # EE.on_ ChildProcess.exitH case _ of
     Normally code
-      | code > 0 -> Process.exit code
+      | code > 0 -> Process.exit' code
       | otherwise -> k (Right unit)
     BySignal _ ->
-      Process.exit 1
+      Process.exit' 1
   pure $ effectCanceler do
-    ChildProcess.kill SIGABRT childProc
+    void $ ChildProcess.kill childProc
 
 execWithStdin :: String -> String -> Aff ExecResult
 execWithStdin command input = makeAff \k -> do
-  childProc <- ChildProcess.exec command defaultExecOptions (k <<< pure)
-  _ <- Stream.writeString (ChildProcess.stdin childProc) UTF8 input mempty
-  Stream.end (ChildProcess.stdin childProc) mempty
-  pure $ effectCanceler $ ChildProcess.kill SIGABRT childProc
+  childProc <- ChildProcess.exec' command identity (k <<< pure)
+  _ <- Stream.writeString (ChildProcess.stdin childProc) UTF8 input
+  Stream.end (ChildProcess.stdin childProc)
+  pure $ effectCanceler $ void $ ChildProcess.kill childProc
 
 bufferToUTF8 :: Buffer -> Aff String
 bufferToUTF8 = liftEffect <<< map (ImmutableBuffer.toString UTF8) <<< freeze
@@ -85,11 +87,15 @@ rmrf path = FS.rm' path { recursive: true, force: true, maxRetries: 0, retryDela
 cpr :: FilePath -> FilePath -> Aff Unit
 cpr from to = do
   spawned <- execa "cp" [ "-r", from, to ] identity
-  spawned.result >>= case _ of
-    Left e ->
+  spawned.getResult >>= case _ of
+    e | errored e ->
       Console.error e.message
-    Right _ ->
+    _ ->
       pure unit
+
+errored :: forall r. { exit :: Exit | r } -> Boolean
+errored { exit: Normally 0 } = false
+errored _ = true
 
 loadModuleMain
   :: { runMain :: Maybe
@@ -100,14 +106,14 @@ loadModuleMain
      , modulePath :: String
      , ebin :: String
      }
-  -> Aff (Either ExecaError ExecaSuccess)
+  -> Aff (Either ExecaResult ExecaResult)
 loadModuleMain { modulePath, ebin, runMain } = do
   -- Console.log $ "compile " <> modulePath
   spawned1 <- execa "erlc" [ "+no_ssa_opt", "-o", ebin, "-W0", modulePath ] identity
-  spawned1.result >>= case _, runMain of
-    Left e, _ -> pure (Left e)
-    Right r, Nothing -> pure (Right r)
-    Right _, Just { scriptFile, moduleName, expected } -> do
+  spawned1.getResult >>= case _, runMain of
+    e, _ | errored e -> pure (Left e)
+    r, Nothing -> pure (Right r)
+    _, Just { scriptFile, moduleName, expected } -> do
       let mod = ModuleName moduleName
       let init x = "(" <> erlModuleNamePs mod <> ":" <> x <> "())"
       -- Console.log $ "run " <> modulePath
@@ -122,10 +128,10 @@ loadModuleMain { modulePath, ebin, runMain } = do
               assertEq(X, Y) -> erlang:error({{actual, X}, {expected, Y}}).
               """
         ]
-      -- Work around execa bug: https://github.com/JordanMartinez/purescript-node-execa/pull/16
-      e <- liftEffect Process.getEnv
-      spawned2 <- execa "escript" [ scriptFile ] _ { env = Just (FO.union (FO.singleton "ERL_FLAGS" $ "-pa " <> ebin) e), extendEnv = Just true }
-      spawned2.result
+      spawned2 <- execa "escript" [ scriptFile ] _ { env = Just ((FO.singleton "ERL_FLAGS" $ "-pa " <> ebin)), extendEnv = Just true }
+      spawned2.getResult >>= case _ of
+        e | errored e -> pure (Left e)
+        r -> pure (Right r)
 
 copyFile :: FilePath -> FilePath -> Aff Unit
 copyFile from to = do
@@ -135,13 +141,11 @@ copyFile from to = do
   makeAff \k -> do
     src <- createReadStream from
     dst <- createWriteStream to
-    res <- Stream.pipe src dst
-    Stream.onError src (k <<< Left)
-    Stream.onError dst (k <<< Left)
-    Stream.onError res (k <<< Left)
-    Stream.onFinish res (k (Right unit))
+    Stream.pipe src dst
+    EE.on_ Stream.errorH (k <<< Left) src
+    EE.on_ Stream.errorH (k <<< Left) dst
+    EE.on_ Stream.finishH (k (Right unit)) dst
     pure $ effectCanceler do
-      Stream.destroy res
       Stream.destroy dst
       Stream.destroy src
 

@@ -4,7 +4,7 @@ import Prelude
 
 import Data.Array as Array
 import Data.Array.NonEmpty as NonEmptyArray
-import Data.Filterable (filterMap)
+import Data.Filterable (compact, filterMap)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.Lazy (force)
 import Data.Lazy as Lazy
@@ -12,8 +12,8 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Tuple (Tuple(..))
-import PureScript.Backend.Erl.Calling (arg, arg', argMatch, curried, evaluator, evaluators, func, getEnv, many, uncurried)
-import PureScript.Backend.Optimizer.CoreFn (ConstructorType(..), Ident(..), Literal(..), ModuleName(..), Prop(..), ProperName(..), Qualified(..))
+import PureScript.Backend.Erl.Calling (arg, arg', arg'', argMatch, curried, evaluator, evaluators, func, getEnv, many, partial, uncurried)
+import PureScript.Backend.Optimizer.CoreFn (ConstructorType(..), Ident(..), Literal(..), ModuleName(..), Prop(..), ProperName(..), Qualified(..), findProp)
 import PureScript.Backend.Optimizer.Semantics (BackendSemantics(..), EvalRef(..), ExternSpine(..), SemConditional(..), evalApp, evalPrimOp, liftInt, makeLet)
 import PureScript.Backend.Optimizer.Semantics.Foreign (ForeignEval, ForeignSemantics, qualified)
 import PureScript.Backend.Optimizer.Syntax (BackendOperator(..), BackendOperator1(..), BackendOperator2(..), BackendOperatorOrd(..))
@@ -25,6 +25,7 @@ erlForeignSemantics = Map.fromFoldable $
   , erl_data_list_types_uncons
   , erl_data_tuple_fst
   , erl_data_tuple_snd
+  , erl_data_variant_matchImpl
   ] <> join
   [ erl_data_tuple_uncurryN
   , erl_atom
@@ -210,6 +211,14 @@ erl_atom =
     s1 <- literal
     s2 <- literal
     in NeutLit (LitBoolean (s1 == s2))
+
+erl_data_variant_matchImpl :: ForeignSemantics
+erl_data_variant_matchImpl = evaluator $ func "Erl.Data.Variant.matchImpl" $ compact $ partial ado
+  NeutLit (LitRecord fns) <- arg
+  Tuple (NeutLit (LitString variantType)) variantValue <- arg'' \(NeutLit (LitRecord props)) ->
+    Tuple <$> findProp "type" props <*> findProp "value" props
+  env <- getEnv
+  in evalApp env <$> findProp variantType fns <@> [variantValue]
 
 recognizeCoercions :: Array ForeignSemantics
 recognizeCoercions = evaluator <$>

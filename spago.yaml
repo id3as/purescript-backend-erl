@@ -33,7 +33,6 @@ package:
       - node-child-process
       - node-execa
       - node-fs
-      - node-fs-aff
       - node-glob-basic
       - node-path
       - node-process
@@ -44,8 +43,73 @@ package:
       - refs
 workspace:
   package_set:
-    registry: 20.0.1
+    registry: 43.0.0
   extra_packages:
+    dodo-printer:
+      git: https://github.com/natefaubion/purescript-dodo-printer
+      ref: v2.2.1
+      dependencies:
+        - "aff"
+        - "ansi"
+        - "arrays"
+        - "avar"
+        - "console"
+        - "control"
+        - "effect"
+        - "either"
+        - "exceptions"
+        - "foldable-traversable"
+        - "integers"
+        - "lists"
+        - "maybe"
+        - "minibench"
+        - "newtype"
+        - "node-buffer"
+        - "node-child-process"
+        - "node-fs"
+        - "node-os"
+        - "node-path"
+        - "node-process"
+        - "node-streams"
+        - "parallel"
+        - "partial"
+        - "prelude"
+        - "safe-coerce"
+        - "strings"
+        - "tuples"
+    language-cst-parser:
+      git: https://github.com/natefaubion/purescript-language-cst-parser
+      ref: v0.13.0
+      dependencies:
+        - "arrays"
+        - "console"
+        - "const"
+        - "control"
+        - "effect"
+        - "either"
+        - "enums"
+        - "foldable-traversable"
+        - "free"
+        - "functions"
+        - "functors"
+        - "identity"
+        - "integers"
+        - "lazy"
+        - "lists"
+        - "maybe"
+        - "newtype"
+        - "node-process"
+        - "numbers"
+        - "ordered-collections"
+        - "partial"
+        - "prelude"
+        - "st"
+        - "strings"
+        - "transformers"
+        - "tuples"
+        - "typelevel-prelude"
+        - "unfoldable"
+        - "unsafe-coerce"
     backend-optimizer:
       git: https://github.com/aristanetworks/purescript-backend-optimizer
       ref: 798396a76006243c4ccc29ab02798c33e7c2215f
@@ -94,7 +158,6 @@ workspace:
         - effect
         - lists
         - maybe
-        - node-fs-aff
         - node-path
         - node-process
         - ordered-collections

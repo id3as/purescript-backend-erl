@@ -43,6 +43,8 @@ data ErlExpr
   | Map (Array (Tuple String ErlExpr))
   -- | A map update expression M#{ X => E }
   | MapUpdate ErlExpr (Array (Tuple String ErlExpr))
+  -- | A map pattern #{ X := E }
+  | MapPattern (Array (Tuple String ErlExpr))
 
   -- | E1 = E2
   | Match ErlExpr ErlExpr
@@ -216,6 +218,7 @@ visit f = go
     ListCons es e -> goes es <> go e
     Tupled es -> goes es
     Map kvs -> foldMap (go <<< snd) kvs
+    MapPattern kvs -> foldMap (go <<< snd) kvs
     MapUpdate e kvs -> go e <> foldMap (go <<< snd) kvs
     Match e1 e2 -> go e1 <> go e2
     Block es -> goes es
@@ -233,14 +236,6 @@ macros = visit case _ of
   Macro name _ -> Set.singleton name
   _ -> mempty
 
--- A conservative check for free variables
--- (since we kind of destroy the binding structure ...)
-noFreeVars :: ErlExpr -> Boolean
-noFreeVars = unwrap <<< visit case _ of
-  Match (Var "_") _ -> mempty
-  Match e1 _ -> Disj true
-  _ -> mempty
-
 curriedApp :: forall f. Foldable f => ErlExpr -> f ErlExpr -> ErlExpr
 curriedApp f es = foldl (\e e' -> FunCall Nothing e [ e' ]) f es
 
@@ -254,6 +249,9 @@ curriedFun args e =
         (FunHead [ a ] Nothing)
         eAcc
     ]
+
+qualified :: String -> String -> Array ErlExpr -> ErlExpr
+qualified mod fn = FunCall (Just (atomLiteral mod)) (atomLiteral fn)
 
 simpleFun :: Array ErlExpr -> ErlExpr -> ErlExpr
 simpleFun args e =

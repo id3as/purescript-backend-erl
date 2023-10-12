@@ -2,7 +2,7 @@ module PureScript.Backend.Erl.Convert where
 
 import Prelude
 
-import Control.Alternative (guard)
+import Control.Alternative (guard, (<|>))
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NEA
@@ -16,7 +16,7 @@ import Data.Newtype (over, unwrap)
 import Data.Set as Set
 import Data.Tuple (Tuple(..), fst, snd, uncurry)
 import Partial.Unsafe (unsafeCrashWith)
-import PureScript.Backend.Erl.Calling (CallPS(..), CallingPS(..), Conventions, Converters, GlobalErl(..), applyConventions, callAs, callAs', callErl, callPS, converts')
+import PureScript.Backend.Erl.Calling (CallPS(..), CallingPS(..), Conventions, Converters, GlobalErl(..), applyConventions, callAs, callAs', callErl, callPS, converts', thunkErl)
 import PureScript.Backend.Erl.Constants as C
 import PureScript.Backend.Erl.Convert.Before (renameRoot)
 import PureScript.Backend.Erl.Convert.Common (erlModuleNameForeign, erlModuleNamePs, tagAtom, toAtomName, toErlVar, toErlVarExpr, toErlVarName, toErlVarWith)
@@ -76,11 +76,11 @@ codegenModule { name: currentModule, bindings, imports, foreign: foreign_, expor
             Nothing ->
               callAs' (Qualified (Just currentModule) (Ident decl)) BasePS
                 (GlobalErl { module: Just $ erlModuleNameForeign currentModule, name: decl })
-                (callErl []) Nothing
+                (callErl [])
             Just vars' ->
               callAs' (Qualified (Just currentModule) (Ident decl)) (callPS (Curried vars'))
                 (GlobalErl { module: Just $ erlModuleNameForeign currentModule, name: decl })
-                (callErl (void vars)) Nothing
+                (callErl (void vars))
       pure $ Tuple calling $ FunctionDefinition decl [] $
         S.curriedFun vars $
           S.FunCall (Just (S.atomLiteral (erlModuleNameForeign currentModule))) (S.atomLiteral decl) vars
@@ -121,21 +121,21 @@ codegenTopLevelBinding currentModule (Tuple (Ident i) n) =
             S.Tupled $ [ tagAtom tag ] <> vars
       ]
     Abs vars e ->
-      callThisAs (callPS (Curried (void vars))) (callErl (void (NEA.toArray vars))) Nothing
+      callThisAs (callPS (Curried (void vars))) (callErl (void (NEA.toArray vars)))
       let evars = locals vars in
       [ const $ FunctionDefinition i [] $ S.curriedFun evars $
           S.FunCall Nothing (S.Literal (S.Atom i)) evars
       , \codegenEnv -> FunctionDefinition i (uncurry toErlVar <$> NEA.toArray vars) $ codegenExpr codegenEnv e
       ]
     UncurriedAbs vars e | Array.length vars > 0 ->
-      callThisAs (callPS (Uncurried (void vars))) (callErl (void vars)) Nothing
+      callThisAs (callPS (Uncurried (void vars))) (callErl (void vars))
       let evars = locals vars in
       [ const $ FunctionDefinition i [] $ S.simpleFun evars $
           S.FunCall Nothing (S.Literal (S.Atom i)) evars
       , \codegenEnv -> FunctionDefinition i (uncurry toErlVar <$> vars) $ codegenExpr codegenEnv e
       ]
     UncurriedEffectAbs vars e | Array.length vars > 0 ->
-      callThisAs (callPS (UncurriedEffect (void vars))) (callErl (void vars)) (Just (callErl []))
+      callThisAs (callPS (UncurriedEffect (void vars))) (callErl (void vars) <|> thunkErl)
       let evars = locals vars in
       [ const $ FunctionDefinition i [] $ S.simpleFun evars $
           S.FunCall Nothing (S.Literal (S.Atom i)) evars
@@ -144,7 +144,7 @@ codegenTopLevelBinding currentModule (Tuple (Ident i) n) =
     _ -> pure
       [ \codegenEnv -> FunctionDefinition i [] $ codegenExpr codegenEnv n ]
   where
-  callThisAs x y z = Tuple (callAs (Qualified (Just currentModule) (Ident i)) x y z)
+  callThisAs x y = Tuple (callAs (Qualified (Just currentModule) (Ident i)) x y)
 
 -- When we recurse in the function side of applications, we don't need to
 -- consider calling conventions: they were already handled
@@ -163,17 +163,6 @@ codegenExpr codegenEnv0@{ currentModule } s | codegenEnv <- setCallsHandled fals
   _ | not codegenEnv.callsHandled, Just result <- converts' codegenEnv.callingConventions (codegenExpr codegenEnv) s ->
     result
 
-  -- Currently disabled due to this bug (OTP 26.1):
-  --   Sub pass ssa_opt_type_start
-  --   internal error in pass beam_ssa_opt:
-  --   exception error: bad key
-  --     in call from beam_ssa_type:opt_local_return/4 (beam_ssa_type.erl, line 733)
-  --     in call from beam_ssa_type:opt_make_fun/4 (beam_ssa_type.erl, line 716)
-  --     in call from beam_ssa_type:opt_is/8 (beam_ssa_type.erl, line 580)
-  --     in call from beam_ssa_type:opt_bs/8 (beam_ssa_type.erl, line 527)
-  --     in call from beam_ssa_type:do_opt_function/6 (beam_ssa_type.erl, line 505)
-  --     in call from beam_ssa_type:opt_function/6 (beam_ssa_type.erl, line 478)
-  --     in call from beam_ssa_type:opt_start_1/5 (beam_ssa_type.erl, line 96)
   Var (Qualified (Just mn) (Ident i)) | mn /= currentModule ->
     S.FunCall (Just (S.atomLiteral $ erlModuleNamePs mn)) (S.atomLiteral i) []
 

@@ -47,7 +47,7 @@ import PureScript.Backend.Optimizer.CoreFn (Ident, Module(..), ModuleName(..), Q
 import PureScript.Backend.Optimizer.Directives (parseDirectiveFile)
 import PureScript.Backend.Optimizer.Directives.Defaults (defaultDirectives)
 import PureScript.Backend.Optimizer.Semantics.Foreign (ForeignEval, coreForeignSemantics)
-import Test.Utils (coreFnModulesFromOutput, mkdirp)
+import Test.Utils (coreFnModulesFromOutput, errored, mkdirp)
 
 type MainArgs =
   { compile :: Boolean
@@ -111,7 +111,7 @@ runCompile { compile, filter, cwd } = do
     Left errors -> do
       for_ errors \(Tuple filePath err) -> do
         Console.error $ filePath <> " " <> err
-      liftEffect $ Process.exit 1
+      liftEffect $ Process.exit' 1
     Right coreFnModules -> do
       when (List.null coreFnModules) do
         Console.log "No modules; try building"
@@ -163,9 +163,9 @@ runCompile { compile, filter, cwd } = do
       when compile do
         filesToCompile <- liftEffect $ Ref.read erls
         spawned <- execa "erlc" ([ "+no_ssa_opt", "-o", ebin, "-W0" ] <> filesToCompile) identity
-        spawned.result >>= case _ of
-          Left { message } -> do
+        spawned.getResult >>= case _ of
+          e@{ message } | errored e -> do
             Console.log $ withGraphics (foreground Red) "✗ failed to compile."
             Console.log message
-          Right _ -> pure unit
+          _ -> pure unit
       pure unit

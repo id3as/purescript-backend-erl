@@ -2,7 +2,7 @@ module PureScript.Backend.Erl.Printer where
 
 import Prelude
 
-import Data.Array (all, foldr)
+import Data.Array (all, foldr, intercalate)
 import Data.Array as Array
 import Data.Array.NonEmpty as NEA
 import Data.CodePoint.Unicode as CodePointU
@@ -171,6 +171,7 @@ printExpr' prec = case _ of
         D.flexAlt (D.space <> D.text "|") (D.break <> D.text "|") <> D.space <> D.indent (printAtomic rest)
   S.Tupled a -> printBraces' $ D.indent <<< printAtomic <$> a
   S.Map fields -> D.text "#" <> printBraces_ (D.indent <<< printField <$> fields)
+  S.MapPattern fields -> D.text "#" <> printBraces_ (D.indent <<< printFieldPattern <$> fields)
   S.MapUpdate e fields | tiny e -> printAtomic e <> D.text "#" <> printBraces_ (printField <$> fields)
   S.MapUpdate e fields -> D.text "(" <> printAtomic e <> D.text ")#" <> printBraces_ (printField <$> fields)
 
@@ -202,12 +203,18 @@ printExpr' prec = case _ of
       maybeSep printExpr qualifier (D.text ":")
       <> printExpr function
       <> D.text "()"
+  S.FunCall qualifier function [arg] ->
+    parenPrec prec $ D.alignCurrentColumn $
+      maybeSep printExpr qualifier (D.text ":")
+      <> printExpr function
+      <> M.guard (not tiny function) D.softBreak
+      <> printParens (printAtomic arg)
   S.FunCall qualifier function args ->
     parenPrec prec $ D.alignCurrentColumn $
       maybeSep printExpr qualifier (D.text ":")
       <> printExpr function
       <> M.guard (not tiny function) D.softBreak
-      <> printParens' (printAtomic <$> args)
+      <> printParens (D.softBreak <> intercalate trailingComma (D.indent <<< printAtomic <$> args) <> D.softBreak)
 
   S.If clauses ->
     D.text "if" <> D.break <>
@@ -366,6 +373,10 @@ printBinaryLiteral = finish <<< go
 printField :: Tuple String ErlExpr -> Doc Void
 printField (Tuple f e) =
   D.text (escapeAtom f) <> D.text " =>" <> D.flexGroup (D.spaceBreak <> printAtomic e)
+
+printFieldPattern :: Tuple String ErlExpr -> Doc Void
+printFieldPattern (Tuple f e) =
+  D.text (escapeAtom f) <> D.text " :=" <> D.flexGroup (D.spaceBreak <> printAtomic e)
 
 isAscii :: String -> Boolean
 isAscii = toCodePointArray >>> all U.isAscii

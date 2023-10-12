@@ -10,9 +10,9 @@ import Data.Maybe (Maybe(..), fromMaybe', maybe)
 import Data.Newtype (unwrap)
 import Data.Traversable (sequence)
 import Data.Tuple (Tuple(..))
-import PureScript.Backend.Erl.Calling (ArityErl, ArityPS, CallErl(..), CallPS(..), CallingErl(..), CallingPS(..), Conventions, Converter, Converters, GlobalErl, applyConventions, arg', callConverters, callErl, callPS, codegenArg, converts, converts', func, indexPatterns, noArgs, qualErl, qualPS, thunkErl, withEnv)
+import PureScript.Backend.Erl.Calling (CallPS(..), Conventions, Converter, Converters, applyConventions, arg', callConverters, callErl, callPS, codegenArg, converts', func, indexPatterns, noArgs, qualErl, qualPS, thunkErl, withEnv)
 import PureScript.Backend.Erl.Convert.Common (toErlVarExpr)
-import PureScript.Backend.Erl.Syntax (ErlExpr, FunHead(..), thunk)
+import PureScript.Backend.Erl.Syntax (ErlExpr, FunHead(..))
 import PureScript.Backend.Erl.Syntax as S
 import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal(..), ModuleName(..), Qualified(..))
 import PureScript.Backend.Optimizer.Semantics (NeutralExpr(..))
@@ -106,6 +106,29 @@ specificCalls =
   , func "Erl.Data.Binary.IOData.append_" $ S.List <$> sequence [ codegenArg, codegenArg ]
   , func "Erl.Data.Binary.IOList.append_" $ S.List <$> sequence [ codegenArg, codegenArg ]
   , func "Erl.Data.Binary.IOList.fromBinary" $ S.List <$> sequence [ codegenArg ]
+  , func "Erl.Data.List.Types.null" $ S.BinOp S.IdenticalTo (S.List []) <$> codegenArg
+  , func "Erl.Data.Map.empty" $ noArgs $> S.Map []
+  , func "Erl.Data.Map.isEmpty" $ S.BinOp S.IdenticalTo (S.Map []) <$> codegenArg
+
+  -- Needs some mechanism for fresh names :(
+  -- , func "Erl.Data.Variant.matchImpl" $ partial ado
+  --     fns <- arg'' \(NeutralExpr (Lit (LitRecord fns))) -> NEA.fromArray fns
+  --     variant <- codegenArg
+  --     codegenExpr <- getEnv
+  --     in S.Case variant $ fns <#> \(Prop variantType fn) ->
+  --       S.CaseClause (S.MapPattern [Tuple "type" (S.atomLiteral variantType), Tuple "value" (S.Var "Value")]) Nothing
+  --       do S.curriedApp (codegenExpr fn) [S.Var "Value"]
+  -- , func "Erl.Data.Variant.matchImpl" $ partial ado
+  --     NeutralExpr (Lit (LitRecord fns)) <- arg
+  --     codegenExpr <- getEnv
+  --     in S.Fun Nothing $ fns <#> \(Prop variantType fn) -> Tuple
+  --       do S.FunHead [S.MapPattern [Tuple "type" (S.atomLiteral variantType), Tuple "value" (S.Var "Value")]] Nothing
+  --       do S.curriedApp (codegenExpr fn) [S.Var "Value"]
+  -- , func "Erl.Data.Variant.matchImpl" ado
+  --     fns <- codegenArg
+  --     in S.Fun Nothing $ pure $ Tuple
+  --       do S.FunHead [S.MapPattern [Tuple "type" (S.Var "Type"), Tuple "value" (S.Var "Value")]] Nothing
+  --       do S.curriedApp (S.qualified "erlang" "map_get" [S.Var "Type", fns]) [S.Var "Value"]
   ]
 
 ffiSpecs :: Conventions
@@ -117,6 +140,9 @@ ffiSpecs = callConverters
     pure1 = calling
       (callPS (Curried (NEA.singleton unit)))
       (callErl [unit])
+    pure2 = calling
+      (callPS (Curried (NEA.singleton unit <> NEA.singleton unit)))
+      (callErl [unit, unit])
     eff1 = calling
       (callPS (Curried (NEA.singleton unit)))
       (callErl [unit] <|> thunkErl)
@@ -130,9 +156,22 @@ ffiSpecs = callConverters
     , pure1 "Erl.Data.Binary.IOList.toBinary" "erlang:iolist_to_binary"
     , pure1 "Erl.Data.Binary.IOData.toBinary" "erlang:iolist_to_binary"
     , pure1 "Erl.Kernel.Erlang.listToBinary" "erlang:list_to_binary"
+    , pure1 "Erl.Atom.atom" "erlang:binary_to_atom"
+    , pure1 "Erl.Atom.toString" "erlang:atom_to_binary"
     -- Effectful, thus wrapped in a thunk
     , eff1 "Erl.Kernel.Exceptions.throw" "erlang:throw"
     , eff1 "Erl.Kernel.Exceptions.error" "erlang:error"
     , eff1 "Erl.Kernel.Exceptions.exit" "erlang:exit"
     , eff1 "Effect.Exception.throwException" "erlang:error"
+
+    , pure2 "Erl.Data.List.Types.mapImpl" "lists:map"
+    , pure2 "Erl.Data.List.Types.filter" "lists:filter"
+
+    , pure1 "Erl.Data.Map.values" "maps:values"
+    , pure1 "Erl.Data.Map.keys" "maps:keys"
+    , pure1 "Erl.Data.Map.size" "maps:size"
+    , pure2 "Erl.Data.Map.union" "maps:merge"
+    , pure2 "Erl.Data.Map.mapWithKeyImpl" "maps:map"
+    , pure2 "Erl.Data.Map.member" "maps:is_key"
+    , pure2 "Erl.Data.Map.delete" "maps:remove"
     ]

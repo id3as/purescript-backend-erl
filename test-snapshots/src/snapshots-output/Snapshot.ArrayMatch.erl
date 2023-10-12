@@ -52,31 +52,31 @@ nestedArrayViaRecord(V) ->
           =:= 2 of
         true ->
           (array:get(0, erlang:map_get(r, array:get(0, erlang:map_get(q, V)))))
-            + (array:get( 1
-                        , erlang:map_get(r, array:get(0, erlang:map_get(q, V)))
-                        ));
+            + (array:get(
+                 1,
+                 erlang:map_get(r, array:get(0, erlang:map_get(q, V)))
+               ));
         _ ->
           0
       end;
     _ ->
       case ((array:size(erlang:map_get(q, V))) =:= 2)
-          andalso (((array:size(erlang:map_get( r
-                                              , array:get( 0
-                                                         , erlang:map_get(q, V)
-                                                         )
-                                              )))
+          andalso (((array:size(erlang:map_get(
+                                  r,
+                                  array:get(0, erlang:map_get(q, V))
+                                )))
             =:= 1)
-            andalso ((array:size(erlang:map_get( r
-                                               , array:get( 1
-                                                          , erlang:map_get(q, V)
-                                                          )
-                                               )))
+            andalso ((array:size(erlang:map_get(
+                                   r,
+                                   array:get(1, erlang:map_get(q, V))
+                                 )))
               =:= 1)) of
         true ->
           (array:get(0, erlang:map_get(r, array:get(0, erlang:map_get(q, V)))))
-            + (array:get( 0
-                        , erlang:map_get(r, array:get(1, erlang:map_get(q, V)))
-                        ));
+            + (array:get(
+                 0,
+                 erlang:map_get(r, array:get(1, erlang:map_get(q, V)))
+               ));
         _ ->
           0
       end

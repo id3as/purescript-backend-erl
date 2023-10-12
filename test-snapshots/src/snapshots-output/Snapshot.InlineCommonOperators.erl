@@ -180,12 +180,13 @@ inlineBinary() ->
                 (S@Local@3) ->
                   fun
                     (C@Local@4) ->
-                      inlineBinary( I@Local
-                                  , N@Local@1
-                                  , B@Local@2
-                                  , S@Local@3
-                                  , C@Local@4
-                                  )
+                      inlineBinary(
+                        I@Local,
+                        N@Local@1,
+                        B@Local@2,
+                        S@Local@3,
+                        C@Local@4
+                      )
                   end
               end
           end

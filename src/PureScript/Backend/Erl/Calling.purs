@@ -21,7 +21,7 @@ import Data.List (List(..))
 import Data.List as List
 import Data.Map (SemigroupMap(..))
 import Data.Map as Map
-import Data.Maybe (Maybe(..), fromMaybe, isNothing, maybe)
+import Data.Maybe (Maybe(..), isNothing)
 import Data.Newtype (class Newtype, un, unwrap, wrap)
 import Data.Profunctor (class Profunctor, dimap)
 import Data.Semigroup.Last (Last(..))
@@ -29,7 +29,6 @@ import Data.String as String
 import Data.Traversable (class Traversable, for, mapAccumR, sequence, traverse)
 import Data.Tuple (Tuple(..), fst, uncurry)
 import Data.Unfoldable (unfoldr)
-import Debug (spy)
 import Effect.Exception (catchException)
 import Effect.Unsafe (unsafePerformEffect)
 import Partial.Unsafe (unsafeCrashWith, unsafePartial)
@@ -53,15 +52,14 @@ data CWB call b a =
   CWB b (call a)
 derive instance functorCallWithBase :: Functor call => Functor (CWB call b)
 derive instance bifunctorCallWithBase :: Functor call => Bifunctor (CWB call)
+instance eqCWB :: (Eq (call a), Eq b) => Eq (CWB call b a) where
+  eq (CWB b call) (CWB b' call') = b == b' && call == call'
 
 baseOf :: forall call b a. CWB call b a -> b
 baseOf (CWB base _) = base
 
 noBase :: forall call b a. CWB call b a -> call a
 noBase (CWB _ call) = call
-
-data CallUncall call a = CallUncall (call a) (Maybe (call Void))
-derive instance functorCallUncall :: Functor call => Functor (CallUncall call)
 
 -- Different ways a function can be called in PureScript
 data CallPS a
@@ -137,6 +135,7 @@ data CallErl a
 derive instance functorCallErl :: Functor CallErl
 derive instance foldableCallErl :: Foldable CallErl
 derive instance traversableCallErl :: Traversable CallErl
+derive instance eqCallErl :: Eq a => Eq (CallErl a)
 -- But a global definition cannot be called zero times
 newtype CallingErl a = CallingErl (NonEmptyArray (CallErl a))
 derive instance newtypeCallingErl :: Newtype (CallingErl a) _
@@ -145,9 +144,11 @@ instance altCallingErl :: Alt CallingErl where
 derive instance functorCallingErl :: Functor CallingErl
 derive instance foldableCallingErl :: Foldable CallingErl
 derive instance traversableCallingErl :: Traversable CallingErl
+derive newtype instance eqCallingErl :: Eq a => Eq (CallingErl a)
 type ArityErl = CallingErl Unit
 newtype GlobalErl = GlobalErl { module :: Maybe String, name :: String }
 derive instance newtypeGlobalErl :: Newtype GlobalErl _
+derive instance eqGlobalErl :: Eq GlobalErl
 
 callErl :: forall a. Array a -> CallingErl a
 callErl = CallingErl <<< pure <<< Call
@@ -160,16 +161,19 @@ thunkErl = CallingErl $ pure $ Thunk
 type Conventions =
   SemigroupMap (Qualified Ident)
   ( SemigroupMap ArityPS
-    (Last (CWB (CallUncall CallingErl) GlobalErl Unit))
+    (Last (CWB CallingErl GlobalErl Unit))
   )
 
-callAs :: Qualified Ident -> ArityPS -> ArityErl -> Maybe (CallingErl Void) -> Conventions
+callAs :: Qualified Ident -> ArityPS -> ArityErl -> Conventions
 callAs qi arity = callAs' qi arity (toGlobalErl qi)
 
-callAs' :: Qualified Ident -> ArityPS -> GlobalErl -> ArityErl -> Maybe (CallingErl Void) -> Conventions
-callAs' qi arity erl call uncall =
+callAs' :: Qualified Ident -> ArityPS -> GlobalErl -> ArityErl -> Conventions
+callAs' qi arity erl call
+  | CWB erl call == conventionWithBase identity (CWB qi arity)
+  = mempty
+callAs' qi arity erl call =
   SemigroupMap $ Map.singleton qi $ SemigroupMap $ Map.singleton arity $ Last $
-    CWB erl (CallUncall call uncall)
+    CWB erl call
 
 toGlobalErl :: Qualified Ident -> GlobalErl
 toGlobalErl (Qualified mmn (Ident ident)) = GlobalErl
@@ -403,35 +407,6 @@ matchBasePattern conv bases env expr = do
       Just case unmatched of
         Nothing -> r
         Just unm -> conv env r unm
-
-instance Calling call => Calling (CallUncall call) where
-  arity (CallUncall call _) = arity call
-  zipAgainst (CallUncall c1 mu1) (CallUncall c2 mu2) =
-    case zipAgainst c1 c2 of
-      Just { matched, unmatched: Just unmatched } | Nothing <- mu1, Nothing <- mu2 -> do
-        Just { matched: CallUncall matched Nothing, unmatched: Just (CallUncall unmatched Nothing) }
-      Just { matched, unmatched: Nothing } -> do
-        case mu1, mu2 of
-          Nothing, Nothing ->
-            Just { matched: CallUncall matched Nothing, unmatched: Nothing }
-          Just u1, Just u2 | Just { matched: u, unmatched: Nothing } <- zipAgainst u1 u2 ->
-            Just { matched: CallUncall matched (Just (map fst u)), unmatched: Nothing }
-          _, _ -> Nothing
-      _ -> Nothing
-
-instance
-  ( CallingExprBase call expr base env
-  , Uncall call expr
-  ) => CallingExprBase (CallUncall call) expr base env where
-  matchCall env expr (CallUncall call Nothing) =
-    matchCall env expr call <#>
-      \{ matched: CWB base matched, unmatched } ->
-        { matched: CWB base (CallUncall matched Nothing)
-        , unmatched: CallUncall <$> unmatched <@> Nothing
-        }
-  matchCall _ _ _ = unsafeCrashWith "Cannot uncall CallUncall"
-  applyCWB env (CWB base (CallUncall call uncall)) =
-    (maybe <*> unCall) (applyCWB env (CWB base call)) uncall
 
 -- Call a global Erlang function (module name, function name)
 instance CallingExprBase CallErl ErlExpr GlobalErl env where
@@ -792,6 +767,9 @@ partial pat = unsafePartial pat
 arg' :: forall env call i o. Structure call => (Partial => i -> o) -> Pattern env call i o
 arg' f = Pattern (review hasOne unit) \_env -> preview hasOne >=> _absorb \i -> Just (f i)
 
+arg'' :: forall env call i o. Structure call => (Partial => i -> Maybe o) -> Pattern env call i o
+arg'' f = Pattern (review hasOne unit) \_env -> preview hasOne >=> _absorb \i -> f i
+
 argMatch :: forall env call1 call2 b i o. Eq b => Structure call2 => CallingExprBase call1 i b env => Pattern env (CWB call1 b) i o -> Pattern env call2 i o
 argMatch pat = Pattern (review hasOne unit) \env -> preview hasOne >=> match' env <@> pat
 
@@ -893,17 +871,17 @@ abstractTrivial e (CallingPS more _) = S.thunk (abstractTrivial e more)
 
 callConverters :: Array { ps :: Qualified Ident, arity :: ArityPS, erl :: GlobalErl, call :: ArityErl } -> Conventions
 callConverters options = options # Array.foldMap \option ->
-  let Tuple arity triv = popTrivial option.arity in
-  callAs' option.ps option.arity option.erl option.call Nothing <> case localConvention identity triv of
+  let Tuple reduced triv = popTrivial option.arity in
+  callAs' option.ps option.arity option.erl option.call <> case localConvention identity triv of
     Nothing -> mempty
     Just r ->
-      callAs' option.ps arity option.erl option.call (Just r)
+      callAs' option.ps reduced option.erl (option.call <|> map absurd r)
 
 applyConventions :: Conventions -> Converters
-applyConventions = mapWithIndex \qi -> mapWithIndex \arity (Last (CWB erlBase (CallUncall convention uncall))) ->
+applyConventions = mapWithIndex \qi -> mapWithIndex \arity (Last (CWB erlBase convention)) ->
   Last $ Pattern (CWB qi arity) \codegenExpr (CWB _old matched) -> do
     calls <- customConvention (codegenExpr >>> const) matched convention
-    pure $ unCallMaybe (applyCall unit erlBase calls) uncall
+    pure $ applyCall unit erlBase calls
 
 type Converters =
   SemigroupMap (Qualified Ident)

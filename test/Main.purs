@@ -56,7 +56,7 @@ import PureScript.Backend.Optimizer.CoreFn (Comment(..), Ident(..), Module(..), 
 import PureScript.Backend.Optimizer.Directives (parseDirectiveFile)
 import PureScript.Backend.Optimizer.Directives.Defaults (defaultDirectives)
 import PureScript.Backend.Optimizer.Semantics.Foreign (ForeignEval, coreForeignSemantics)
-import Test.Utils (bufferToUTF8, coreFnModulesFromOutput, cpr, execWithStdin, loadModuleMain, mkdirp, rmrf, spawnFromParent)
+import Test.Utils (bufferToUTF8, coreFnModulesFromOutput, cpr, errored, execWithStdin, loadModuleMain, mkdirp, rmrf, spawnFromParent)
 
 type TestArgs =
   { accept :: Boolean
@@ -129,7 +129,7 @@ runSnapshotTests { accept, compile, run, filter } = do
     Left errors -> do
       for_ errors \(Tuple filePath err) -> do
         Console.error $ filePath <> " " <> err
-      liftEffect $ Process.exit 1
+      liftEffect $ Process.exit' 1
     Right coreFnModules -> do
       let { directives } = parseDirectiveFile defaultDirectives
       -- No runtime .ss files needed yet
@@ -164,9 +164,9 @@ runSnapshotTests { accept, compile, run, filter } = do
             -- liftEffect $ debugModule backend  -- show backend
             mkdirp testFileDir
             FS.writeTextFile UTF8 testFilePath formatted
-            r <- _.result =<< execa "cp" [ snapshotDirFileForeign, testFileForeignPath ] identity
+            r <- _.getResult =<< execa "cp" [ snapshotDirFileForeign, testFileForeignPath ] identity
             case r of
-              Right _ | run -> do
+              _ | not errored r, run -> do
                 _ <- loadModuleMain
                   { ebin
                   , modulePath: testFileForeignPath
@@ -252,7 +252,7 @@ runSnapshotTests { accept, compile, run, filter } = do
                 Console.log diff
                 pure false
       unless (Foldable.and results) do
-        liftEffect $ Process.exit 1
+        liftEffect $ Process.exit' 1
       pure unit
 
 hasFails :: BackendModule -> Maybe String
