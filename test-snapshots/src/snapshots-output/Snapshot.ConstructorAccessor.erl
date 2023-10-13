@@ -24,7 +24,7 @@
         , result/0
         ]).
 -compile(no_auto_import).
--define( IS_TAG(Tag, V)
+-define( IS_KNOWN_TAG(Tag, Arity, V)
        , ((erlang:is_tuple(V))
          andalso ((1 =< (erlang:tuple_size(V)))
            andalso (Tag =:= (erlang:element(1, V)))))
@@ -88,7 +88,7 @@ test5() ->
 
 test5(_, V) ->
   if
-    ?IS_TAG(first, V) ->
+    ?IS_KNOWN_TAG(first, 1, V) ->
       erlang:element(2, V);
     true ->
       erlang:throw({fail, <<"Failed pattern match">>})
@@ -102,7 +102,7 @@ test51() ->
 
 test51(V) ->
   if
-    ?IS_TAG(first, V) ->
+    ?IS_KNOWN_TAG(first, 1, V) ->
       erlang:element(2, V);
     true ->
       erlang:throw({fail, <<"Failed pattern match">>})
@@ -116,9 +116,9 @@ test4() ->
 
 test4(V) ->
   if
-    ?IS_TAG(first, V) ->
+    ?IS_KNOWN_TAG(first, 1, V) ->
       erlang:element(2, V);
-    ?IS_TAG(last, V) ->
+    ?IS_KNOWN_TAG(last, 1, V) ->
       erlang:element(2, V);
     true ->
       erlang:throw({fail, <<"Failed pattern match">>})

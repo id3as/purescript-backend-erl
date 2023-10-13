@@ -27,7 +27,7 @@
         , inlineAtom/0
         ]).
 -compile(no_auto_import).
--define( IS_TAG(Tag, V)
+-define( IS_KNOWN_TAG(Tag, Arity, V)
        , ((erlang:is_tuple(V))
          andalso ((1 =< (erlang:tuple_size(V)))
            andalso (Tag =:= (erlang:element(1, V)))))
@@ -43,13 +43,13 @@ min() ->
 
 min(X, Y) ->
   begin
-    V = (((erlang:map_get(compare, data_ord@ps:ordInt()))(X))(Y)),
+    V = ((erlang:map_get(compare, data_ord@ps:ordInt()))(X))(Y),
     if
-      ?IS_TAG(lT, V) ->
+      ?IS_KNOWN_TAG(lT, 0, V) ->
         X;
-      ?IS_TAG(eQ, V) ->
+      ?IS_KNOWN_TAG(eQ, 0, V) ->
         X;
-      ?IS_TAG(gT, V) ->
+      ?IS_KNOWN_TAG(gT, 0, V) ->
         Y;
       true ->
         erlang:throw({fail, <<"Failed pattern match">>})
@@ -67,13 +67,13 @@ max() ->
 
 max(X, Y) ->
   begin
-    V = (((erlang:map_get(compare, data_ord@ps:ordInt()))(X))(Y)),
+    V = ((erlang:map_get(compare, data_ord@ps:ordInt()))(X))(Y),
     if
-      ?IS_TAG(lT, V) ->
+      ?IS_KNOWN_TAG(lT, 0, V) ->
         Y;
-      ?IS_TAG(eQ, V) ->
+      ?IS_KNOWN_TAG(eQ, 0, V) ->
         X;
-      ?IS_TAG(gT, V) ->
+      ?IS_KNOWN_TAG(gT, 0, V) ->
         X;
       true ->
         erlang:throw({fail, <<"Failed pattern match">>})

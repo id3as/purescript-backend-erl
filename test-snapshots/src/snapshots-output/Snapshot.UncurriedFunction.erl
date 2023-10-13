@@ -21,7 +21,7 @@ test4a() ->
 
 test4a(A) ->
   begin
-    V = (effect_console@foreign:log(A)),
+    V = effect_console@foreign:log(A),
     V(),
     A
   end.
@@ -67,16 +67,16 @@ test1b() ->
 
 main() ->
   begin
-    V = ((test_assert@ps:assert())((test1b()) =:= 1)),
+    V = (test_assert@ps:assert())((test1b()) =:= 1),
     fun
       () ->
         begin
           V(),
           ((test_assert@ps:assert())((test2b()) =:= 1))(),
           ((test_assert@ps:assert())((test3b()) =:= 2))(),
-          V@1 = ((test4b())()),
+          V@1 = (test4b())(),
           ((test_assert@ps:assert())(V@1 =:= <<"test4b">>))(),
-          W = ((test4a())(<<"test4b">>)),
+          W = (test4a())(<<"test4b">>),
           ((test_assert@ps:assert())(W =:= <<"test4b">>))()
         end
     end

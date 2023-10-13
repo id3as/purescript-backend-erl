@@ -36,7 +36,7 @@ import Node.Path as Path
 import Node.Process as Process
 import Parsing (parseErrorMessage)
 import PureScript.Backend.Erl.Constants (erlExt)
-import PureScript.Backend.Erl.Convert (codegenModule)
+import PureScript.Backend.Erl.Convert (codegenModule, initAcrossModules)
 import PureScript.Backend.Erl.Convert.Common (erlModuleNamePs, erlModuleNameForeign)
 import PureScript.Backend.Erl.Foreign (erlForeignSemantics)
 import PureScript.Backend.Erl.Foreign.Analyze (analyzeCustom)
@@ -106,7 +106,7 @@ runCompile { compile, filter, cwd } = do
   mkdirp outputDir
   mkdirp ebin
   erls <- liftEffect $ Ref.new []
-  conventionsRef <- liftEffect $ Ref.new mempty
+  conventionsRef <- liftEffect $ Ref.new initAcrossModules
   coreFnModulesFromOutput "output" filter >>= case _ of
     Left errors -> do
       for_ errors \(Tuple filePath err) -> do

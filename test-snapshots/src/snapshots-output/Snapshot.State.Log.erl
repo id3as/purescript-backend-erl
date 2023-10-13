@@ -22,7 +22,7 @@ freshE(DictMonadState) ->
 
 'exE\''(S) ->
   begin
-    V = (S + 1),
+    V = S + 1,
     fun
       () ->
         begin
@@ -41,7 +41,7 @@ exE() ->
 
 exE(S) ->
   begin
-    V = (S + 1),
+    V = S + 1,
     fun
       () ->
         begin

@@ -40,7 +40,7 @@
         , useMember/1
         ]).
 -compile(no_auto_import).
--define( IS_TAG(Tag, V)
+-define( IS_KNOWN_TAG(Tag, Arity, V)
        , ((erlang:is_tuple(V))
          andalso ((1 =< (erlang:tuple_size(V)))
            andalso (Tag =:= (erlang:element(1, V)))))
@@ -134,11 +134,11 @@ useNormal() ->
 
 useNormal(DictNormal) ->
   begin
-    Normal1 = (normal(DictNormal)),
+    Normal1 = normal(DictNormal),
     fun
       (DictNormal1) ->
         begin
-          Normal2 = (normal(DictNormal1)),
+          Normal2 = normal(DictNormal1),
           fun
             (A) ->
               fun
@@ -155,9 +155,9 @@ useNormal(DictNormal) ->
      fun
        (V) ->
          if
-           ?IS_TAG(f1, V) ->
+           ?IS_KNOWN_TAG(f1, 0, V) ->
              <<"F1">>;
-           ?IS_TAG(f2, V) ->
+           ?IS_KNOWN_TAG(f2, 0, V) ->
              <<"F2">>;
            true ->
              erlang:throw({fail, <<"Failed pattern match">>})

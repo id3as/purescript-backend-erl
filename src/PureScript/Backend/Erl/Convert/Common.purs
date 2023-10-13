@@ -7,7 +7,7 @@ import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (unwrap)
 import Data.String as String
 import Data.Tuple (Tuple, uncurry)
-import PureScript.Backend.Erl.Syntax (ErlExpr)
+import PureScript.Backend.Erl.Syntax (ErlExpr, ErlPattern, self)
 import PureScript.Backend.Erl.Syntax as S
 import PureScript.Backend.Optimizer.CoreFn (Ident, ModuleName)
 import PureScript.Backend.Optimizer.Syntax (Level(..))
@@ -55,7 +55,12 @@ toErlVarName text = case String.uncons text of
   Nothing -> "V"
 
 toErlVarExpr :: Tuple (Maybe Ident) Level -> ErlExpr
-toErlVarExpr = S.Var <<< uncurry toErlVar
+toErlVarExpr = (S.Var <@> self) <<< uncurry toErlVar
+
+toErlVarPat :: Tuple (Maybe Ident) Level -> ErlPattern
+toErlVarPat = uncurry toErlVar >>> case _ of
+  "_" -> S.Discard
+  v -> S.BindVar v
 
 tagAtom :: Ident -> ErlExpr
 tagAtom tagName = S.Literal $ S.Atom $ toAtomName $ unwrap tagName

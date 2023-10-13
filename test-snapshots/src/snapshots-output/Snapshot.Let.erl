@@ -31,9 +31,9 @@ letChain() ->
 
 letChain(X) ->
   begin
-    A = (X + X),
-    B = (A + A),
-    C = (B + B),
+    A = X + X,
+    B = A + A,
+    C = B + B,
     ((A + B) + C) + (C * C)
   end.
 
@@ -63,7 +63,7 @@ isEven(X) ->
       true;
     true ->
       begin
-        V = (X - 1),
+        V = X - 1,
         if
           V =:= 1 ->
             false;

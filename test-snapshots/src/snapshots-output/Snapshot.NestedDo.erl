@@ -14,12 +14,12 @@ pure_() ->
 
 renamed() ->
   begin
-    V = ((pure_())(unit)),
+    V = (pure_())(unit),
     fun
       () ->
         begin
-          A0 = (V()),
-          A1 = (((pure_())(A0))()),
+          A0 = V(),
+          A1 = ((pure_())(A0))(),
           ((pure_())(A1))(),
           (effect_console@foreign:log(<<"Oh no">>))()
         end
@@ -28,12 +28,12 @@ renamed() ->
 
 renamed0() ->
   begin
-    V = ((pure_())(unit)),
+    V = (pure_())(unit),
     fun
       () ->
         begin
-          A0 = (V()),
-          A = (((pure_())(A0))()),
+          A0 = V(),
+          A = ((pure_())(A0))(),
           ((pure_())(A))(),
           (effect_console@foreign:log(<<"Oh no">>))()
         end
@@ -42,12 +42,12 @@ renamed0() ->
 
 renamed1() ->
   begin
-    V = ((pure_())(unit)),
+    V = (pure_())(unit),
     fun
       () ->
         begin
-          A = (V()),
-          A@1 = (((pure_())(A))()),
+          A = V(),
+          A@1 = ((pure_())(A))(),
           ((pure_())(A@1))(),
           (effect_console@foreign:log(<<"Oh no">>))()
         end
@@ -56,12 +56,12 @@ renamed1() ->
 
 renamed2() ->
   begin
-    V = ((pure_())(unit)),
+    V = (pure_())(unit),
     fun
       () ->
         begin
-          A = (V()),
-          A1 = (((pure_())(A))()),
+          A = V(),
+          A1 = ((pure_())(A))(),
           ((pure_())(A1))(),
           (effect_console@foreign:log(<<"Oh no">>))()
         end
@@ -70,11 +70,11 @@ renamed2() ->
 
 do1() ->
   begin
-    V = ((pure_())(unit)),
+    V = (pure_())(unit),
     fun
       () ->
         begin
-          A = (V()),
+          A = V(),
           ((pure_())(A))(),
           (effect_console@foreign:log(<<"Oh no">>))()
         end
@@ -83,7 +83,7 @@ do1() ->
 
 do0() ->
   begin
-    V = ((pure_())(unit)),
+    V = (pure_())(unit),
     fun
       () ->
         begin
@@ -95,12 +95,12 @@ do0() ->
 
 bug26() ->
   begin
-    V = ((pure_())(unit)),
+    V = (pure_())(unit),
     fun
       () ->
         begin
-          A = (V()),
-          A@1 = (((pure_())(A))()),
+          A = V(),
+          A@1 = ((pure_())(A))(),
           ((pure_())(A@1))(),
           (effect_console@foreign:log(<<"Oh no">>))()
         end

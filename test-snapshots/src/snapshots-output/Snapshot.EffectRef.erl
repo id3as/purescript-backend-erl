@@ -12,18 +12,18 @@ onLet() ->
 
 onLet(X) ->
   begin
-    A = (X + X),
+    A = X + X,
     effect_ref@foreign:new((A + A) + X)
   end.
 
 onLetTest() ->
   begin
-    V = (onLet(1)),
+    V = onLet(1),
     fun
       () ->
         begin
-          N = (V()),
-          V@1 = ((effect_ref@foreign:read(N))()),
+          N = V(),
+          V@1 = (effect_ref@foreign:read(N))(),
           ((test_assert@ps:assert())(V@1 =:= 5))()
         end
     end
@@ -31,11 +31,11 @@ onLetTest() ->
 
 basicTest() ->
   begin
-    V = (effect_ref@foreign:new(0)),
+    V = effect_ref@foreign:new(0),
     fun
       () ->
         begin
-          N = (V()),
+          N = V(),
           (effect_ref@ps:modify_(
              fun
                (V@1) ->
@@ -43,7 +43,7 @@ basicTest() ->
              end,
              N
            ))(),
-          V@1 = ((effect_ref@foreign:read(N))()),
+          V@1 = (effect_ref@foreign:read(N))(),
           ((test_assert@ps:assert())(V@1 =:= 1))()
         end
     end

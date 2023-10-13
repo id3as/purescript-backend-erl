@@ -10,11 +10,11 @@ import Data.Maybe (Maybe(..), fromMaybe', maybe)
 import Data.Newtype (unwrap)
 import Data.Traversable (sequence)
 import Data.Tuple (Tuple(..))
-import PureScript.Backend.Erl.Calling (CallPS(..), Conventions, Converter, Converters, applyConventions, arg', callConverters, callErl, callPS, codegenArg, converts', func, indexPatterns, noArgs, qualErl, qualPS, thunkErl, withEnv)
-import PureScript.Backend.Erl.Convert.Common (toErlVarExpr)
+import PureScript.Backend.Erl.Calling (CallPS(..), Conventions, Converter, Converters, applyConventions, arg, arg', arg'', callConverters, callErl, callPS, codegenArg, converts', func, getEnv, indexPatterns, noArgs, partial, qualErl, qualPS, thunkErl, withEnv)
+import PureScript.Backend.Erl.Convert.Common (toErlVarExpr, toErlVarPat)
 import PureScript.Backend.Erl.Syntax (ErlExpr, FunHead(..))
 import PureScript.Backend.Erl.Syntax as S
-import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal(..), ModuleName(..), Qualified(..))
+import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal(..), ModuleName(..), Prop(..), Qualified(..))
 import PureScript.Backend.Optimizer.Semantics (NeutralExpr(..))
 import PureScript.Backend.Optimizer.Syntax (BackendSyntax(..))
 
@@ -43,7 +43,7 @@ tupleCalls = [1,2,3,4,5,6,7,8,9,10] >>= \arity ->
   -- `uncurryN` with 1 argument applied
   , func ("Erl.Data.Tuple.uncurry" <> show arity) $ withEnv $ arg' case _ of
       NeutralExpr (Abs a e) | NEA.length a >= arity -> \codegenExpr ->
-        S.Fun Nothing $ Array.singleton $ Tuple (FunHead [ S.Tupled (toErlVarExpr <$> NEA.take arity a) ] Nothing) $
+        S.Fun Nothing $ Array.singleton $ Tuple (FunHead [ S.MatchTuple (toErlVarPat <$> NEA.take arity a) ] Nothing) $
           codegenExpr (maybe e (\a' -> NeutralExpr (Abs a' e)) (NEA.fromArray $ NEA.drop arity a))
   ]
 
@@ -116,19 +116,21 @@ specificCalls =
   --     variant <- codegenArg
   --     codegenExpr <- getEnv
   --     in S.Case variant $ fns <#> \(Prop variantType fn) ->
-  --       S.CaseClause (S.MapPattern [Tuple "type" (S.atomLiteral variantType), Tuple "value" (S.Var "Value")]) Nothing
+  --       S.CaseClause (S.MatchMap [Tuple "type" (S.MatchLiteral (S.Atom variantType)), Tuple "value" (S.BindVar "Value")]) Nothing
   --       do S.curriedApp (codegenExpr fn) [S.Var "Value"]
   -- , func "Erl.Data.Variant.matchImpl" $ partial ado
   --     NeutralExpr (Lit (LitRecord fns)) <- arg
   --     codegenExpr <- getEnv
   --     in S.Fun Nothing $ fns <#> \(Prop variantType fn) -> Tuple
-  --       do S.FunHead [S.MapPattern [Tuple "type" (S.atomLiteral variantType), Tuple "value" (S.Var "Value")]] Nothing
+  --       do S.FunHead [S.MatchMap [Tuple "type" (S.MatchLiteral (S.Atom variantType)), Tuple "value" (S.BindVar "Value")]] Nothing
   --       do S.curriedApp (codegenExpr fn) [S.Var "Value"]
   -- , func "Erl.Data.Variant.matchImpl" ado
   --     fns <- codegenArg
   --     in S.Fun Nothing $ pure $ Tuple
-  --       do S.FunHead [S.MapPattern [Tuple "type" (S.Var "Type"), Tuple "value" (S.Var "Value")]] Nothing
+  --       do S.FunHead [S.MatchMap [Tuple "type" (S.BindVar "Type"), Tuple "value" (S.BindVar "Value")]] Nothing
   --       do S.curriedApp (S.qualified "erlang" "map_get" [S.Var "Type", fns]) [S.Var "Value"]
+
+  , func "Partial._unsafePartial" $ S.curriedApp <$> codegenArg <@> [S.atomLiteral "unit"]
   ]
 
 ffiSpecs :: Conventions
@@ -158,6 +160,7 @@ ffiSpecs = callConverters
     , pure1 "Erl.Kernel.Erlang.listToBinary" "erlang:list_to_binary"
     , pure1 "Erl.Atom.atom" "erlang:binary_to_atom"
     , pure1 "Erl.Atom.toString" "erlang:atom_to_binary"
+    , pure1 "Partial._crashWith" "erlang:error"
     -- Effectful, thus wrapped in a thunk
     , eff1 "Erl.Kernel.Exceptions.throw" "erlang:throw"
     , eff1 "Erl.Kernel.Exceptions.error" "erlang:error"

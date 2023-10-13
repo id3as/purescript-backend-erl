@@ -20,7 +20,7 @@
 
 lastComponentIsRun() ->
   begin
-    V = ('don\'tInlineMeMe'(<<"a">>)),
+    V = 'don\'tInlineMeMe'(<<"a">>),
     fun
       () ->
         begin
@@ -33,11 +33,11 @@ lastComponentIsRun() ->
 
 lastPureIsUnwrapped() ->
   begin
-    V = ('don\'tInlineMeMe'(<<"a">>)),
+    V = 'don\'tInlineMeMe'(<<"a">>),
     fun
       () ->
         begin
-          Value = (V()),
+          Value = V(),
           ('don\'tInlineMeMe'(<<"b">>))(),
           Value
         end

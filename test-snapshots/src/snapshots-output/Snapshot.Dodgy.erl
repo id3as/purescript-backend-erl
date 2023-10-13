@@ -8,7 +8,7 @@
         , result/0
         ]).
 -compile(no_auto_import).
--define( IS_TAG(Tag, V)
+-define( IS_KNOWN_TAG(Tag, Arity, V)
        , ((erlang:is_tuple(V))
          andalso ((1 =< (erlang:tuple_size(V)))
            andalso (Tag =:= (erlang:element(1, V)))))
@@ -35,8 +35,8 @@ isSecretMsg() ->
   end.
 
 isSecretMsg(V) ->
-  ?IS_TAG(privateProcessTTimeoutMsg__, V).
+  ?IS_KNOWN_TAG(privateProcessTTimeoutMsg__, 0, V).
 
 result() ->
-  ?IS_TAG(privateProcessTTimeoutMsg__, noInline(1)).
+  ?IS_KNOWN_TAG(privateProcessTTimeoutMsg__, 0, noInline(1)).
 

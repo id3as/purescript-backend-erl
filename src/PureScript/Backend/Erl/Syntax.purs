@@ -34,7 +34,7 @@ data ErlDefinition
 
 data ErlExpr
   = Literal ErlLiteral
-  | Var String
+  | Var String Accessors
   | List (Array ErlExpr)
   | ListCons (Array ErlExpr) ErlExpr
   -- | An erlang tuple { E1, E2, ... }
@@ -43,12 +43,8 @@ data ErlExpr
   | Map (Array (Tuple String ErlExpr))
   -- | A map update expression M#{ X => E }
   | MapUpdate ErlExpr (Array (Tuple String ErlExpr))
-  -- | A map pattern #{ X := E }
-  | MapPattern (Array (Tuple String ErlExpr))
 
-  -- | E1 = E2
-  | Match ErlExpr ErlExpr
-  | Block (Array ErlExpr)
+  | Assignments (Array (Tuple ErlPattern ErlExpr)) ErlExpr
   -- |
   -- A fun definition
   --
@@ -63,10 +59,30 @@ data ErlExpr
   | UnaryOp UnaryOperator ErlExpr
   | BinaryAppend ErlExpr ErlExpr
 
-data FunHead = FunHead (Array ErlExpr) (Maybe Guard)
+type Accessors = Array Accessor
+data Accessor
+  = AcsElement Int
+  | AcsKey String
+  -- | AcsItem Int
+  -- | AcsTag String
+derive instance eqAccessor :: Eq Accessor
+derive instance ordAccessor :: Ord Accessor
+
+data ErlPattern
+  = Discard
+  | BindVar String
+  | MatchLiteral ErlLiteral
+  -- | Match operator, X = P1
+  | MatchBoth String ErlPattern
+  -- | A map pattern #{ X := E }
+  | MatchMap (Array (Tuple String ErlPattern))
+  | MatchTuple (Array ErlPattern)
+  | MatchList (Array ErlPattern) (Maybe ErlPattern)
+
+data FunHead = FunHead (Array ErlPattern) (Maybe Guard)
 data IfClause = IfClause ErlExpr ErlExpr
 
-data CaseClause = CaseClause ErlExpr (Maybe Guard) ErlExpr
+data CaseClause = CaseClause ErlPattern (Maybe Guard) ErlExpr
 
 newtype Guard = Guard ErlExpr
 derive instance Newtype Guard _
@@ -208,20 +224,18 @@ visit f = go
   goes :: Array ErlExpr -> m
   goes es = foldMap go es
   goFunHead :: FunHead -> m
-  goFunHead (FunHead es mg) = goes es <> foldMap (coerce go) mg
+  goFunHead (FunHead _ps mg) = foldMap (coerce go) mg
   goIfClause (IfClause e1 e2) = go e1 <> go e2
-  goCaseClause (CaseClause e1 me2 e3) = go e1 <> foldMap (coerce go) me2 <> go e3
+  goCaseClause (CaseClause _p1 me2 e3) = foldMap (coerce go) me2 <> go e3
   go e0 = f e0 <> case e0 of
     Literal _ -> mempty
-    Var _ -> mempty
+    Var _ _ -> mempty
     List es -> goes es
     ListCons es e -> goes es <> go e
     Tupled es -> goes es
     Map kvs -> foldMap (go <<< snd) kvs
-    MapPattern kvs -> foldMap (go <<< snd) kvs
     MapUpdate e kvs -> go e <> foldMap (go <<< snd) kvs
-    Match e1 e2 -> go e1 <> go e2
-    Block es -> goes es
+    Assignments es e -> foldMap (go <<< snd) es <> go e
     Fun _ heads -> foldMap (bifoldMap goFunHead go) heads
     FunCall me e es -> foldMap go me <> go e <> goes es
     Macro _ mes -> foldMap (foldMap go) mes
@@ -239,28 +253,47 @@ macros = visit case _ of
 curriedApp :: forall f. Foldable f => ErlExpr -> f ErlExpr -> ErlExpr
 curriedApp f es = foldl (\e e' -> FunCall Nothing e [ e' ]) f es
 
-curriedFun :: forall f. Foldable f => f ErlExpr -> ErlExpr -> ErlExpr
+curriedFun :: forall f. Foldable f => f ErlPattern -> ErlExpr -> ErlExpr
 curriedFun args e =
   foldr go e args
   where
-  go :: ErlExpr -> ErlExpr -> ErlExpr
+  go :: ErlPattern -> ErlExpr -> ErlExpr
   go a eAcc = Fun Nothing
     [ Tuple
         (FunHead [ a ] Nothing)
         eAcc
     ]
 
-qualified :: String -> String -> Array ErlExpr -> ErlExpr
-qualified mod fn = FunCall (Just (atomLiteral mod)) (atomLiteral fn)
+callGlobal :: String -> String -> Array ErlExpr -> ErlExpr
+callGlobal mod fn = FunCall (Just (atomLiteral mod)) (atomLiteral fn)
 
-simpleFun :: Array ErlExpr -> ErlExpr -> ErlExpr
+simpleFun :: Array ErlPattern -> ErlExpr -> ErlExpr
 simpleFun args e =
   Fun Nothing [ Tuple (FunHead args Nothing) e ]
 
 assignments :: Array (Tuple String ErlExpr) -> ErlExpr -> ErlExpr
 assignments [] res = res
 assignments bindings res =
-  Block $ (uncurry Match <<< lmap Var <$> bindings) `Array.snoc` res
+  Assignments (lmap bindOrDiscard <$> bindings) res
+
+bindOrDiscard :: String -> ErlPattern
+bindOrDiscard "_" = Discard
+bindOrDiscard v = BindVar v
+
+self :: Accessors
+self = []
+
+access :: Accessor -> ErlExpr -> ErlExpr
+access = access' true
+
+applyAccessors :: ErlExpr -> Accessors -> ErlExpr
+applyAccessors = foldl (\e a -> access' false a e)
+
+access' :: Boolean -> Accessor -> ErlExpr -> ErlExpr
+access' true acs (Var v acrs) = Var v (acrs <> [acs])
+access' _ (AcsElement n) e = callGlobal "erlang" "element" [intLiteral n, e]
+access' _ (AcsKey k) e = callGlobal "erlang" "map_get" [atomLiteral k, e]
+-- access' _ (AcsTag t) e = mIS_TAG (atomLiteral t) e
 
 atomLiteral :: String -> ErlExpr
 atomLiteral = Literal <<< Atom
@@ -295,22 +328,34 @@ predefMacros :: Array (Tuple (Tuple String (Maybe (NonEmptyArray String))) ErlEx
 predefMacros =
   [ Tuple (Tuple "IS_TAG" (NEA.fromArray [ "Tag", "V" ])) $
       binops (Literal (Atom "true")) AndAlso
-      [ FunCall (Just $ atomLiteral C.erlang) (atomLiteral "is_tuple") [ Var "V" ]
+      [ FunCall (Just $ atomLiteral C.erlang) (atomLiteral "is_tuple") [ Var "V" self ]
       , BinOp LessThanOrEqualTo (Literal (Integer 1)) $
-          FunCall (Just $ atomLiteral C.erlang) (atomLiteral "tuple_size") [ Var "V" ]
-      , BinOp IdenticalTo (Var "Tag") $
+          FunCall (Just $ atomLiteral C.erlang) (atomLiteral "tuple_size") [ Var "V" self ]
+      , BinOp IdenticalTo (Var "Tag" self) $
           FunCall (Just $ atomLiteral C.erlang) (atomLiteral C.element)
-            [ numberLiteral 1, Var "V" ]
+            [ numberLiteral 1, Var "V" self ]
+      ]
+  , Tuple (Tuple "IS_KNOWN_TAG" (NEA.fromArray [ "Tag", "Arity", "V" ])) $
+      binops (Literal (Atom "true")) AndAlso
+      [ FunCall (Just $ atomLiteral C.erlang) (atomLiteral "is_tuple") [ Var "V" self ]
+      , BinOp LessThanOrEqualTo (Literal (Integer 1)) $
+          FunCall (Just $ atomLiteral C.erlang) (atomLiteral "tuple_size") [ Var "V" self ]
+      , BinOp IdenticalTo (Var "Tag" self) $
+          FunCall (Just $ atomLiteral C.erlang) (atomLiteral C.element)
+            [ numberLiteral 1, Var "V" self ]
       ]
   ]
 
 mIS_TAG :: ErlExpr -> ErlExpr -> ErlExpr
 mIS_TAG tag v = Macro "IS_TAG" $ NEA.fromArray [ tag, v ]
 
+mIS_KNOWN_TAG :: ErlExpr -> Int -> ErlExpr -> ErlExpr
+mIS_KNOWN_TAG tag arity v = Macro "IS_KNOWN_TAG" $ NEA.fromArray [ tag, Literal (Integer arity), v ]
+
 guardExpr :: ErlExpr -> Boolean
 guardExpr = case _ of
   Literal _ -> true
-  Var _ -> true
+  Var _ _ -> true
   List items -> all guardExpr items
   ListCons items tail -> all guardExpr items && guardExpr tail
   Tupled items -> all guardExpr items
@@ -322,6 +367,7 @@ guardExpr = case _ of
   UnaryOp _ e -> guardExpr e
   BinaryAppend e1 e2 -> guardExpr e1 && guardExpr e2
   Macro "IS_TAG" margs -> maybe false (all guardExpr <<< NEA.toArray) margs
+  Macro "IS_KNOWN_TAG" margs -> maybe false (all guardExpr <<< NEA.toArray) margs
   _ -> false
 
 guardFns :: Array (Tuple String String)

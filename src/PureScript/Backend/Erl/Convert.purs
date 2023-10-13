@@ -13,16 +13,18 @@ import Data.Map (Map, SemigroupMap(..))
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (over, unwrap)
+import Data.Profunctor.Strong ((&&&))
 import Data.Set as Set
 import Data.Tuple (Tuple(..), fst, snd, uncurry)
 import Partial.Unsafe (unsafeCrashWith)
 import PureScript.Backend.Erl.Calling (CallPS(..), CallingPS(..), Conventions, Converters, GlobalErl(..), applyConventions, callAs, callAs', callErl, callPS, converts', thunkErl)
 import PureScript.Backend.Erl.Constants as C
+import PureScript.Backend.Erl.Convert.After (optimizePatterns)
 import PureScript.Backend.Erl.Convert.Before (renameRoot)
-import PureScript.Backend.Erl.Convert.Common (erlModuleNameForeign, erlModuleNamePs, tagAtom, toAtomName, toErlVar, toErlVarExpr, toErlVarName, toErlVarWith)
+import PureScript.Backend.Erl.Convert.Common (erlModuleNameForeign, erlModuleNamePs, tagAtom, toAtomName, toErlVar, toErlVarExpr, toErlVarName, toErlVarPat, toErlVarWith)
 import PureScript.Backend.Erl.Convert.Foreign (codegenForeign)
 import PureScript.Backend.Erl.Parser (ForeignDecls)
-import PureScript.Backend.Erl.Syntax (ErlDefinition(..), ErlExport(..), ErlExpr, ErlModule, atomLiteral)
+import PureScript.Backend.Erl.Syntax (Accessor(..), ErlDefinition(..), ErlExport(..), ErlExpr, ErlModule, ErlPattern, access, atomLiteral, mIS_KNOWN_TAG, mIS_TAG, self)
 import PureScript.Backend.Erl.Syntax as S
 import PureScript.Backend.Optimizer.Convert (BackendModule, BackendBindingGroup)
 import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal(..), ModuleName, Prop(..), Qualified(..))
@@ -36,17 +38,27 @@ type CodegenEnv =
   , substitutions :: Map (Tuple (Maybe Ident) Level) ErlExpr
   , callingConventions :: Converters
   , callsHandled :: Boolean
+  , constructors :: Map (Qualified Ident) Int
   }
 
-codegenModule :: BackendModule -> ForeignDecls -> Conventions -> Tuple ErlModule Conventions
-codegenModule { name: currentModule, bindings, imports, foreign: foreign_, exports: moduleExports } foreigns initialConventions =
+type AcrossModules =
+  { callingConventions :: Conventions
+  , constructors :: Map (Qualified Ident) Int
+  }
+
+initAcrossModules = { callingConventions: mempty, constructors: Map.empty }
+
+codegenModule :: BackendModule -> ForeignDecls -> AcrossModules -> Tuple ErlModule AcrossModules
+codegenModule { name: currentModule, bindings, imports, foreign: foreign_, dataTypes, exports: moduleExports } foreigns rolling =
   let
     Tuple thisModuleConventions thisModuleBindings = foldMap (codegenTopLevelBindingGroup currentModule) bindings
-    withForeignConventions = initialConventions <> foldMap fst reexportForeigns
+    withForeignConventions = rolling.callingConventions <> foldMap fst reexportForeigns
     callingConventions = withForeignConventions <> thisModuleConventions
     -- We do not qualify same-module bindings
     localConventions = thisModuleConventions <#> (map <<< map <<< lmap) (over GlobalErl _ { module = Nothing })
     localCallingConventions = withForeignConventions <> localConventions
+    constructors = Map.union rolling.constructors $ Map.fromFoldable $ Array.fromFoldable dataTypes >>= \{ constructors: cTors } ->
+      Map.toUnfoldable cTors <#> \(Tuple ctor { fields }) -> Tuple (Qualified (Just currentModule) ctor) (Array.length fields)
     narrowToImports = over SemigroupMap $ Map.filterKeys case _ of
       Qualified (Just mn) _ -> Set.member mn imports || mn == currentModule
       _ -> true
@@ -55,22 +67,24 @@ codegenModule { name: currentModule, bindings, imports, foreign: foreign_, expor
       , substitutions: Map.empty
       , callingConventions: applyConventions $ narrowToImports localCallingConventions
       , callsHandled: false
+      , constructors
       }
 
     definitions :: Array ErlDefinition
     definitions = Array.concat
       [ thisModuleBindings <@> codegenEnv
       , reexportForeigns <#> snd
-      ]
+      ] <#> \(FunctionDefinition name args expr) ->
+        FunctionDefinition name args (optimizePatterns expr)
 
     reexportForeigns :: Array (Tuple Conventions ErlDefinition)
     reexportForeigns = foreigns.exported >>= \(Tuple decl arity) -> do
       guard $ Ident decl `Set.member` foreign_
       let
-        vars =
+        Tuple pats vars = patsAndVars $
           Array.replicate arity unit
             # mapWithIndex \i _ ->
-              toErlVarExpr (Tuple Nothing (Level i))
+              toErlVar Nothing (Level i)
         calling =
           case NEA.fromArray (void vars) of
             Nothing ->
@@ -82,7 +96,7 @@ codegenModule { name: currentModule, bindings, imports, foreign: foreign_, expor
                 (GlobalErl { module: Just $ erlModuleNameForeign currentModule, name: decl })
                 (callErl (void vars))
       pure $ Tuple calling $ FunctionDefinition decl [] $
-        S.curriedFun vars $
+        S.curriedFun pats $
           S.FunCall (Just (S.atomLiteral (erlModuleNameForeign currentModule))) (S.atomLiteral decl) vars
 
     exports :: Array ErlExport
@@ -95,7 +109,9 @@ codegenModule { name: currentModule, bindings, imports, foreign: foreign_, expor
       , exports
       , comments: []
       }
-      callingConventions
+      { callingConventions
+      , constructors
+      }
 
 definitionExports :: ErlDefinition -> ErlExport
 definitionExports = case _ of
@@ -115,29 +131,29 @@ codegenTopLevelBinding
   -> Tuple Conventions (Array (CodegenEnv -> ErlDefinition))
 codegenTopLevelBinding currentModule (Tuple (Ident i) n) =
   case unwrap n of
-    CtorDef _ _ tag fields | vars <- S.Var <<< toErlVarName <$> fields -> pure
+    CtorDef _ _ tag fields | Tuple pats vars <- patsAndVars $ toErlVarName <$> fields -> pure
       [ const $ FunctionDefinition i [] $
-          S.curriedFun vars $
+          S.curriedFun pats $
             S.Tupled $ [ tagAtom tag ] <> vars
       ]
     Abs vars e ->
       callThisAs (callPS (Curried (void vars))) (callErl (void (NEA.toArray vars)))
-      let evars = locals vars in
-      [ const $ FunctionDefinition i [] $ S.curriedFun evars $
+      let Tuple epats evars = locals vars in
+      [ const $ FunctionDefinition i [] $ S.curriedFun epats $
           S.FunCall Nothing (S.Literal (S.Atom i)) evars
       , \codegenEnv -> FunctionDefinition i (uncurry toErlVar <$> NEA.toArray vars) $ codegenExpr codegenEnv e
       ]
     UncurriedAbs vars e | Array.length vars > 0 ->
       callThisAs (callPS (Uncurried (void vars))) (callErl (void vars))
-      let evars = locals vars in
-      [ const $ FunctionDefinition i [] $ S.simpleFun evars $
+      let Tuple epats evars = locals vars in
+      [ const $ FunctionDefinition i [] $ S.simpleFun epats $
           S.FunCall Nothing (S.Literal (S.Atom i)) evars
       , \codegenEnv -> FunctionDefinition i (uncurry toErlVar <$> vars) $ codegenExpr codegenEnv e
       ]
     UncurriedEffectAbs vars e | Array.length vars > 0 ->
       callThisAs (callPS (UncurriedEffect (void vars))) (callErl (void vars) <|> thunkErl)
-      let evars = locals vars in
-      [ const $ FunctionDefinition i [] $ S.simpleFun evars $
+      let Tuple epats evars = locals vars in
+      [ const $ FunctionDefinition i [] $ S.simpleFun epats $
           S.FunCall Nothing (S.Literal (S.Atom i)) evars
       , \codegenEnv -> FunctionDefinition i (uncurry toErlVar <$> vars) $ codegenChain effectChainMode codegenEnv e
       ]
@@ -172,34 +188,33 @@ codegenExpr codegenEnv0@{ currentModule } s | codegenEnv <- setCallsHandled fals
   Local i l | Just replacement <- Map.lookup (Tuple i l) codegenEnv.substitutions ->
     replacement
   Local i l ->
-    S.Var $ toErlVar i l
+    S.Var (toErlVar i l) self
   Lit l ->
     codegenLiteral codegenEnv l
   App f p ->
     S.curriedApp (codegenExpr0 codegenEnv f) (codegenExpr codegenEnv <$> p)
   Abs a e -> do
-    S.curriedFun (toErlVarExpr <$> a) (codegenExpr codegenEnv e)
+    S.curriedFun (toErlVarPat <$> a) (codegenExpr codegenEnv e)
   UncurriedApp f p ->
     S.FunCall Nothing (codegenExpr0 codegenEnv f) (codegenExpr codegenEnv <$> p)
   UncurriedAbs a e ->
-    S.simpleFun (toErlVarExpr <$> a) (codegenExpr codegenEnv e)
+    S.simpleFun (toErlVarPat <$> a) (codegenExpr codegenEnv e)
   UncurriedEffectApp f p ->
     S.thunk $ S.FunCall Nothing (codegenExpr0 codegenEnv f) (codegenExpr codegenEnv <$> p)
   UncurriedEffectAbs a e ->
-    S.simpleFun (toErlVarExpr <$> a) (codegenChain effectChainMode codegenEnv e)
+    S.simpleFun (toErlVarPat <$> a) (codegenChain effectChainMode codegenEnv e)
+
   Accessor e (GetProp i) ->
-    S.FunCall (Just $ atomLiteral C.erlang) (atomLiteral C.map_get)
-      [ S.atomLiteral i, codegenExpr codegenEnv e ]
+    access (AcsKey i) (codegenExpr codegenEnv e)
 
   Accessor e (GetIndex i) ->
     S.FunCall (Just $ atomLiteral C.array) (atomLiteral C.get)
       [ S.numberLiteral i, codegenExpr codegenEnv e ]
 
   Accessor e (GetCtorField _ _ _ _ _ i) ->
-    S.FunCall (Just $ atomLiteral C.erlang) (atomLiteral C.element)
-      -- plus 1 for tag at beginning of tuple
-      -- plus 1 for 1-indexing
-      [ S.numberLiteral (i + 2), codegenExpr codegenEnv e ]
+    -- plus 1 for tag at beginning of tuple
+    -- plus 1 for 1-indexing
+    access (AcsElement (i + 2)) (codegenExpr codegenEnv e)
 
   Update e props ->
     S.MapUpdate (codegenExpr codegenEnv e) ((\(Prop name p) -> Tuple name (codegenExpr codegenEnv p)) <$> props)
@@ -227,8 +242,8 @@ codegenExpr codegenEnv0@{ currentModule } s | codegenEnv <- setCallsHandled fals
             S.If (S.IfClause c e NEA.: NEA.singleton (S.IfClause (S.Literal $ S.Atom "true") ee))
       go (Tuple c e) ee =
         S.Case c
-          ( S.CaseClause (S.atomLiteral C.true_) Nothing e NEA.:
-              NEA.singleton (S.CaseClause (S.Var "_") Nothing ee)
+          ( S.CaseClause (S.MatchLiteral (S.Atom C.true_)) Nothing e NEA.:
+              NEA.singleton (S.CaseClause S.Discard Nothing ee)
           )
 
     foldr go (codegenExpr codegenEnv o) (goPair <$> b)
@@ -321,8 +336,11 @@ codegenChain chainMode codegenEnv0 = collect [] codegenEnv0.substitutions
     _ ->
       finish chainMode.effect bindings substitutions expression
 
-locals :: forall f. Foldable f => f (Tuple (Maybe Ident) Level) -> Array ErlExpr
-locals = locals' >>> map S.Var
+locals :: forall f. Foldable f => f (Tuple (Maybe Ident) Level) -> Tuple (Array ErlPattern) (Array ErlExpr)
+locals = locals' >>> patsAndVars
+
+patsAndVars :: Array String -> Tuple (Array ErlPattern) (Array ErlExpr)
+patsAndVars = map S.bindOrDiscard &&& map (S.Var <@> self)
 
 locals' :: forall f. Foldable f => f (Tuple (Maybe Ident) Level) -> Array String
 locals' = Array.fromFoldable >>> mapWithIndex \idx (Tuple name _) ->
@@ -342,22 +360,22 @@ codegenLetRec codegenEnv { lvl, bindings }
       { vars, value, recName, recCall } = case unwrap directValue of
         Abs vars value ->
           let recName = toErlVar (Just name) lvl in
-          { vars: toErlVarExpr <$> NEA.toArray vars
+          { vars: toErlVarPat <$> NEA.toArray vars
           , value
           , recName
           , recCall:
-              if NEA.length vars == 1 then S.Var recName else
+              if NEA.length vars == 1 then S.Var recName self else
               -- We generate an uncurried function, but the callsites expect a curried function still
               -- TODO: inline `S.FunCall _ (S.Fun _ _) _` afterwards
-              let recvars = locals vars in
-              S.curriedFun recvars (S.FunCall Nothing (S.Var recName) recvars)
+              let Tuple recpats recvars = locals vars in
+              S.curriedFun recpats (S.FunCall Nothing (S.Var recName self) recvars)
           }
         _ ->
           let recName = toErlVarWith "Rec" (Just name) lvl in
           { vars: []
           , value: directValue
           , recName
-          , recCall: S.unthunk (S.Var recName)
+          , recCall: S.unthunk (S.Var recName self)
           }
       renamed = codegenEnv { substitutions = Map.insert (Tuple (Just name) lvl) recCall codegenEnv.substitutions }
     in
@@ -374,21 +392,22 @@ codegenLetRec codegenEnv { lvl, bindings }
       mutual i = toErlVarWith "MutualFn" (Just i) lvl
 
       names = fst <$> NEA.toArray bindings
-      bundled scheme = S.Var <<< scheme <$> names
+      bundledPat scheme = S.BindVar <<< scheme <$> names
+      bundled scheme = (S.Var <@> self) <<< scheme <$> names
 
       substitutions = Map.fromFoldable $ names <#>
         \i -> Tuple (Tuple (Just i) lvl) $
-          S.FunCall Nothing (S.Var (local i)) (bundled local)
+          S.FunCall Nothing (S.Var (local i) self) (bundled local)
       renamed = codegenEnv { substitutions = substitutions `Map.union` codegenEnv.substitutions }
     in
       { bindings: foldMap (map <<< uncurry)
         [ \i value ->
             Tuple (mutual i) $
-              S.simpleFun (bundled local) $
+              S.simpleFun (bundledPat local) $
                 codegenExpr renamed value
         , \i _ ->
             Tuple (normal i) $
-              S.FunCall Nothing (S.Var (mutual i)) (bundled mutual)
+              S.FunCall Nothing (S.Var (mutual i) self) (bundled mutual)
         ] $ NEA.toArray bindings
       , substitutions: codegenEnv.substitutions
       }
@@ -405,8 +424,11 @@ codegenPrimOp codegenEnv = case _ of
       OpNumberNegate -> S.UnaryOp S.Negate x'
       OpArrayLength ->
         S.FunCall (Just $ atomLiteral C.array) (atomLiteral C.size) [ x' ]
+      OpIsTag qi@(Qualified _ (Ident constructor)) | Just arity <- Map.lookup qi codegenEnv.constructors ->
+        mIS_KNOWN_TAG (S.atomLiteral (toAtomName constructor)) arity x'
       OpIsTag (Qualified _ (Ident constructor)) ->
-        S.mIS_TAG (S.atomLiteral (toAtomName constructor)) x'
+        mIS_TAG (S.atomLiteral (toAtomName constructor)) x'
+        -- access (AcsTag (toAtomName constructor)) x'
 
   Op2 o x y ->
     let

@@ -44,7 +44,7 @@ import Node.Path as Path
 import Node.Process as Process
 import Parsing (parseErrorMessage)
 import PureScript.Backend.Erl.Constants (erlExt)
-import PureScript.Backend.Erl.Convert (codegenModule)
+import PureScript.Backend.Erl.Convert (codegenModule, initAcrossModules)
 import PureScript.Backend.Erl.Convert.Common (erlModuleNamePs, erlModuleNameForeign)
 import PureScript.Backend.Erl.Foreign (erlForeignSemantics)
 import PureScript.Backend.Erl.Foreign.Analyze (analyzeCustom)
@@ -106,13 +106,14 @@ foreignSemantics = Map.union erlForeignSemantics $
 
 runSnapshotTests :: TestArgs -> Aff Unit
 runSnapshotTests { accept, compile, run, filter } = do
-  currentDirectory <- liftEffect Process.cwd
-  let vendorDirectory = Path.concat [ currentDirectory, "vendor", "purs" ]
+  Console.log "Hi"
   liftEffect $ Process.chdir $ Path.concat [ "test-snapshots" ]
   spawnFromParent "spago" [ "build" ]
+  Console.log "Did spago"
   snapshotDir <- liftEffect Process.cwd
   snapshotPaths <- expandGlobs (Path.concat [ snapshotDir, "src", "snapshots-input" ])
     [ "Snapshot.*.purs" ]
+  Console.log "Did globs"
   outputRef <- liftEffect $ Ref.new []
   let snapshotsOut = Path.concat [ snapshotDir, "src", "snapshots-output" ]
   let testOut = Path.concat [ snapshotDir, "test-out" ]
@@ -121,19 +122,16 @@ runSnapshotTests { accept, compile, run, filter } = do
   rmrf testOut
   mkdirp testOut
   mkdirp ebin
-  -- let runtimeContents = Dodo.print plainText Dodo.twoSpaces $ P.printModule $ runtimeModule
-  -- FS.writeTextFile UTF8 runtimeFilePath runtimeContents
-  cpr vendorDirectory testOut
-  conventionsRef <- liftEffect $ Ref.new mempty
+  conventionsRef <- liftEffect $ Ref.new initAcrossModules
+  Console.log "Did setup"
   coreFnModulesFromOutput "output" filter >>= case _ of
     Left errors -> do
       for_ errors \(Tuple filePath err) -> do
         Console.error $ filePath <> " " <> err
       liftEffect $ Process.exit' 1
     Right coreFnModules -> do
+      Console.log "Got modules"
       let { directives } = parseDirectiveFile defaultDirectives
-      -- No runtime .ss files needed yet
-      -- copyFile (Path.concat [ "..", "..", "runtime.js" ]) (Path.concat [ testOut, "runtime.js" ])
       coreFnModules # buildModules
         { directives
         , analyzeCustom

@@ -40,7 +40,7 @@ functorState() ->
              fun
                (S) ->
                  begin
-                   V1 = (V(S)),
+                   V1 = V(S),
                    {tuple, F(erlang:element(2, V1)), erlang:element(3, V1)}
                  end
              end
@@ -87,7 +87,7 @@ exMTL() ->
 
 exMTL(S) ->
   begin
-    V = (S + 1),
+    V = S + 1,
     {tuple, #{ a => S, b => V }, V + 1}
   end.
 
@@ -99,7 +99,7 @@ exMTL(S) ->
 
 'exE\''(S) ->
   begin
-    V = (S + 1),
+    V = S + 1,
     fun
       () ->
         {tuple, #{ a => S, b => V }, V + 1}
@@ -114,7 +114,7 @@ exE() ->
 
 exE(S) ->
   begin
-    V = (S + 1),
+    V = S + 1,
     fun
       () ->
         {tuple, #{ a => S, b => V }, V + 1}
@@ -143,7 +143,7 @@ bindState() ->
              fun
                (S) ->
                  begin
-                   V1 = (V(S)),
+                   V1 = V(S),
                    (F(erlang:element(2, V1)))(erlang:element(3, V1))
                  end
              end
@@ -165,8 +165,8 @@ applyState() ->
              fun
                (S) ->
                  begin
-                   V1 = (F(S)),
-                   V1@1 = (A(erlang:element(3, V1))),
+                   V1 = F(S),
+                   V1@1 = A(erlang:element(3, V1)),
                    ((erlang:map_get(pure, applicativeState()))
                     ((erlang:element(2, V1))(erlang:element(2, V1@1))))
                    (erlang:element(3, V1@1))
@@ -205,7 +205,7 @@ ex() ->
 
 ex(S) ->
   begin
-    V = (S + 1),
+    V = S + 1,
     {tuple, #{ a => S, b => V }, V + 1}
   end.
 

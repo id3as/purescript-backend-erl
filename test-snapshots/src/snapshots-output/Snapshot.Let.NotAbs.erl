@@ -3,7 +3,7 @@
 -compile(no_auto_import).
 result() ->
   begin
-    FibAnd@Rec = (fun
+    FibAnd@Rec = fun
       FibAnd@Rec () ->
         { tuple
         , <<"fib">>
@@ -18,7 +18,7 @@ result() ->
               end
           end
         }
-    end),
+    end,
     { tuple
     , erlang:element(2, FibAnd@Rec())
     , (erlang:element(3, FibAnd@Rec()))(6)

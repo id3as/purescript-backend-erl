@@ -27,7 +27,7 @@ import Dodo (Doc, flexAlt)
 import Dodo as D
 import Dodo.Common (leadingComma, trailingComma)
 import Partial.Unsafe (unsafePartial)
-import PureScript.Backend.Erl.Syntax (BinaryOperator, CaseClause(..), ErlDefinition, ErlExport(..), ErlExpr, ErlModule, FunHead(..), Guard(..), IfClause(..), UnaryOperator)
+import PureScript.Backend.Erl.Syntax (BinaryOperator, CaseClause(..), ErlDefinition, ErlExport(..), ErlExpr, ErlModule, ErlPattern, FunHead(..), Guard(..), IfClause(..), UnaryOperator, applyAccessors)
 import PureScript.Backend.Erl.Syntax as S
 import Safe.Coerce (coerce)
 
@@ -146,6 +146,39 @@ printExpr e = printExpr' false e
 printAtomic :: ErlExpr -> Doc Void
 printAtomic e = D.flexGroup $ printExpr' atomic e
 
+printStatement :: Tuple ErlPattern ErlExpr -> Doc Void
+printStatement (Tuple S.Discard e) = printAtomic e
+printStatement (Tuple pat e) = printPattern pat <> D.text " = " <> printAtomic e
+
+printPattern :: ErlPattern -> Doc Void
+printPattern = case _ of
+  S.MatchLiteral (S.Integer n) -> D.text $ show n
+  S.MatchLiteral (S.Float f) -> D.text $
+    -- Erlang does not like scientific notation without a decimal point
+    show f # Regex.replace' (Regex.Unsafe.unsafeRegex "^(\\d+)(e[+-]?\\d+)$" mempty) \original ->
+      case _ of
+        [Just integer, Just exponent] -> integer <> ".0" <> exponent
+        _ -> original
+  S.MatchLiteral (S.Char c) -> D.text $ "$" <> escapeNonprinting (escapeErlString (StringCU.singleton c))
+  S.MatchLiteral (S.Atom a) -> D.text $ escapeAtom a
+
+  S.MatchLiteral s@(S.String _) -> printBinaryLiteral (S.Literal s)
+
+  S.MatchTuple a -> printBraces' $ D.indent <<< printPattern <$> a
+  S.MatchMap fields -> D.text "#" <> printBraces_ (D.indent <<< printFieldPattern <$> fields)
+  S.MatchList a Nothing -> printBrackets' $ D.indent <<< printPattern <$> a
+  S.MatchList [] (Just rest) -> printPattern rest
+  S.MatchList a (Just rest) -> printBrackets_ $ a # mapWithIndex \i item ->
+    D.indent (printPattern item)
+      <> if i /= Array.length a - 1 then mempty else
+        D.flexAlt (D.space <> D.text "|") (D.break <> D.text "|") <> D.space <> D.indent (printPattern rest)
+
+  S.BindVar v -> D.text v
+  S.Discard -> D.text "_"
+  S.MatchBoth v S.Discard -> D.text v
+  S.MatchBoth v e -> D.text v <> D.text " = " <> printPattern e
+
+
 printExpr' :: Precedence -> ErlExpr -> Doc Void
 printExpr' prec = case _ of
   S.Literal (S.Integer n) -> D.text $ show n
@@ -161,7 +194,8 @@ printExpr' prec = case _ of
   s@(S.BinaryAppend _ _) -> printBinaryLiteral s
   s@(S.Literal (S.String _)) -> printBinaryLiteral s
 
-  S.Var v -> D.text v
+  S.Var v [] -> D.text v
+  S.Var v acsrs -> printExpr' prec (applyAccessors (S.Var v []) acsrs)
 
   S.List a -> printBrackets' $ D.indent <<< printAtomic <$> a
   S.ListCons [] rest -> printExpr' prec rest
@@ -171,15 +205,13 @@ printExpr' prec = case _ of
         D.flexAlt (D.space <> D.text "|") (D.break <> D.text "|") <> D.space <> D.indent (printAtomic rest)
   S.Tupled a -> printBraces' $ D.indent <<< printAtomic <$> a
   S.Map fields -> D.text "#" <> printBraces_ (D.indent <<< printField <$> fields)
-  S.MapPattern fields -> D.text "#" <> printBraces_ (D.indent <<< printFieldPattern <$> fields)
   S.MapUpdate e fields | tiny e -> printAtomic e <> D.text "#" <> printBraces_ (printField <$> fields)
   S.MapUpdate e fields -> D.text "(" <> printAtomic e <> D.text ")#" <> printBraces_ (printField <$> fields)
 
-  S.Match e1 e2 -> printExpr e1 <> D.text " = " <> printExpr e2
-
-  S.Block exprs ->
+  S.Assignments [] ret -> printExpr' prec ret
+  S.Assignments exprs ret ->
     D.text "begin" <> D.break <>
-      D.indent (D.foldWithSeparator trailingComma (printAtomic <<< skipUnusedMatch <$> exprs)) <> D.break <>
+      D.indent (D.foldWithSeparator (D.text "," <> D.break) (printStatement <$> exprs) <> D.text "," <> D.break <> printAtomic ret) <> D.break <>
     D.text "end"
 
   S.Fun name heads -> parenPrec prec $ do
@@ -187,7 +219,7 @@ printExpr' prec = case _ of
       printFunHead :: Tuple FunHead ErlExpr -> Doc Void
       printFunHead (Tuple (FunHead exprs g) e) =
         maybeSep D.text name D.space <>
-          printParens' (printExpr <$> exprs) <>
+          printParens' (printPattern <$> exprs) <>
           sepMaybe (D.text " when ") (coerce printAtomic) g <>
           D.text " ->" <> D.break <>
           D.indent (printAtomic e) <> D.break
@@ -241,7 +273,7 @@ printExpr' prec = case _ of
     D.text ("?" <> name) <> foldMap (printParens <<< commaSepMap printAtomic) args
 
 tiny :: ErlExpr -> Boolean
-tiny (S.Var _) = true
+tiny (S.Var _ []) = true
 tiny (S.Literal (S.Integer _)) = true
 tiny (S.Literal (S.Atom _)) = true
 tiny _ = false
@@ -252,7 +284,7 @@ printIfClause (IfClause guard e) =
 
 printCaseClause :: CaseClause -> Doc Void
 printCaseClause (CaseClause test guard e) =
-  printAtomic test <> sepMaybe (D.text " when ") (coerce printAtomic) guard <> D.text " ->" <> D.break <> D.indent (printAtomic e)
+  printPattern test <> sepMaybe (D.text " when ") (coerce printAtomic) guard <> D.text " ->" <> D.break <> D.indent (printAtomic e)
 
 trailingSemi :: forall a. Doc a
 trailingSemi = flexAlt (D.text "; ") (D.text ";" <> D.break)
@@ -278,10 +310,6 @@ escapeAtom a =
       CodePointU.isLower head
         && Array.all atomCP (String.toCodePointArray a)
         && not (nameIsErlReserved a)
-
-skipUnusedMatch :: ErlExpr -> ErlExpr
-skipUnusedMatch (S.Match (S.Var "_") e) = e
-skipUnusedMatch e = e
 
 nameIsErlReserved :: String -> Boolean
 nameIsErlReserved name =
@@ -374,9 +402,9 @@ printField :: Tuple String ErlExpr -> Doc Void
 printField (Tuple f e) =
   D.text (escapeAtom f) <> D.text " =>" <> D.flexGroup (D.spaceBreak <> printAtomic e)
 
-printFieldPattern :: Tuple String ErlExpr -> Doc Void
+printFieldPattern :: Tuple String ErlPattern -> Doc Void
 printFieldPattern (Tuple f e) =
-  D.text (escapeAtom f) <> D.text " :=" <> D.flexGroup (D.spaceBreak <> printAtomic e)
+  D.text (escapeAtom f) <> D.text " :=" <> D.flexGroup (D.spaceBreak <> printPattern e)
 
 isAscii :: String -> Boolean
 isAscii = toCodePointArray >>> all U.isAscii

@@ -20,7 +20,7 @@
         , result/0
         ]).
 -compile(no_auto_import).
--define( IS_TAG(Tag, V)
+-define( IS_KNOWN_TAG(Tag, Arity, V)
        , ((erlang:is_tuple(V))
          andalso ((1 =< (erlang:tuple_size(V)))
            andalso (Tag =:= (erlang:element(1, V)))))
@@ -157,7 +157,8 @@ maybeArray() ->
   end.
 
 maybeArray(A) ->
-  case ?IS_TAG(just, A) andalso ((array:size(erlang:element(2, A))) =:= 2) of
+  case ?IS_KNOWN_TAG(just, 1, A)
+      andalso ((array:size(erlang:element(2, A))) =:= 2) of
     true ->
       (array:get(0, erlang:element(2, A)))
         + (array:get(1, erlang:element(2, A)));
