@@ -24,8 +24,8 @@
 -compile(no_auto_import).
 'State'() ->
   fun
-    (X@Local) ->
-      'State'(X@Local)
+    (X) ->
+      'State'(X)
   end.
 
 'State'(X) ->
@@ -50,8 +50,8 @@ functorState() ->
 
 freshMTL() ->
   fun
-    (X@Local) ->
-      freshMTL(X@Local)
+    (X) ->
+      freshMTL(X)
   end.
 
 freshMTL(X) ->
@@ -59,21 +59,20 @@ freshMTL(X) ->
 
 freshE() ->
   fun
-    (DictMonadState@Local) ->
-      freshE(DictMonadState@Local)
+    (DictMonadState) ->
+      freshE(DictMonadState)
   end.
 
-freshE(DictMonadState) ->
-  (erlang:map_get(state, DictMonadState))
-  (fun
+freshE(#{ state := DictMonadState@1 }) ->
+  DictMonadState@1(fun
     (S) ->
       {tuple, S, S + 1}
   end).
 
 fresh() ->
   fun
-    (S@Local) ->
-      fresh(S@Local)
+    (S) ->
+      fresh(S)
   end.
 
 fresh(S) ->
@@ -81,8 +80,8 @@ fresh(S) ->
 
 exMTL() ->
   fun
-    (S@Local) ->
-      exMTL(S@Local)
+    (S) ->
+      exMTL(S)
   end.
 
 exMTL(S) ->
@@ -93,8 +92,8 @@ exMTL(S) ->
 
 'exE\''() ->
   fun
-    (S@Local) ->
-      'exE\''(S@Local)
+    (S) ->
+      'exE\''(S)
   end.
 
 'exE\''(S) ->
@@ -108,8 +107,8 @@ exMTL(S) ->
 
 exE() ->
   fun
-    (S@Local) ->
-      exE(S@Local)
+    (S) ->
+      exE(S)
   end.
 
 exE(S) ->
@@ -151,7 +150,7 @@ bindState() ->
      end
    , 'Apply0' =>
      fun
-       (_) ->
+       (V) ->
          applyState()
      end
    }.
@@ -199,8 +198,8 @@ applicativeState() ->
 
 ex() ->
   fun
-    (S@Local) ->
-      ex(S@Local)
+    (S) ->
+      ex(S)
   end.
 
 ex(S) ->

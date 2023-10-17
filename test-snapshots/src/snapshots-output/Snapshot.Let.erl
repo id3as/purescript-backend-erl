@@ -11,8 +11,8 @@
 -compile(no_auto_import).
 letRecursive() ->
   fun
-    (X@Local) ->
-      letRecursive(X@Local)
+    (X) ->
+      letRecursive(X)
   end.
 
 letRecursive(X) ->
@@ -25,8 +25,8 @@ letRecursive(X) ->
 
 letChain() ->
   fun
-    (X@Local) ->
-      letChain(X@Local)
+    (X) ->
+      letChain(X)
   end.
 
 letChain(X) ->
@@ -39,8 +39,8 @@ letChain(X) ->
 
 isOdd() ->
   fun
-    (X@Local) ->
-      isOdd(X@Local)
+    (X) ->
+      isOdd(X)
   end.
 
 isOdd(X) ->
@@ -53,8 +53,8 @@ isOdd(X) ->
 
 isEven() ->
   fun
-    (X@Local) ->
-      isEven(X@Local)
+    (X) ->
+      isEven(X)
   end.
 
 isEven(X) ->

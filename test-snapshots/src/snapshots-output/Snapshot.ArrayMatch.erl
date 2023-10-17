@@ -27,8 +27,8 @@
        ).
 onlyArray() ->
   fun
-    (A@Local) ->
-      onlyArray(A@Local)
+    (A) ->
+      onlyArray(A)
   end.
 
 onlyArray(A) ->
@@ -41,42 +41,27 @@ onlyArray(A) ->
 
 nestedArrayViaRecord() ->
   fun
-    (V@Local) ->
-      nestedArrayViaRecord(V@Local)
+    (V) ->
+      nestedArrayViaRecord(V)
   end.
 
-nestedArrayViaRecord(V) ->
-  case (array:size(erlang:map_get(q, V))) =:= 1 of
+nestedArrayViaRecord(#{ q := V@1 }) ->
+  case (array:size(V@1)) =:= 1 of
     true ->
-      case (array:size(erlang:map_get(r, array:get(0, erlang:map_get(q, V)))))
-          =:= 2 of
+      case (array:size(erlang:map_get(r, array:get(0, V@1)))) =:= 2 of
         true ->
-          (array:get(0, erlang:map_get(r, array:get(0, erlang:map_get(q, V)))))
-            + (array:get(
-                 1,
-                 erlang:map_get(r, array:get(0, erlang:map_get(q, V)))
-               ));
+          (array:get(0, erlang:map_get(r, array:get(0, V@1))))
+            + (array:get(1, erlang:map_get(r, array:get(0, V@1))));
         _ ->
           0
       end;
     _ ->
-      case ((array:size(erlang:map_get(q, V))) =:= 2)
-          andalso (((array:size(erlang:map_get(
-                                  r,
-                                  array:get(0, erlang:map_get(q, V))
-                                )))
-            =:= 1)
-            andalso ((array:size(erlang:map_get(
-                                   r,
-                                   array:get(1, erlang:map_get(q, V))
-                                 )))
-              =:= 1)) of
+      case ((array:size(V@1)) =:= 2)
+          andalso (((array:size(erlang:map_get(r, array:get(0, V@1)))) =:= 1)
+            andalso ((array:size(erlang:map_get(r, array:get(1, V@1)))) =:= 1)) of
         true ->
-          (array:get(0, erlang:map_get(r, array:get(0, erlang:map_get(q, V)))))
-            + (array:get(
-                 0,
-                 erlang:map_get(r, array:get(1, erlang:map_get(q, V)))
-               ));
+          (array:get(0, erlang:map_get(r, array:get(0, V@1))))
+            + (array:get(0, erlang:map_get(r, array:get(1, V@1))));
         _ ->
           0
       end
@@ -84,10 +69,10 @@ nestedArrayViaRecord(V) ->
 
 nestedArrayRefutable2() ->
   fun
-    (V@Local) ->
+    (V) ->
       fun
-        (V1@Local@1) ->
-          nestedArrayRefutable2(V@Local, V1@Local@1)
+        (V1) ->
+          nestedArrayRefutable2(V, V1)
       end
   end.
 
@@ -103,10 +88,10 @@ nestedArrayRefutable2(V, V1) ->
 
 nestedArrayRefutable() ->
   fun
-    (Arg1@Local) ->
+    (Arg1) ->
       fun
-        (Arg2@Local@1) ->
-          nestedArrayRefutable(Arg1@Local, Arg2@Local@1)
+        (Arg2) ->
+          nestedArrayRefutable(Arg1, Arg2)
       end
   end.
 
@@ -124,8 +109,8 @@ nestedArrayRefutable(Arg1, Arg2) ->
 
 nestedArray() ->
   fun
-    (V@Local) ->
-      nestedArray(V@Local)
+    (V) ->
+      nestedArray(V)
   end.
 
 nestedArray(V) ->
@@ -138,8 +123,8 @@ nestedArray(V) ->
 
 namedArray() ->
   fun
-    (V@Local) ->
-      namedArray(V@Local)
+    (V) ->
+      namedArray(V)
   end.
 
 namedArray(V) ->
@@ -152,8 +137,8 @@ namedArray(V) ->
 
 maybeArray() ->
   fun
-    (A@Local) ->
-      maybeArray(A@Local)
+    (A) ->
+      maybeArray(A)
   end.
 
 maybeArray(A) ->
@@ -168,8 +153,8 @@ maybeArray(A) ->
 
 bug28_2() ->
   fun
-    (A@Local) ->
-      bug28_2(A@Local)
+    (A) ->
+      bug28_2(A)
   end.
 
 bug28_2(_) ->
@@ -177,15 +162,14 @@ bug28_2(_) ->
 
 bug28() ->
   fun
-    (A@Local) ->
-      bug28(A@Local)
+    (A) ->
+      bug28(A)
   end.
 
-bug28(A) ->
-  case (array:size(erlang:map_get(q, A))) =:= 2 of
+bug28(#{ q := A@1 }) ->
+  case (array:size(A@1)) =:= 2 of
     true ->
-      (array:get(0, erlang:map_get(q, A)))
-        + (array:get(1, erlang:map_get(q, A)));
+      (array:get(0, A@1)) + (array:get(1, A@1));
     _ ->
       0
   end.

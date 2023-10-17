@@ -34,8 +34,8 @@ uncons1() ->
 
 uncons0() ->
   fun
-    (L@Local) ->
-      uncons0(L@Local)
+    (L) ->
+      uncons0(L)
   end.
 
 uncons0(L) ->
@@ -58,10 +58,10 @@ hd() ->
 
 concatSimple() ->
   fun
-    (L@Local) ->
+    (L) ->
       fun
-        (R@Local@1) ->
-          concatSimple(L@Local, R@Local@1)
+        (R) ->
+          concatSimple(L, R)
       end
   end.
 
@@ -82,8 +82,8 @@ result() ->
 
 concatL() ->
   fun
-    (L@Local) ->
-      concatL(L@Local)
+    (L) ->
+      concatL(L)
   end.
 
 concatL(L) ->

@@ -79,39 +79,39 @@ x() ->
 
 test5() ->
   fun
-    (_@dollar__unused@Local) ->
+    (V) ->
       fun
-        (V@Local@1) ->
-          test5(_@dollar__unused@Local, V@Local@1)
+        (V@1) ->
+          test5(V, V@1)
       end
   end.
 
-test5(_, V) ->
+test5(_, V@1 = {_, V@2}) ->
   if
-    ?IS_KNOWN_TAG(first, 1, V) ->
-      erlang:element(2, V);
+    ?IS_KNOWN_TAG(first, 1, V@1) ->
+      V@2;
     true ->
       erlang:throw({fail, <<"Failed pattern match">>})
   end.
 
 test51() ->
   fun
-    (V@Local) ->
-      test51(V@Local)
+    (V) ->
+      test51(V)
   end.
 
-test51(V) ->
+test51(V = {_, V@1}) ->
   if
     ?IS_KNOWN_TAG(first, 1, V) ->
-      erlang:element(2, V);
+      V@1;
     true ->
       erlang:throw({fail, <<"Failed pattern match">>})
   end.
 
 test4() ->
   fun
-    (V@Local) ->
-      test4(V@Local)
+    (V) ->
+      test4(V)
   end.
 
 test4(V) ->
@@ -126,8 +126,8 @@ test4(V) ->
 
 test3() ->
   fun
-    (V@Local) ->
-      test3(V@Local)
+    (V) ->
+      test3(V)
   end.
 
 test3(V) ->
@@ -140,8 +140,8 @@ test3(V) ->
 
 test2() ->
   fun
-    (V@Local) ->
-      test2(V@Local)
+    (V) ->
+      test2(V)
   end.
 
 test2(V) ->
@@ -149,8 +149,8 @@ test2(V) ->
 
 test1() ->
   fun
-    (V@Local) ->
-      test1(V@Local)
+    (V) ->
+      test1(V)
   end.
 
 test1(_) ->
@@ -158,8 +158,8 @@ test1(_) ->
 
 'don\'tInlineMeMe'() ->
   fun
-    (A@Local) ->
-      'don\'tInlineMeMe'(A@Local)
+    (A) ->
+      'don\'tInlineMeMe'(A)
   end.
 
 'don\'tInlineMeMe'(A) ->

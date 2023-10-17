@@ -15,8 +15,8 @@
 -compile(no_auto_import).
 test4a() ->
   fun
-    (A@Local) ->
-      test4a(A@Local)
+    (A) ->
+      test4a(A)
   end.
 
 test4a(A) ->
@@ -34,8 +34,8 @@ test4b() ->
 
 test3a() ->
   fun
-    (V@Local, B@Local@1) ->
-      test3a(V@Local, B@Local@1)
+    (V, B) ->
+      test3a(V, B)
   end.
 
 test3a(_, B) ->
@@ -46,8 +46,8 @@ test3b() ->
 
 test2a() ->
   fun
-    (A@Local, V@Local@1) ->
-      test2a(A@Local, V@Local@1)
+    (A, V) ->
+      test2a(A, V)
   end.
 
 test2a(A, _) ->
@@ -74,8 +74,8 @@ main() ->
           V(),
           ((test_assert@ps:assert())((test2b()) =:= 1))(),
           ((test_assert@ps:assert())((test3b()) =:= 2))(),
-          V@1 = (test4b())(),
-          ((test_assert@ps:assert())(V@1 =:= <<"test4b">>))(),
+          V@4 = (test4b())(),
+          ((test_assert@ps:assert())(V@4 =:= <<"test4b">>))(),
           W = (test4a())(<<"test4b">>),
           ((test_assert@ps:assert())(W =:= <<"test4b">>))()
         end

@@ -40,7 +40,7 @@ addLevel (Level lvl) = (_ <> ("@" <> show lvl))
 
 toErlVarWith :: String -> Maybe Ident -> Level -> String
 toErlVarWith suffix text lvl =
-  maybe "V" (toErlVarName <<< unwrap) text <> "@" <> suffix # addLevel lvl
+  maybe "V" (toErlVarName <<< unwrap) text <> "@" <> suffix # addLevel (max (Level 0) lvl)
 
 -- String.replace (String.Pattern ".") (String.Replacement "_") (unwrap name)
 --   T.intercalate "_" (toAtomName <$> T.splitOn "." name)

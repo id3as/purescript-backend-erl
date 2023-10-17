@@ -129,7 +129,7 @@ printAttribute name a = D.text "-" <> D.text name <> printParens' a <> D.text ".
 printDefinition :: ErlDefinition -> Doc Void
 printDefinition = case _ of
   S.FunctionDefinition name args e ->
-    D.text (escapeAtom name) <> printParens (commaSep $ D.text <$> args) <> D.text " ->"
+    D.text (escapeAtom name) <> printParens (commaSep $ printPattern <$> args) <> D.text " ->"
       <> D.break <> D.indent (printAtomic e)
       <> D.text "." <> D.break
 
@@ -176,6 +176,7 @@ printPattern = case _ of
   S.BindVar v -> D.text v
   S.Discard -> D.text "_"
   S.MatchBoth v S.Discard -> D.text v
+  S.MatchBoth "_" e -> printPattern e
   S.MatchBoth v e -> D.text v <> D.text " = " <> printPattern e
 
 

@@ -13,10 +13,10 @@
 -compile(no_auto_import).
 stringComparison() ->
   fun
-    (X@Local) ->
+    (X) ->
       fun
-        (Y@Local@1) ->
-          stringComparison(X@Local, Y@Local@1)
+        (Y) ->
+          stringComparison(X, Y)
       end
   end.
 
@@ -25,10 +25,10 @@ stringComparison(X, Y) ->
 
 numberComparison() ->
   fun
-    (X@Local) ->
+    (X) ->
       fun
-        (Y@Local@1) ->
-          numberComparison(X@Local, Y@Local@1)
+        (Y) ->
+          numberComparison(X, Y)
       end
   end.
 
@@ -37,10 +37,10 @@ numberComparison(X, Y) ->
 
 integerComparison() ->
   fun
-    (X@Local) ->
+    (X) ->
       fun
-        (Y@Local@1) ->
-          integerComparison(X@Local, Y@Local@1)
+        (Y) ->
+          integerComparison(X, Y)
       end
   end.
 
@@ -49,10 +49,10 @@ integerComparison(X, Y) ->
 
 charComparison() ->
   fun
-    (X@Local) ->
+    (X) ->
       fun
-        (Y@Local@1) ->
-          charComparison(X@Local, Y@Local@1)
+        (Y) ->
+          charComparison(X, Y)
       end
   end.
 
@@ -61,10 +61,10 @@ charComparison(X, Y) ->
 
 booleanComparison() ->
   fun
-    (X@Local) ->
+    (X) ->
       fun
-        (Y@Local@1) ->
-          booleanComparison(X@Local, Y@Local@1)
+        (Y) ->
+          booleanComparison(X, Y)
       end
   end.
 

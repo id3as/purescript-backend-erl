@@ -21,8 +21,8 @@
 
 noInline() ->
   fun
-    (A@Local) ->
-      noInline(A@Local)
+    (A) ->
+      noInline(A)
   end.
 
 noInline(A) ->
@@ -30,13 +30,16 @@ noInline(A) ->
 
 isSecretMsg() ->
   fun
-    (V@Local) ->
-      isSecretMsg(V@Local)
+    (V) ->
+      isSecretMsg(V)
   end.
 
 isSecretMsg(V) ->
   ?IS_KNOWN_TAG(privateProcessTTimeoutMsg__, 0, V).
 
 result() ->
-  ?IS_KNOWN_TAG(privateProcessTTimeoutMsg__, 0, noInline(1)).
+  begin
+    V = noInline(1),
+    ?IS_KNOWN_TAG(privateProcessTTimeoutMsg__, 0, V)
+  end.
 

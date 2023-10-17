@@ -8,10 +8,10 @@
        ).
 foldr() ->
   fun
-    (F@Local) ->
+    (F) ->
       fun
-        (B@Local@1) ->
-          foldr(F@Local, B@Local@1)
+        (B) ->
+          foldr(F, B)
       end
   end.
 
@@ -24,26 +24,26 @@ foldr(F, B) ->
             B@1;
           ?IS_KNOWN_TAG(cons, 2, V) ->
             begin
-              {_, V@@0, V@@1} = V,
+              {_, V@1, V@2} = V,
               ((fun
-                 (B@Local) ->
+                 (B@2) ->
                    fun
-                     (V@Local@1) ->
-                       Go(B@Local, V@Local@1)
+                     (V@3) ->
+                       Go(B@2, V@3)
                    end
                end)
-               ((F(V@@0))(B@1)))
-              (V@@1)
+               ((F(V@1))(B@1)))
+              (V@2)
             end;
           true ->
             erlang:throw({fail, <<"Failed pattern match">>})
         end
     end,
     V = (fun
-          (B@Local) ->
+          (B@1) ->
             fun
-              (V@Local@1) ->
-                Go(B@Local, V@Local@1)
+              (V) ->
+                Go(B@1, V)
             end
         end)
         (B),
@@ -54,26 +54,26 @@ foldr(F, B) ->
             V@1;
           ?IS_KNOWN_TAG(cons, 2, V1) ->
             begin
-              {_, V1@@0, V1@@1} = V1,
+              {_, V1@1, V1@2} = V1,
               ((fun
-                 (V@Local) ->
+                 (V@2) ->
                    fun
-                     (V1@Local@1) ->
-                       Go@1(V@Local, V1@Local@1)
+                     (V1@3) ->
+                       Go@1(V@2, V1@3)
                    end
                end)
-               ({cons, V1@@0, V@1}))
-              (V1@@1)
+               ({cons, V1@1, V@1}))
+              (V1@2)
             end;
           true ->
             erlang:throw({fail, <<"Failed pattern match">>})
         end
     end,
     V@1 = (fun
-            (V@Local) ->
+            (V@1) ->
               fun
-                (V1@Local@1) ->
-                  Go@1(V@Local, V1@Local@1)
+                (V1) ->
+                  Go@1(V@1, V1)
               end
           end)
           ({nil}),

@@ -14,10 +14,10 @@
 -compile(no_auto_import).
 i() ->
   fun
-    (V@Local) ->
+    (V) ->
       fun
-        (V1@Local@1) ->
-          i(V@Local, V1@Local@1)
+        (V1) ->
+          i(V, V1)
       end
   end.
 
@@ -35,8 +35,8 @@ i(V, V1) ->
 
 h() ->
   fun
-    (V@Local) ->
-      h(V@Local)
+    (V) ->
+      h(V)
   end.
 
 h(V) ->
@@ -49,8 +49,8 @@ h(V) ->
 
 g() ->
   fun
-    (V@Local) ->
-      g(V@Local)
+    (V) ->
+      g(V)
   end.
 
 g(V) ->
@@ -67,12 +67,12 @@ g(V) ->
 
 f() ->
   fun
-    (X@Local) ->
+    (X) ->
       fun
-        (Y@Local@1) ->
+        (Y) ->
           fun
-            (Z@Local@2) ->
-              f(X@Local, Y@Local@1, Z@Local@2)
+            (Z) ->
+              f(X, Y, Z)
           end
       end
   end.
@@ -113,8 +113,8 @@ result() ->
 
 dontInlineMe() ->
   fun
-    (A@Local) ->
-      dontInlineMe(A@Local)
+    (A) ->
+      dontInlineMe(A)
   end.
 
 dontInlineMe(A) ->

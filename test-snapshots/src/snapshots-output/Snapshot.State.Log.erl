@@ -3,21 +3,20 @@
 -compile(no_auto_import).
 freshE() ->
   fun
-    (DictMonadState@Local) ->
-      freshE(DictMonadState@Local)
+    (DictMonadState) ->
+      freshE(DictMonadState)
   end.
 
-freshE(DictMonadState) ->
-  (erlang:map_get(state, DictMonadState))
-  (fun
+freshE(#{ state := DictMonadState@1 }) ->
+  DictMonadState@1(fun
     (S) ->
       {tuple, S, S + 1}
   end).
 
 'exE\''() ->
   fun
-    (S@Local) ->
-      'exE\''(S@Local)
+    (S) ->
+      'exE\''(S)
   end.
 
 'exE\''(S) ->
@@ -35,8 +34,8 @@ freshE(DictMonadState) ->
 
 exE() ->
   fun
-    (S@Local) ->
-      exE(S@Local)
+    (S) ->
+      exE(S)
   end.
 
 exE(S) ->

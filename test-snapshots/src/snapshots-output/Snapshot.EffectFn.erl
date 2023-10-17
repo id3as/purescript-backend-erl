@@ -3,8 +3,8 @@
 -compile(no_auto_import).
 x() ->
   fun
-    (A@Local) ->
-      x(A@Local)
+    (A) ->
+      x(A)
   end.
 
 x(A) ->
@@ -15,8 +15,8 @@ x(A) ->
 
 y() ->
   fun
-    (A@Local, B@Local@1) ->
-      y(A@Local, B@Local@1)
+    (A, B) ->
+      y(A, B)
   end.
 
 y(A, B) ->

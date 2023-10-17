@@ -34,10 +34,10 @@
        ).
 min() ->
   fun
-    (X@Local) ->
+    (X) ->
       fun
-        (Y@Local@1) ->
-          min(X@Local, Y@Local@1)
+        (Y) ->
+          min(X, Y)
       end
   end.
 
@@ -58,10 +58,10 @@ min(X, Y) ->
 
 max() ->
   fun
-    (X@Local) ->
+    (X) ->
       fun
-        (Y@Local@1) ->
-          max(X@Local, Y@Local@1)
+        (Y) ->
+          max(X, Y)
       end
   end.
 
@@ -82,8 +82,8 @@ max(X, Y) ->
 
 'N'() ->
   fun
-    (X@Local) ->
-      'N'(X@Local)
+    (X) ->
+      'N'(X)
   end.
 
 'N'(X) ->
@@ -99,8 +99,8 @@ newtypeN_() ->
 
 stringAppend() ->
   fun
-    (World@Local) ->
-      stringAppend(World@Local)
+    (World) ->
+      stringAppend(World)
   end.
 
 stringAppend(World) ->
@@ -123,12 +123,12 @@ inlineUnsafeCoerce() ->
 
 inlineUnary() ->
   fun
-    (I@Local) ->
+    (I) ->
       fun
-        (N@Local@1) ->
+        (N) ->
           fun
-            (B@Local@2) ->
-              inlineUnary(I@Local, N@Local@1, B@Local@2)
+            (B) ->
+              inlineUnary(I, N, B)
           end
       end
   end.
@@ -141,8 +141,8 @@ inlineOver2() ->
 
 inlineOver() ->
   fun
-    (V@Local) ->
-      inlineOver(V@Local)
+    (V) ->
+      inlineOver(V)
   end.
 
 inlineOver(V) ->
@@ -153,10 +153,10 @@ inlineListSingleton() ->
 
 inlineListCons() ->
   fun
-    (X@Local) ->
+    (X) ->
       fun
-        (V@Local@1) ->
-          inlineListCons(X@Local, V@Local@1)
+        (V) ->
+          inlineListCons(X, V)
       end
   end.
 
@@ -171,22 +171,16 @@ inlineCoerce() ->
 
 inlineBinary() ->
   fun
-    (I@Local) ->
+    (I) ->
       fun
-        (N@Local@1) ->
+        (N) ->
           fun
-            (B@Local@2) ->
+            (B) ->
               fun
-                (S@Local@3) ->
+                (S) ->
                   fun
-                    (C@Local@4) ->
-                      inlineBinary(
-                        I@Local,
-                        N@Local@1,
-                        B@Local@2,
-                        S@Local@3,
-                        C@Local@4
-                      )
+                    (C) ->
+                      inlineBinary(I, N, B, S, C)
                   end
               end
           end

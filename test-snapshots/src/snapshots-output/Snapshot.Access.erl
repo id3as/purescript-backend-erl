@@ -8,8 +8,8 @@
        ).
 foo() ->
   fun
-    (I@Local) ->
-      foo(I@Local)
+    (I) ->
+      foo(I)
   end.
 
 foo(I) ->
@@ -17,41 +17,41 @@ foo(I) ->
 
 f() ->
   fun
-    (I@Local) ->
-      f(I@Local)
+    (I) ->
+      f(I)
   end.
 
 f(I) ->
   begin
-    V = #{ x := V@@0, y := V@@1 } = foo(I),
-    V@@0 * V@@1
+    #{ x := V@1, y := V@2 } = foo(I),
+    V@1 * V@2
   end.
 
 bar() ->
   fun
-    (V@Local) ->
-      bar(V@Local)
+    (V) ->
+      bar(V)
   end.
 
-bar(V) ->
-  ((erlang:map_get(x, V)) - (erlang:map_get(y, V))) * (erlang:map_get(y, V)).
+bar(#{ x := V@1, y := V@2 }) ->
+  (V@1 - V@2) * V@2.
 
 g() ->
   fun
-    (I@Local) ->
-      g(I@Local)
+    (I) ->
+      g(I)
   end.
 
 g(I) ->
   begin
-    V = #{ x := V@@0, y := V@@1 } = foo(I),
-    (V@@0 * V@@1) + (bar(V))
+    V = #{ x := V@1, y := V@2 } = foo(I),
+    (V@1 * V@2) + (bar(V))
   end.
 
 h() ->
   fun
-    (Mi@Local) ->
-      h(Mi@Local)
+    (Mi) ->
+      h(Mi)
   end.
 
 h(Mi) ->

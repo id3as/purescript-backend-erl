@@ -3,32 +3,32 @@
 -compile(no_auto_import).
 result() ->
   begin
-    IsOdd@MutualFn = fun
-      (IsOdd@LocalFn, IsEven@LocalFn) ->
+    IsOdd = fun
+      (IsOdd, IsEven) ->
         fun
           (V) ->
             if
               V =:= 0 ->
                 false;
               true ->
-                (IsEven@LocalFn(IsOdd@LocalFn, IsEven@LocalFn))(V - 1)
+                (IsEven(IsOdd, IsEven))(V - 1)
             end
         end
     end,
-    IsEven@MutualFn = fun
-      (IsOdd@LocalFn, IsEven@LocalFn) ->
+    IsEven = fun
+      (IsOdd@1, IsEven) ->
         fun
           (V) ->
             if
               V =:= 0 ->
                 true;
               true ->
-                (IsOdd@LocalFn(IsOdd@LocalFn, IsEven@LocalFn))(V - 1)
+                (IsOdd@1(IsOdd@1, IsEven))(V - 1)
             end
         end
     end,
-    IsOdd = IsOdd@MutualFn(IsOdd@MutualFn, IsEven@MutualFn),
-    IsEven = IsEven@MutualFn(IsOdd@MutualFn, IsEven@MutualFn),
-    {tuple, IsEven(5), IsOdd(5)}
+    IsOdd@1 = IsOdd(IsOdd, IsEven),
+    IsEven@1 = IsEven(IsOdd, IsEven),
+    {tuple, IsEven@1(5), IsOdd@1(5)}
   end.
 

@@ -13,17 +13,20 @@ import Data.Map (Map, SemigroupMap(..))
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (over, unwrap)
+import Data.Profunctor (dimap)
 import Data.Profunctor.Strong ((&&&))
 import Data.Set as Set
 import Data.Tuple (Tuple(..), fst, snd, uncurry)
+import Debug (spy, spyWith)
+import Dodo as Dodo
 import Partial.Unsafe (unsafeCrashWith)
 import PureScript.Backend.Erl.Calling (CallPS(..), CallingPS(..), Conventions, Converters, GlobalErl(..), applyConventions, callAs, callAs', callErl, callPS, converts', thunkErl)
 import PureScript.Backend.Erl.Constants as C
-import PureScript.Backend.Erl.Convert.After (optimizePatterns)
-import PureScript.Backend.Erl.Convert.Before (renameRoot)
+import PureScript.Backend.Erl.Convert.After (optimizePatterns, optimizePatternsDecl)
 import PureScript.Backend.Erl.Convert.Common (erlModuleNameForeign, erlModuleNamePs, tagAtom, toAtomName, toErlVar, toErlVarExpr, toErlVarName, toErlVarPat, toErlVarWith)
 import PureScript.Backend.Erl.Convert.Foreign (codegenForeign)
 import PureScript.Backend.Erl.Parser (ForeignDecls)
+import PureScript.Backend.Erl.Printer (printAtomic)
 import PureScript.Backend.Erl.Syntax (Accessor(..), ErlDefinition(..), ErlExport(..), ErlExpr, ErlModule, ErlPattern, access, atomLiteral, mIS_KNOWN_TAG, mIS_TAG, self)
 import PureScript.Backend.Erl.Syntax as S
 import PureScript.Backend.Optimizer.Convert (BackendModule, BackendBindingGroup)
@@ -74,8 +77,7 @@ codegenModule { name: currentModule, bindings, imports, foreign: foreign_, dataT
     definitions = Array.concat
       [ thisModuleBindings <@> codegenEnv
       , reexportForeigns <#> snd
-      ] <#> \(FunctionDefinition name args expr) ->
-        FunctionDefinition name args (optimizePatterns expr)
+      ] <#> optimizePatternsDecl
 
     reexportForeigns :: Array (Tuple Conventions ErlDefinition)
     reexportForeigns = foreigns.exported >>= \(Tuple decl arity) -> do
@@ -123,7 +125,7 @@ codegenTopLevelBindingGroup
   -> BackendBindingGroup Ident NeutralExpr
   -> Tuple Conventions (Array (CodegenEnv -> ErlDefinition))
 codegenTopLevelBindingGroup currentModule { bindings } =
-  foldMap (codegenTopLevelBinding currentModule <<< map renameRoot) bindings
+  foldMap (codegenTopLevelBinding currentModule) bindings
 
 codegenTopLevelBinding
   :: ModuleName
@@ -141,21 +143,21 @@ codegenTopLevelBinding currentModule (Tuple (Ident i) n) =
       let Tuple epats evars = locals vars in
       [ const $ FunctionDefinition i [] $ S.curriedFun epats $
           S.FunCall Nothing (S.Literal (S.Atom i)) evars
-      , \codegenEnv -> FunctionDefinition i (uncurry toErlVar <$> NEA.toArray vars) $ codegenExpr codegenEnv e
+      , \codegenEnv -> FunctionDefinition i (toErlVarPat <$> NEA.toArray vars) $ codegenExpr codegenEnv e
       ]
     UncurriedAbs vars e | Array.length vars > 0 ->
       callThisAs (callPS (Uncurried (void vars))) (callErl (void vars))
       let Tuple epats evars = locals vars in
       [ const $ FunctionDefinition i [] $ S.simpleFun epats $
           S.FunCall Nothing (S.Literal (S.Atom i)) evars
-      , \codegenEnv -> FunctionDefinition i (uncurry toErlVar <$> vars) $ codegenExpr codegenEnv e
+      , \codegenEnv -> FunctionDefinition i (toErlVarPat <$> vars) $ codegenExpr codegenEnv e
       ]
     UncurriedEffectAbs vars e | Array.length vars > 0 ->
       callThisAs (callPS (UncurriedEffect (void vars))) (callErl (void vars) <|> thunkErl)
       let Tuple epats evars = locals vars in
       [ const $ FunctionDefinition i [] $ S.simpleFun epats $
           S.FunCall Nothing (S.Literal (S.Atom i)) evars
-      , \codegenEnv -> FunctionDefinition i (uncurry toErlVar <$> vars) $ codegenChain effectChainMode codegenEnv e
+      , \codegenEnv -> FunctionDefinition i (toErlVarPat <$> vars) $ codegenChain effectChainMode codegenEnv e
       ]
     _ -> pure
       [ \codegenEnv -> FunctionDefinition i [] $ codegenExpr codegenEnv n ]

@@ -3,8 +3,8 @@
 -compile(no_auto_import).
 testAccessorGetIndex() ->
   fun
-    (V@Local) ->
-      testAccessorGetIndex(V@Local)
+    (V) ->
+      testAccessorGetIndex(V)
   end.
 
 testAccessorGetIndex(V) ->

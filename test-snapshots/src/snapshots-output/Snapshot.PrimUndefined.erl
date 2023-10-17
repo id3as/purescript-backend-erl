@@ -3,12 +3,12 @@
 -compile(no_auto_import).
 testCase() ->
   fun
-    (DictRing@Local) ->
-      testCase(DictRing@Local)
+    (DictRing) ->
+      testCase(DictRing)
   end.
 
-testCase(DictRing) ->
-  erlang:map_get(add, (erlang:map_get('Semiring0', DictRing))(undefined)).
+testCase(#{ 'Semiring0' := DictRing@1 }) ->
+  erlang:map_get(add, DictRing@1(undefined)).
 
 main() ->
   (test_assert@ps:assert())((((testCase(data_ring@ps:ringInt()))(1))(1)) =:= 2).

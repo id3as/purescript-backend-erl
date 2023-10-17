@@ -11,10 +11,10 @@
 -compile(no_auto_import).
 stringOps() ->
   fun
-    (X@Local) ->
+    (X) ->
       fun
-        (Y@Local@1) ->
-          stringOps(X@Local, Y@Local@1)
+        (Y) ->
+          stringOps(X, Y)
       end
   end.
 
@@ -23,10 +23,10 @@ stringOps(X, Y) ->
 
 numberOps() ->
   fun
-    (X@Local) ->
+    (X) ->
       fun
-        (Y@Local@1) ->
-          numberOps(X@Local, Y@Local@1)
+        (Y) ->
+          numberOps(X, Y)
       end
   end.
 
@@ -35,10 +35,10 @@ numberOps(X, Y) ->
 
 intOps() ->
   fun
-    (X@Local) ->
+    (X) ->
       fun
-        (Y@Local@1) ->
-          intOps(X@Local, Y@Local@1)
+        (Y) ->
+          intOps(X, Y)
       end
   end.
 
@@ -57,10 +57,10 @@ intOps(X, Y) ->
 
 booleanOps() ->
   fun
-    (X@Local) ->
+    (X) ->
       fun
-        (Y@Local@1) ->
-          booleanOps(X@Local, Y@Local@1)
+        (Y) ->
+          booleanOps(X, Y)
       end
   end.
 

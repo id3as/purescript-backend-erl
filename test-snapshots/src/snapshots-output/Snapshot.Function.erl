@@ -3,10 +3,10 @@
 -compile(no_auto_import).
 f() ->
   fun
-    (X@Local) ->
+    (X) ->
       fun
-        (Y@Local@1) ->
-          f(X@Local, Y@Local@1)
+        (Y) ->
+          f(X, Y)
       end
   end.
 
@@ -15,10 +15,10 @@ f(X, Y) ->
 
 g() ->
   fun
-    (X@Local) ->
+    (X) ->
       fun
-        (Y@Local@1) ->
-          g(X@Local, Y@Local@1)
+        (Y) ->
+          g(X, Y)
       end
   end.
 

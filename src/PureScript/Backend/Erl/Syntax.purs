@@ -30,7 +30,7 @@ data ErlDefinition
   -- |
   -- Top-level function definition
   --
-  = FunctionDefinition {- (Maybe EType) (Maybe SourceSpan) -} String (Array String) ErlExpr
+  = FunctionDefinition {- (Maybe EType) (Maybe SourceSpan) -} String (Array ErlPattern) ErlExpr
 
 data ErlExpr
   = Literal ErlLiteral

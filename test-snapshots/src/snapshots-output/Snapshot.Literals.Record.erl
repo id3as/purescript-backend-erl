@@ -3,10 +3,10 @@
 -compile(no_auto_import).
 recordAccess() ->
   fun
-    (V@Local) ->
-      recordAccess(V@Local)
+    (V) ->
+      recordAccess(V)
   end.
 
-recordAccess(V) ->
-  erlang:map_get(fooBarBaz, V).
+recordAccess(#{ fooBarBaz := V@1 }) ->
+  V@1.
 

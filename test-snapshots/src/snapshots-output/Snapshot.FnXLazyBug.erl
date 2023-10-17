@@ -8,22 +8,16 @@
        ).
 zipWith4() ->
   fun
-    (F@Local) ->
+    (F) ->
       fun
-        (As@Local@1) ->
+        (As) ->
           fun
-            (Bs@Local@2) ->
+            (Bs) ->
               fun
-                (Cs@Local@3) ->
+                (Cs) ->
                   fun
-                    (Ds@Local@4) ->
-                      zipWith4(
-                        F@Local,
-                        As@Local@1,
-                        Bs@Local@2,
-                        Cs@Local@3,
-                        Ds@Local@4
-                      )
+                    (Ds) ->
+                      zipWith4(F, As, Bs, Cs, Ds)
                   end
               end
           end
@@ -32,8 +26,8 @@ zipWith4() ->
 
 zipWith4(F, As, Bs, Cs, Ds) ->
   begin
-    Go@Rec = fun
-      Go@Rec () ->
+    Go = fun
+      Go () ->
         fun
           (Acc, As1, Bs1, Cs1, Ds1) ->
             begin
@@ -47,17 +41,17 @@ zipWith4(F, As, Bs, Cs, Ds) ->
                     andalso (?IS_KNOWN_TAG(just, 1, V1)
                       andalso ?IS_KNOWN_TAG(just, 1, V))) ->
                   begin
-                    {_, V@@0 = #{ head := V@@0@@0, tail := V@@0@@1 }} = V,
-                    {_, V1@@0 = #{ head := V1@@0@@0, tail := V1@@0@@1 }} = V1,
-                    {_, V2@@0 = #{ head := V2@@0@@0, tail := V2@@0@@1 }} = V2,
-                    {_, V3@@0 = #{ head := V3@@0@@0, tail := V3@@0@@1 }} = V3,
-                    (Go@Rec())
+                    {_, #{ head := V@2, tail := V@3 }} = V,
+                    {_, #{ head := V3@2, tail := V3@3 }} = V3,
+                    {_, #{ head := V2@2, tail := V2@3 }} = V2,
+                    {_, #{ head := V1@2, tail := V1@3 }} = V1,
+                    (Go())
                     (
-                      [ (((F(V3@@0@@0))(V2@@0@@0))(V1@@0@@0))(V@@0@@0) | Acc ],
-                      V3@@0@@1,
-                      V2@@0@@1,
-                      V1@@0@@1,
-                      V@@0@@1
+                      [ (((F(V3@2))(V2@2))(V1@2))(V@2) | Acc ],
+                      V3@3,
+                      V2@3,
+                      V1@3,
+                      V@3
                     )
                   end;
                 true ->
@@ -66,7 +60,7 @@ zipWith4(F, As, Bs, Cs, Ds) ->
             end
         end
     end,
-    (Go@Rec())([], As, Bs, Cs, Ds)
+    (Go())([], As, Bs, Cs, Ds)
   end.
 
 result() ->

@@ -47,8 +47,8 @@
        ).
 'NCtor'() ->
   fun
-    (X@Local) ->
-      'NCtor'(X@Local)
+    (X) ->
+      'NCtor'(X)
   end.
 
 'NCtor'(X) ->
@@ -56,8 +56,8 @@
 
 'NewtypeCtor\''() ->
   fun
-    (X@Local) ->
-      'NewtypeCtor\''(X@Local)
+    (X) ->
+      'NewtypeCtor\''(X)
   end.
 
 'NewtypeCtor\''(X) ->
@@ -83,8 +83,8 @@
 
 useNewtypeType() ->
   fun
-    (I@Local) ->
-      useNewtypeType(I@Local)
+    (I) ->
+      useNewtypeType(I)
   end.
 
 useNewtypeType(I) ->
@@ -92,8 +92,8 @@ useNewtypeType(I) ->
 
 useNewtypeCtor() ->
   fun
-    (I@Local) ->
-      useNewtypeCtor(I@Local)
+    (I) ->
+      useNewtypeCtor(I)
   end.
 
 useNewtypeCtor(I) ->
@@ -101,8 +101,8 @@ useNewtypeCtor(I) ->
 
 useDataType() ->
   fun
-    (V@Local) ->
-      useDataType(V@Local)
+    (V) ->
+      useDataType(V)
   end.
 
 useDataType(_) ->
@@ -110,8 +110,8 @@ useDataType(_) ->
 
 useDataCtor() ->
   fun
-    (S@Local) ->
-      useDataCtor(S@Local)
+    (S) ->
+      useDataCtor(S)
   end.
 
 useDataCtor(S) ->
@@ -119,17 +119,17 @@ useDataCtor(S) ->
 
 normal() ->
   fun
-    (Dict@Local) ->
-      normal(Dict@Local)
+    (Dict) ->
+      normal(Dict)
   end.
 
-normal(Dict) ->
-  erlang:map_get(normal, Dict).
+normal(#{ normal := Dict@1 }) ->
+  Dict@1.
 
 useNormal() ->
   fun
-    (DictNormal@Local) ->
-      useNormal(DictNormal@Local)
+    (DictNormal) ->
+      useNormal(DictNormal)
   end.
 
 useNormal(DictNormal) ->
@@ -173,21 +173,21 @@ useInstance() ->
 
 ignore() ->
   fun
-    (Dict@Local) ->
-      ignore(Dict@Local)
+    (Dict) ->
+      ignore(Dict)
   end.
 
-ignore(Dict) ->
-  erlang:map_get(ignore, Dict).
+ignore(#{ ignore := Dict@1 }) ->
+  Dict@1.
 
 useClass() ->
   fun
-    (DictClassName_@prime@Local) ->
-      useClass(DictClassName_@prime@Local)
+    (DictClassName_) ->
+      useClass(DictClassName_)
   end.
 
-useClass(DictClassName_@prime) ->
-  ignore(DictClassName_@prime).
+useClass(DictClassName_) ->
+  ignore(DictClassName_).
 
 'foo\'oo'() ->
   <<"foo\'oo">>.
@@ -219,17 +219,17 @@ foo() ->
 
 'classMember\''() ->
   fun
-    (Dict@Local) ->
-      'classMember\''(Dict@Local)
+    (Dict) ->
+      'classMember\''(Dict)
   end.
 
-'classMember\''(Dict) ->
-  erlang:map_get('classMember\'', Dict).
+'classMember\''(#{ 'classMember\'' := Dict@1 }) ->
+  Dict@1.
 
 useMember() ->
   fun
-    (DictClassMember@Local) ->
-      useMember(DictClassMember@Local)
+    (DictClassMember) ->
+      useMember(DictClassMember)
   end.
 
 useMember(DictClassMember) ->
