@@ -24,11 +24,6 @@
         , result/0
         ]).
 -compile(no_auto_import).
--define( IS_KNOWN_TAG(Tag, Arity, V)
-       , ((erlang:is_tuple(V))
-         andalso ((1 =< (erlang:tuple_size(V)))
-           andalso (Tag =:= (erlang:element(1, V)))))
-       ).
 'First'() ->
   fun
     (Value0) ->
@@ -86,12 +81,12 @@ test5() ->
       end
   end.
 
-test5(_, V@1 = {_, V@2}) ->
-  if
-    ?IS_KNOWN_TAG(first, 1, V@1) ->
+test5(_, V@1 = {first, V@2}) ->
+  case V@1 of
+    {first, _} ->
       V@2;
-    true ->
-      erlang:throw({fail, <<"Failed pattern match">>})
+    _ ->
+      erlang:error({fail, <<"Failed pattern match">>})
   end.
 
 test51() ->
@@ -100,12 +95,12 @@ test51() ->
       test51(V)
   end.
 
-test51(V = {_, V@1}) ->
-  if
-    ?IS_KNOWN_TAG(first, 1, V) ->
+test51(V = {first, V@1}) ->
+  case V of
+    {first, _} ->
       V@1;
-    true ->
-      erlang:throw({fail, <<"Failed pattern match">>})
+    _ ->
+      erlang:error({fail, <<"Failed pattern match">>})
   end.
 
 test4() ->
@@ -115,13 +110,13 @@ test4() ->
   end.
 
 test4(V) ->
-  if
-    ?IS_KNOWN_TAG(first, 1, V) ->
-      erlang:element(2, V);
-    ?IS_KNOWN_TAG(last, 1, V) ->
-      erlang:element(2, V);
-    true ->
-      erlang:throw({fail, <<"Failed pattern match">>})
+  case V of
+    {first, V@1} ->
+      V@1;
+    {last, V@2} ->
+      V@2;
+    _ ->
+      erlang:error({fail, <<"Failed pattern match">>})
   end.
 
 test3() ->

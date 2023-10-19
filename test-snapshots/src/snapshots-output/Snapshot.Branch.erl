@@ -30,7 +30,7 @@ i(V, V1) ->
     V1 ->
       false;
     true ->
-      erlang:throw({fail, <<"Failed pattern match">>})
+      erlang:error({fail, <<"Failed pattern match">>})
   end.
 
 h() ->
@@ -44,7 +44,7 @@ h(V) ->
     V =:= 3.14 ->
       3.14159;
     true ->
-      erlang:throw({fail, <<"Failed pattern match">>})
+      erlang:error({fail, <<"Failed pattern match">>})
   end.
 
 g() ->

@@ -22,7 +22,7 @@
 -compile(no_auto_import).
 -define( IS_KNOWN_TAG(Tag, Arity, V)
        , ((erlang:is_tuple(V))
-         andalso ((1 =< (erlang:tuple_size(V)))
+         andalso (((Arity + 1) =:= (erlang:tuple_size(V)))
            andalso (Tag =:= (erlang:element(1, V)))))
        ).
 onlyArray() ->
@@ -45,13 +45,16 @@ nestedArrayViaRecord() ->
       nestedArrayViaRecord(V)
   end.
 
-nestedArrayViaRecord(#{ q := V@1 }) ->
+nestedArrayViaRecord(V = #{ q := V@1 }) ->
   case (array:size(V@1)) =:= 1 of
     true ->
       case (array:size(erlang:map_get(r, array:get(0, V@1)))) =:= 2 of
         true ->
-          (array:get(0, erlang:map_get(r, array:get(0, V@1))))
-            + (array:get(1, erlang:map_get(r, array:get(0, V@1))));
+          begin
+            #{ q := V@2 } = V,
+            (array:get(0, erlang:map_get(r, array:get(0, V@2))))
+              + (array:get(1, erlang:map_get(r, array:get(0, V@2))))
+          end;
         _ ->
           0
       end;
@@ -60,8 +63,11 @@ nestedArrayViaRecord(#{ q := V@1 }) ->
           andalso (((array:size(erlang:map_get(r, array:get(0, V@1)))) =:= 1)
             andalso ((array:size(erlang:map_get(r, array:get(1, V@1)))) =:= 1)) of
         true ->
-          (array:get(0, erlang:map_get(r, array:get(0, V@1))))
-            + (array:get(0, erlang:map_get(r, array:get(1, V@1))));
+          begin
+            #{ q := V@3 } = V,
+            (array:get(0, erlang:map_get(r, array:get(0, V@3))))
+              + (array:get(0, erlang:map_get(r, array:get(1, V@3))))
+          end;
         _ ->
           0
       end
@@ -145,8 +151,10 @@ maybeArray(A) ->
   case ?IS_KNOWN_TAG(just, 1, A)
       andalso ((array:size(erlang:element(2, A))) =:= 2) of
     true ->
-      (array:get(0, erlang:element(2, A)))
-        + (array:get(1, erlang:element(2, A)));
+      begin
+        {just, A@1} = A,
+        (array:get(0, A@1)) + (array:get(1, A@1))
+      end;
     _ ->
       0
   end.
@@ -166,10 +174,13 @@ bug28() ->
       bug28(A)
   end.
 
-bug28(#{ q := A@1 }) ->
+bug28(A = #{ q := A@1 }) ->
   case (array:size(A@1)) =:= 2 of
     true ->
-      (array:get(0, A@1)) + (array:get(1, A@1));
+      begin
+        #{ q := A@2 } = A,
+        (array:get(0, A@2)) + (array:get(1, A@2))
+      end;
     _ ->
       0
   end.

@@ -1,11 +1,6 @@
 -module(snapshot_access@ps).
 -export([foo/0, foo/1, f/0, f/1, bar/0, bar/1, g/0, g/1, h/0, h/1]).
 -compile(no_auto_import).
--define( IS_KNOWN_TAG(Tag, Arity, V)
-       , ((erlang:is_tuple(V))
-         andalso ((1 =< (erlang:tuple_size(V)))
-           andalso (Tag =:= (erlang:element(1, V)))))
-       ).
 foo() ->
   fun
     (I) ->
@@ -55,12 +50,11 @@ h() ->
   end.
 
 h(Mi) ->
-  if
-    ?IS_KNOWN_TAG(just, 1, Mi) ->
-      ((erlang:map_get(x, foo(erlang:element(2, Mi))))
-        * (erlang:map_get(y, foo(erlang:element(2, Mi)))))
-        + (bar(foo(erlang:element(2, Mi))));
-    true ->
+  case Mi of
+    {just, Mi@1} ->
+      ((erlang:map_get(x, foo(Mi@1))) * (erlang:map_get(y, foo(Mi@1))))
+        + (bar(foo(Mi@1)));
+    _ ->
       0
   end.
 

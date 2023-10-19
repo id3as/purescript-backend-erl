@@ -40,11 +40,6 @@
         , useMember/1
         ]).
 -compile(no_auto_import).
--define( IS_KNOWN_TAG(Tag, Arity, V)
-       , ((erlang:is_tuple(V))
-         andalso ((1 =< (erlang:tuple_size(V)))
-           andalso (Tag =:= (erlang:element(1, V)))))
-       ).
 'NCtor'() ->
   fun
     (X) ->
@@ -154,13 +149,13 @@ useNormal(DictNormal) ->
   #{ normal =>
      fun
        (V) ->
-         if
-           ?IS_KNOWN_TAG(f1, 0, V) ->
+         case V of
+           {f1} ->
              <<"F1">>;
-           ?IS_KNOWN_TAG(f2, 0, V) ->
+           {f2} ->
              <<"F2">>;
-           true ->
-             erlang:throw({fail, <<"Failed pattern match">>})
+           _ ->
+             erlang:error({fail, <<"Failed pattern match">>})
          end
      end
    }.

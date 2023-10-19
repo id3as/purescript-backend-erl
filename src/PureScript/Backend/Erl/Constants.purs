@@ -54,3 +54,6 @@ from_list = "from_list"
 
 throw :: String
 throw = "throw"
+
+error :: String
+error = "error"

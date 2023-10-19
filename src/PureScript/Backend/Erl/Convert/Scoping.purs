@@ -80,7 +80,10 @@ overNames f = case _ of
   S.BindVar name -> f name <#> \rename ->
     if rename == "_" then S.Discard else S.BindVar rename
   p@(S.MatchLiteral _) -> pure p
-  S.MatchBoth name pat -> S.MatchBoth <$> f name <*> overNames f pat
+  S.MatchBoth name pat -> ado
+    rename <- f name
+    pat' <- overNames f pat
+    in if rename == "_" then pat' else S.MatchBoth rename pat'
   S.MatchMap pats -> S.MatchMap <$> traverse (traverse (overNames f)) pats
   S.MatchTuple pats -> S.MatchTuple <$> traverse (overNames f) pats
   S.MatchList pats mpat -> S.MatchList

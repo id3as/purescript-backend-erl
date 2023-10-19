@@ -11,16 +11,18 @@ import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Bifunctor (lmap)
 import Data.Either (Either(..), either)
-import Data.Foldable (for_, traverse_)
+import Data.Foldable (for_, sum, traverse_)
 import Data.List as List
 import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Monoid (power)
+import Data.Monoid.Additive (Additive(..))
 import Data.Newtype (unwrap)
 import Data.Set as Set
 import Data.String as String
 import Data.String.CodeUnits as SCU
 import Data.Tuple (Tuple(..))
+import Debug (traceM)
 import Dodo (plainText)
 import Dodo as Dodo
 import Effect (Effect)
@@ -42,6 +44,7 @@ import PureScript.Backend.Erl.Foreign (erlForeignSemantics)
 import PureScript.Backend.Erl.Foreign.Analyze (analyzeCustom)
 import PureScript.Backend.Erl.Parser (parseFile)
 import PureScript.Backend.Erl.Printer as P
+import PureScript.Backend.Erl.Syntax (ErlDefinition(..), visit)
 import PureScript.Backend.Optimizer.Builder (buildModules)
 import PureScript.Backend.Optimizer.CoreFn (Ident, Module(..), ModuleName(..), Qualified(..))
 import PureScript.Backend.Optimizer.Directives (parseDirectiveFile)
@@ -97,6 +100,19 @@ Stetson.HandlerProxy.provide arity=1
 Stetson.HandlerProxy.accept arity=1
 """
 
+
+-- printer :: forall a. Dodo.Printer String a (Aff Unit)
+-- printer = Printer
+--   { emptyBuffer: ""
+--   , writeText: \_ str buff -> buff <> str
+--   , writeIndent: \_ str buff -> buff <> str
+--   , writeBreak: \buff -> buff <> "\n"
+--   , enterAnnotation: \_ _ buff -> buff
+--   , leaveAnnotation: \_ _ buff -> buff
+--   , flushBuffer: \buff -> buff
+--   }
+
+
 runCompile :: MainArgs -> Aff Unit
 runCompile { compile, filter, cwd } = do
   liftEffect $ traverse_ Process.chdir cwd
@@ -143,6 +159,8 @@ runCompile { compile, filter, cwd } = do
             prevConventions <- liftEffect $ Ref.read conventionsRef
             let
               Tuple codegened nextConventions = codegenModule backend foreigns prevConventions
+            Console.log $ show $ sum $ unwrap <<< visit (const (Additive 1)) <<< (\(FunctionDefinition _ _ e) -> e) <$> codegened.definitions
+            let
               formatted =
                 Dodo.print plainText Dodo.twoSpaces
                   $ P.printModule codegened

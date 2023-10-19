@@ -78,6 +78,7 @@ data ErlPattern
   | MatchMap (Array (Tuple String ErlPattern))
   | MatchTuple (Array ErlPattern)
   | MatchList (Array ErlPattern) (Maybe ErlPattern)
+derive instance Eq ErlPattern
 
 data FunHead = FunHead (Array ErlPattern) (Maybe Guard)
 data IfClause = IfClause ErlExpr ErlExpr
@@ -93,6 +94,7 @@ data ErlLiteral
   | String String
   | Char Char
   | Atom String
+derive instance Eq ErlLiteral
 
 -- |
 -- Built-in binary operators
@@ -293,7 +295,6 @@ access' :: Boolean -> Accessor -> ErlExpr -> ErlExpr
 access' true acs (Var v acrs) = Var v (acrs <> [acs])
 access' _ (AcsElement n) e = callGlobal "erlang" "element" [intLiteral n, e]
 access' _ (AcsKey k) e = callGlobal "erlang" "map_get" [atomLiteral k, e]
--- access' _ (AcsTag t) e = mIS_TAG (atomLiteral t) e
 
 atomLiteral :: String -> ErlExpr
 atomLiteral = Literal <<< Atom
@@ -326,28 +327,16 @@ binops' op = NEA.foldr1 (BinOp op)
 
 predefMacros :: Array (Tuple (Tuple String (Maybe (NonEmptyArray String))) ErlExpr)
 predefMacros =
-  [ Tuple (Tuple "IS_TAG" (NEA.fromArray [ "Tag", "V" ])) $
+  [ Tuple (Tuple "IS_KNOWN_TAG" (NEA.fromArray [ "Tag", "Arity", "V" ])) $
       binops (Literal (Atom "true")) AndAlso
       [ FunCall (Just $ atomLiteral C.erlang) (atomLiteral "is_tuple") [ Var "V" self ]
-      , BinOp LessThanOrEqualTo (Literal (Integer 1)) $
-          FunCall (Just $ atomLiteral C.erlang) (atomLiteral "tuple_size") [ Var "V" self ]
-      , BinOp IdenticalTo (Var "Tag" self) $
-          FunCall (Just $ atomLiteral C.erlang) (atomLiteral C.element)
-            [ numberLiteral 1, Var "V" self ]
-      ]
-  , Tuple (Tuple "IS_KNOWN_TAG" (NEA.fromArray [ "Tag", "Arity", "V" ])) $
-      binops (Literal (Atom "true")) AndAlso
-      [ FunCall (Just $ atomLiteral C.erlang) (atomLiteral "is_tuple") [ Var "V" self ]
-      , BinOp LessThanOrEqualTo (Literal (Integer 1)) $
+      , BinOp IdenticalTo (BinOp Add (Var "Arity" self) (intLiteral 1)) $
           FunCall (Just $ atomLiteral C.erlang) (atomLiteral "tuple_size") [ Var "V" self ]
       , BinOp IdenticalTo (Var "Tag" self) $
           FunCall (Just $ atomLiteral C.erlang) (atomLiteral C.element)
             [ numberLiteral 1, Var "V" self ]
       ]
   ]
-
-mIS_TAG :: ErlExpr -> ErlExpr -> ErlExpr
-mIS_TAG tag v = Macro "IS_TAG" $ NEA.fromArray [ tag, v ]
 
 mIS_KNOWN_TAG :: ErlExpr -> Int -> ErlExpr -> ErlExpr
 mIS_KNOWN_TAG tag arity v = Macro "IS_KNOWN_TAG" $ NEA.fromArray [ tag, Literal (Integer arity), v ]
@@ -366,7 +355,6 @@ guardExpr = case _ of
   BinOp _ e1 e2 -> guardExpr e1 && guardExpr e2
   UnaryOp _ e -> guardExpr e
   BinaryAppend e1 e2 -> guardExpr e1 && guardExpr e2
-  Macro "IS_TAG" margs -> maybe false (all guardExpr <<< NEA.toArray) margs
   Macro "IS_KNOWN_TAG" margs -> maybe false (all guardExpr <<< NEA.toArray) margs
   _ -> false
 

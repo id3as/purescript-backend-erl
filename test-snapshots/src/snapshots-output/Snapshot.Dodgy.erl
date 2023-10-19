@@ -10,7 +10,7 @@
 -compile(no_auto_import).
 -define( IS_KNOWN_TAG(Tag, Arity, V)
        , ((erlang:is_tuple(V))
-         andalso ((1 =< (erlang:tuple_size(V)))
+         andalso (((Arity + 1) =:= (erlang:tuple_size(V)))
            andalso (Tag =:= (erlang:element(1, V)))))
        ).
 'PrivateProcessTTimeoutMsg__'() ->

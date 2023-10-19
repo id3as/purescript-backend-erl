@@ -27,10 +27,10 @@ import PureScript.Backend.Erl.Convert.Common (erlModuleNameForeign, erlModuleNam
 import PureScript.Backend.Erl.Convert.Foreign (codegenForeign)
 import PureScript.Backend.Erl.Parser (ForeignDecls)
 import PureScript.Backend.Erl.Printer (printAtomic)
-import PureScript.Backend.Erl.Syntax (Accessor(..), ErlDefinition(..), ErlExport(..), ErlExpr, ErlModule, ErlPattern, access, atomLiteral, mIS_KNOWN_TAG, mIS_TAG, self)
+import PureScript.Backend.Erl.Syntax (Accessor(..), ErlDefinition(..), ErlExport(..), ErlExpr, ErlModule, ErlPattern, access, atomLiteral, mIS_KNOWN_TAG, self)
 import PureScript.Backend.Erl.Syntax as S
 import PureScript.Backend.Optimizer.Convert (BackendModule, BackendBindingGroup)
-import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal(..), ModuleName, Prop(..), Qualified(..))
+import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal(..), ModuleName(..), Prop(..), Qualified(..))
 import PureScript.Backend.Optimizer.Semantics (NeutralExpr)
 import PureScript.Backend.Optimizer.Syntax (BackendAccessor(..), BackendOperator(..), BackendOperator1(..), BackendOperator2(..), BackendOperatorNum(..), BackendOperatorOrd(..), BackendSyntax(..), Level(..), Pair(..))
 
@@ -265,7 +265,7 @@ codegenExpr codegenEnv0@{ currentModule } s | codegenEnv <- setCallsHandled fals
     S.atomLiteral C.undefined
 
   Fail i ->
-    S.FunCall (Just $ atomLiteral C.erlang) (atomLiteral C.throw) [
+    S.FunCall (Just $ atomLiteral C.erlang) (atomLiteral C.error) [
       S.Tupled [ S.atomLiteral "fail", S.stringLiteral i ]
     ]
 
@@ -428,9 +428,8 @@ codegenPrimOp codegenEnv = case _ of
         S.FunCall (Just $ atomLiteral C.array) (atomLiteral C.size) [ x' ]
       OpIsTag qi@(Qualified _ (Ident constructor)) | Just arity <- Map.lookup qi codegenEnv.constructors ->
         mIS_KNOWN_TAG (S.atomLiteral (toAtomName constructor)) arity x'
-      OpIsTag (Qualified _ (Ident constructor)) ->
-        mIS_TAG (S.atomLiteral (toAtomName constructor)) x'
-        -- access (AcsTag (toAtomName constructor)) x'
+      OpIsTag (Qualified mn (Ident constructor)) ->
+        unsafeCrashWith $ "Unknown constructor: " <> foldMap (\(ModuleName n) -> n <> ".") mn <> constructor
 
   Op2 o x y ->
     let

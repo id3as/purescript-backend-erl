@@ -36,13 +36,14 @@ basicTest() ->
       () ->
         begin
           N = V(),
-          V@1 = (effect_ref@ps:modify_(
-                   fun
-                     (V@1) ->
-                       V@1 + 1
-                   end,
-                   N
-                 ))(),
+          V@1 =
+            (effect_ref@ps:modify_(
+               fun
+                 (V@1) ->
+                   V@1 + 1
+               end,
+               N
+             ))(),
           V@2 = (effect_ref@foreign:read(N))(),
           ((test_assert@ps:assert())(V@2 =:= 1))()
         end

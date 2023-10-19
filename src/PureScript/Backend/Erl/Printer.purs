@@ -2,7 +2,7 @@ module PureScript.Backend.Erl.Printer where
 
 import Prelude
 
-import Data.Array (all, foldr, intercalate)
+import Data.Array (all, fold, foldr, intercalate)
 import Data.Array as Array
 import Data.Array.NonEmpty as NEA
 import Data.CodePoint.Unicode as CodePointU
@@ -129,7 +129,7 @@ printAttribute name a = D.text "-" <> D.text name <> printParens' a <> D.text ".
 printDefinition :: ErlDefinition -> Doc Void
 printDefinition = case _ of
   S.FunctionDefinition name args e ->
-    D.text (escapeAtom name) <> printParens (commaSep $ printPattern <$> args) <> D.text " ->"
+    D.text (escapeAtom name) <> printParens' (printPattern <$> args) <> D.text " ->"
       <> D.break <> D.indent (printAtomic e)
       <> D.text "." <> D.break
 
@@ -148,7 +148,7 @@ printAtomic e = D.flexGroup $ printExpr' atomic e
 
 printStatement :: Tuple ErlPattern ErlExpr -> Doc Void
 printStatement (Tuple S.Discard e) = printAtomic e
-printStatement (Tuple pat e) = printPattern pat <> D.text " = " <> printAtomic e
+printStatement (Tuple pat e) = D.flexGroup $ printPattern pat <> D.text " =" <> D.spaceBreak <> (D.indent (printAtomic e))
 
 printPattern :: ErlPattern -> Doc Void
 printPattern = case _ of
@@ -210,10 +210,15 @@ printExpr' prec = case _ of
   S.MapUpdate e fields -> D.text "(" <> printAtomic e <> D.text ")#" <> printBraces_ (printField <$> fields)
 
   S.Assignments [] ret -> printExpr' prec ret
-  S.Assignments exprs ret ->
-    D.text "begin" <> D.break <>
-      D.indent (D.foldWithSeparator (D.text "," <> D.break) (printStatement <$> exprs) <> D.text "," <> D.break <> printAtomic ret) <> D.break <>
-    D.text "end"
+  S.Assignments exprs ret -> fold
+    [ D.text "begin" <> D.break
+    , D.indent $ fold
+      [ D.foldWithSeparator (D.text "," <> D.break) (printStatement <$> exprs)
+      , D.text "," <> D.break
+      , printAtomic ret
+      ]
+    , D.break <> D.text "end"
+    ]
 
   S.Fun name heads -> parenPrec prec $ do
     let
@@ -391,8 +396,11 @@ printUnaryOp = D.text <<< case _ of
 printBinaryLiteral :: ErlExpr -> Doc Void
 printBinaryLiteral = finish <<< go
   where
-  finish items =
-    D.text "<<" <> Array.intercalate (D.text ", ") items <> D.text ">>"
+  finish items = D.flexGroup $ fold
+    [ D.text "<<" <> D.softBreak
+    , D.indent (Array.intercalate (D.text "," <> D.spaceBreak) items)
+    , D.softBreak <> D.text ">>"
+    ]
   go (S.BinaryAppend e1 e2) = go e1 <> go e2
   go (S.Literal (S.String s))
     | isAscii s = [ D.text $ "\"" <> escapeErlString s <> "\"" ]

@@ -30,15 +30,16 @@ ex() ->
 
 ex(N) ->
   begin
-    A@1 = if
-      N =:= 0 ->
-        begin
-          A = noInline(N),
-          A + A
-        end;
-      true ->
-        2
-    end,
+    A@1 =
+      if
+        N =:= 0 ->
+          begin
+            A = noInline(N),
+            A + A
+          end;
+        true ->
+          2
+      end,
     if
       A@1 =:= 2 ->
         0;
