@@ -13,6 +13,7 @@ import Data.Maybe (Maybe(..), maybe)
 import Data.Monoid.Disj (Disj(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Set as Set
+import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..), snd, uncurry)
 import PureScript.Backend.Erl.Constants as C
 import Safe.Coerce (coerce)
@@ -281,6 +282,26 @@ assignments bindings res =
 bindOrDiscard :: String -> ErlPattern
 bindOrDiscard "_" = Discard
 bindOrDiscard v = BindVar v
+
+optimizePattern :: ErlPattern -> ErlPattern
+optimizePattern Discard = Discard
+optimizePattern (BindVar "_") = Discard
+optimizePattern pat@(BindVar _) = pat
+optimizePattern (MatchBoth "_" pat) = optimizePattern pat
+optimizePattern (MatchBoth v pat) = case optimizePattern pat of
+  Discard -> BindVar v
+  pat' -> MatchBoth v pat'
+optimizePattern (MatchMap items) =
+  case Array.filter (notEq Discard <<< snd) (map optimizePattern <$> items) of
+    [] -> Discard
+    items' -> MatchMap items'
+optimizePattern (MatchTuple items) = MatchTuple (optimizePattern <$> items)
+optimizePattern pat@(MatchLiteral _) = pat
+optimizePattern (MatchList [] (Just pat)) = optimizePattern pat
+optimizePattern (MatchList items tail) =
+  MatchList
+    (optimizePattern <$> items)
+    (optimizePattern <$> tail)
 
 self :: Accessors
 self = []

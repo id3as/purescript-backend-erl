@@ -149,6 +149,7 @@ type ArityErl = CallingErl Unit
 newtype GlobalErl = GlobalErl { module :: Maybe String, name :: String }
 derive instance newtypeGlobalErl :: Newtype GlobalErl _
 derive instance eqGlobalErl :: Eq GlobalErl
+derive instance ordGlobalErl :: Ord GlobalErl
 
 callErl :: forall a. Array a -> CallingErl a
 callErl = CallingErl <<< pure <<< Call

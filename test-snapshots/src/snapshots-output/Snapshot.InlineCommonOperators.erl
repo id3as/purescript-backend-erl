@@ -183,7 +183,7 @@ inlineBinary() ->
   end.
 
 inlineBinary(I, N, B, S, C) ->
-  #{ divInt => I div I
+  #{ divInt => data_euclideanRing@foreign:intDiv(I, I)
    , divNum => N / N
    , andBool => B andalso B
    , orBool => B orelse B

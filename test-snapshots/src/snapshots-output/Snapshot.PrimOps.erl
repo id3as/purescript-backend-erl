@@ -50,7 +50,7 @@ intOps(X, Y) ->
                   , X bsr Y
                   , X xor Y
                   , X + Y
-                  , X div Y
+                  , data_euclideanRing@foreign:intDiv(X, Y)
                   , X * Y
                   , X - Y
                   ]).

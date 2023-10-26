@@ -25,6 +25,7 @@ import Data.Monoid.Endo (Endo(..))
 import Data.Monoid.Multiplicative (Multiplicative(..))
 import Data.Newtype (over, unwrap)
 import Data.Semigroup.Last (Last(..))
+import Data.String as String
 import Data.Traversable (class Foldable, class Traversable, foldMap, foldl, foldr, for, mapAccumL, sequence, sum, traverse, traverse_)
 import Data.Tuple (Tuple(..), fst, snd, uncurry)
 import Debug (spy, spyWith)
@@ -124,11 +125,11 @@ optimizePatternsDecl (FunctionDefinition name args expr) =
   case optimizePatterns (S.Fun Nothing [ Tuple (FunHead args Nothing) expr ]) of
     S.Fun Nothing [ Tuple (FunHead args' Nothing) expr' ] ->
       FunctionDefinition name args' expr'
-    _ -> unsafeCrashWith "Did not receive function of right shape in optimizePatternsDecl"
+    _ -> unsafeCrashWith "Did not rewrite to function of right shape in optimizePatternsDecl"
 
 optimizePatterns :: ErlExpr -> ErlExpr
-optimizePatterns =
-  optimizePatternDemand
+optimizePatterns = identity
+    >>> optimizePatternDemand
     >>> flip runWriterT mempty
     >>> (\(Tuple e _) -> optimizePatternRewrite e mempty)
     >>> renameRoot
@@ -162,12 +163,16 @@ makePatternsFrom :: String -> Tuple String Accessors -> Demand -> Demand -> Arra
 makePatternsFrom _ _ _ (DemandRecord _ fields) | Map.isEmpty fields = []
 makePatternsFrom v (Tuple v0 acsrs) (DemandRecord _ prev) (DemandRecord _ fields) =
   Map.toUnfoldable fields # Array.mapMaybe Just # foldMapWithIndex \i (Tuple k demand) -> do
-    let v' = v <> "@@" <> show i
+    -- Sorry
+    let v' = v <> "@@" <> String.replaceAll (String.Pattern "@@") (String.Replacement "@@@") k
+    -- let v' = v <> "@@" <> show (i + 1 + Map.size prev)
     makePatternsFrom v' (Tuple v0 (acsrs <> [AcsKey k])) (fromMaybe NoDemand $ Map.lookup k prev) demand
 makePatternsFrom v (Tuple v0 acsrs) prev (DemandRecord _ fields) =
   pure $ flip Tuple (S.Var v0 acsrs) $ S.MatchMap $
     Map.toUnfoldable fields # mapWithIndex \i (Tuple k demand) -> do
-      let v' = v <> "@@" <> show i
+      -- Sorry
+      let v' = v <> "@@" <> String.replaceAll (String.Pattern "@@") (String.Replacement "@@@") k
+      -- let v' = v <> "@@" <> show i
       Tuple k (andMatch v' (flatPat (makePatternsFrom v' (Tuple v0 (acsrs <> [AcsKey k])) NoDemand demand)))
 makePatternsFrom _ _ _ (DemandADT _ (Just (Tuple _ 0)) _) = []
 makePatternsFrom v (Tuple v0 acsrs) (DemandADT _ (Just t1) prev) (DemandADT _ (Just t2@(Tuple tag arity)) fields)
@@ -215,6 +220,11 @@ selfDemand Unreachable = 0
 
 childDemand :: Demand -> Int
 childDemand = allDemand - selfDemand
+
+justDemands :: MDemands -> MDemands
+justDemands = over Multiplicative case _ of
+  NullAndVoid -> NullAndVoid
+  Demands m -> Demands $ m <#> allDemand >>> Demand
 
 addedDemands :: MDemands -> MDemands -> Array (Tuple ErlPattern ErlExpr)
 addedDemands (Multiplicative (Demands d1)) (Multiplicative (Demands d2)) =
@@ -336,8 +346,8 @@ optimizePatternDemand = case _ of
       let k = knownFrom (coerce cond)
       e' <- withKnown k (opd e)
       pure $ Tuple [] \d ds -> IfClause cond' (optimizeDemands ds e')
-    -- The first case always runs, so we want to include it in the analysis
-    void $ opd $ (\(IfClause cond _) -> cond) (NEA.head cases)
+    -- The first conditional always runs, so we want to include it in the analysis
+    -- void $ censor justDemands $ opd $ (\(IfClause cond _) -> cond) (NEA.head cases)
     pure $ S.If cases'
   e@(S.Var name acsrs) -> WriterT \r -> do
     let
@@ -345,7 +355,6 @@ optimizePatternDemand = case _ of
         demandAccessors acsrs * fromMaybe one (demandOf name r)
     Tuple e d
 
-  -- A few special things to handle here:
   -- - Failures, where we discard demands
   s@(S.FunCall (Just (S.Literal (S.Atom "erlang"))) (S.Literal (S.Atom "error"))
     [S.Tupled [ S.Literal (S.Atom "fail"), S.Literal (S.String _i) ]]) ->
@@ -378,7 +387,13 @@ optimizePatternDemand = case _ of
 type VRW = SemigroupMap String Rewrites
 data Rewrites = Rewrites ErlExpr (Map Accessor Rewrites)
 instance Semigroup Rewrites where
-  append (Rewrites _ rws1) (Rewrites e rws2) = Rewrites e $ Map.unionWith append rws1 rws2
+  append (Rewrites e1 rws1) (Rewrites e2 rws2) = Rewrites e3 $ Map.unionWith append rws1 rws2
+    where
+    e3 = case e1, e2 of
+      S.Var _ acsrs1, S.Var _ acsrs2
+        | Array.length acsrs1 <= Array.length acsrs2
+        -> e1
+      _, _ -> e2
 
 getVar :: String -> Accessors -> VRW -> ErlExpr
 getVar name acsrs (SemigroupMap vrw) = case Map.lookup name vrw of
@@ -434,10 +449,18 @@ optimizePatternRewrite = case _ of
   S.Var name acsrs -> getVar name acsrs
   S.Assignments asgns ret -> do
     let
-      asgn1 vrw (Tuple pat e) = do
-        { value: Tuple pat (opr e vrw), accum: bindVarWithin e pat vrw }
+      asgn1 vrw (Tuple pat e) =
+        case S.optimizePattern pat, opr e vrw of
+          S.Discard, _ -> { value: Nothing, accum: vrw }
+          S.BindVar v', S.Var v [] -> { value: Nothing, accum: bindVarWithin (S.Var v' []) (S.BindVar v) vrw }
+          S.MatchBoth v' pat', e'@(S.Var v []) ->
+            { value: Just (Tuple pat' e'), accum: bindVarWithin e pat' (bindVarWithin (S.Var v' []) (S.BindVar v) vrw) }
+          pat', e' ->
+            { value: Just (Tuple pat' e'), accum: bindVarWithin e pat' vrw }
     { value: asgns', accum: vrw } <- \vrw0 -> mapAccumL asgn1 vrw0 asgns
-    pure $ S.Assignments asgns' (opr ret vrw)
+    -- if Array.length (Array.nub (names <<< fst =<< asgns)) == Array.length (names <<< fst =<< asgns) then pure unit else
+    --   unsafeCrashWith "Repeat names"
+    pure $ S.Assignments (Array.catMaybes asgns') (opr ret vrw)
   S.Fun name cases -> do
     cases' <- for cases \(Tuple (FunHead pats mg) e) -> bindVars pats >>> do
       mg' <- oprg mg
@@ -457,6 +480,7 @@ optimizePatternRewrite = case _ of
       e' <- opr e
       pure $ IfClause cond' e'
     pure $ optimizeIf cases'
+    -- pure $ S.If cases'
 
   e@(S.Literal _) -> pure e
   S.List es -> S.List <$> oprs es
@@ -529,6 +553,8 @@ reassign name acsrs (S.Assignments asgns e) =
 reassign _ _ e = Just (Tuple S.Discard e)
 
 zipPats :: Array ErlPattern -> Maybe ErlPattern
+-- zipPats [pat] = Just pat
+-- zipPats _ = Nothing
 -- zipPats [] = Nothing
 zipPats pats = foldl (\mp p -> mp >>= zipPat p) (Just S.Discard) pats
 

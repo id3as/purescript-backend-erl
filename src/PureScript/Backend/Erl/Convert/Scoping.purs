@@ -146,9 +146,10 @@ renameTree = case _ of
   S.Var name acsrs -> S.Var <$> (reference name) <@> acsrs
   S.Assignments asgns ret -> do
     let
-      asgn1 (Tuple pat e) more = do
-        lift2 Tuple (opr e) (binding (Identity pat) more) <#> \(Tuple e' (Tuple (Identity pat') (Tuple asgns' final'))) -> do
-          Tuple (Array.cons (Tuple pat' e') asgns') final'
+      asgn1 (Tuple pat e) more = ado
+        e' <- opr e
+        Tuple (Identity pat') (Tuple asgns' final) <- binding (Identity pat) more
+        in Tuple (Array.cons (Tuple pat' e') asgns') final
     uncurry S.Assignments <$> foldr asgn1 (Tuple [] <$> opr ret) asgns
   S.Fun (Just name) cases -> do
     uncurry (S.Fun <<< Just) <$> scopedBindingName name do
@@ -180,16 +181,19 @@ renameTree = case _ of
   S.Map kvs -> coerce S.Map <$> (oprs (Compose kvs))
   S.MapUpdate e kvs -> S.MapUpdate <$> opr e <*> oprss kvs
   S.FunCall me e es -> S.FunCall <$> oprs me <*> opr e <*> oprs es
+
+  -- S.Macro name margs -> S.Macro name <$> traverse (traverse renameTree) margs
   S.Macro name Nothing -> pure (S.Macro name Nothing)
   -- Macros that use their arguments multiple times are allergic to case
   -- statements that bind any variables, so we hoist arguments if needed
   S.Macro name (Just args) -> do
     Tuple bindings args' <- NEA.unzip <$> for args \arg -> do
-      if trivialExpr arg then pure (Tuple Nothing arg) else do
-        argName <- choose "V"
+      if trivialExpr arg then Tuple Nothing <$> renameTree arg else do
         arg' <- renameTree arg
+        argName <- choose "V"
         pure $ Tuple (Just (Tuple (S.BindVar argName) arg')) (S.Var argName self)
-    S.Assignments (NEA.catMaybes bindings) <<< S.Macro name <<< Just <$> oprs args'
+    pure $ S.Assignments (NEA.catMaybes bindings) $ S.Macro name $ Just args'
+
   S.BinOp op e1 e2 -> S.BinOp op <$> opr e1 <*> opr e2
   S.UnaryOp op e -> S.UnaryOp op <$> opr e
   S.BinaryAppend e1 e2 -> S.BinaryAppend <$> opr e1 <*> opr e2
