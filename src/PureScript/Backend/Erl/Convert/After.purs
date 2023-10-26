@@ -8,7 +8,7 @@ import Control.Apply (lift2)
 import Control.Bind (bindFlipped)
 import Control.Extend (duplicate)
 import Control.Monad.Reader (local)
-import Control.Monad.Writer (WriterT(..), censor, listen, runWriterT)
+import Control.Monad.Writer (WriterT(..), censor, listen, runWriterT, tell)
 import Control.Plus (empty)
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
@@ -24,6 +24,7 @@ import Data.Monoid.Additive (Additive(..))
 import Data.Monoid.Endo (Endo(..))
 import Data.Monoid.Multiplicative (Multiplicative(..))
 import Data.Newtype (over, unwrap)
+import Data.Semigroup.First (First(..))
 import Data.Semigroup.Last (Last(..))
 import Data.String as String
 import Data.Traversable (class Foldable, class Traversable, foldMap, foldl, foldr, for, mapAccumL, sequence, sum, traverse, traverse_)
@@ -31,6 +32,7 @@ import Data.Tuple (Tuple(..), fst, snd, uncurry)
 import Debug (spy, spyWith)
 import Partial.Unsafe (unsafeCrashWith)
 import Prim.Coerce (class Coercible)
+import PureScript.Backend.Erl.Calling (GlobalErl(..), applyCall, callErl)
 import PureScript.Backend.Erl.Convert.Scoping (renameRoot)
 import PureScript.Backend.Erl.Syntax (Accessor(..), Accessors, CaseClause(..), ErlDefinition(..), ErlExpr(..), ErlPattern, FunHead(..), Guard(..), IfClause(..), access, assignments, self)
 import PureScript.Backend.Erl.Syntax as S
@@ -73,6 +75,7 @@ instance semiringDemand :: Semiring Demand where
   mul d NoDemand = d
   mul Unreachable _ = Unreachable
   mul _ Unreachable = Unreachable
+  mul (Demand u1) (Demand u2) = Demand (u1 + u2)
   mul (Demand u1) (DemandADT u2 l d) = DemandADT (u1 + u2) l d
   mul (DemandADT u1 l d) (Demand u2) = DemandADT (u1 + u2) l d
   mul (Demand u1) (DemandRecord u2 d) = DemandRecord (u1 + u2) d
@@ -96,12 +99,12 @@ common (Just a) (Just b) | a /= b = Nothing
 common a b = Just (a <|> b)
 
 data Demands
-  = Demands (Map String Demand)
+  = Demands (Map GlobalErl Demand) (Map String Demand)
   | NullAndVoid
 
 demandOf :: forall d. Coercible d Demands => String -> d -> Maybe Demand
 demandOf n = coerce case _ of
-  Demands m -> Map.lookup n m
+  Demands _ m -> Map.lookup n m
   NullAndVoid -> Nothing
 
 type MDemands = Multiplicative Demands
@@ -109,15 +112,17 @@ type ADemands = Additive Demands
 
 instance semiringDemands :: Semiring Demands where
   zero = NullAndVoid
-  one = Demands Map.empty
+  one = Demands Map.empty Map.empty
 
-  add (Demands d1) (Demands d2) = Demands $
-    Map.union (lift2 add d1 d2) (NoDemand <$ (d1 <|> d2))
-  add d@(Demands _) _ = d
-  add _ d@(Demands _) = d
+  add (Demands g1 d1) (Demands g2 d2) = Demands
+    (Map.union (lift2 add g1 g2) (NoDemand <$ (g1 <|> g2)))
+    (Map.union (lift2 add d1 d2) (NoDemand <$ (d1 <|> d2)))
+  add d@(Demands _ _) NullAndVoid = d
+  add NullAndVoid d@(Demands _ _) = d
   add NullAndVoid NullAndVoid = NullAndVoid
-  mul (Demands d1) (Demands d2) = Demands $
-    Map.unionWith mul d1 d2
+  mul (Demands g1 d1) (Demands g2 d2) = Demands
+    (Map.unionWith mul g1 g2)
+    (Map.unionWith mul d1 d2)
   mul _ _ = NullAndVoid
 
 optimizePatternsDecl :: ErlDefinition -> ErlDefinition
@@ -145,7 +150,7 @@ opdg :: Maybe Guard -> W (Maybe Guard)
 opdg mg = traverse (coerce opd) mg
 
 choosePattern :: MDemands -> ErlPattern -> ErlPattern
-choosePattern (Multiplicative (Demands m)) = case _ of
+choosePattern (Multiplicative (Demands _ m)) = case _ of
   S.BindVar v | Just d <- Map.lookup v m -> do
     S.MatchBoth v (flatPat (makePatterns v NoDemand d))
   p -> p
@@ -224,10 +229,10 @@ childDemand = allDemand - selfDemand
 justDemands :: MDemands -> MDemands
 justDemands = over Multiplicative case _ of
   NullAndVoid -> NullAndVoid
-  Demands m -> Demands $ m <#> allDemand >>> Demand
+  Demands g m -> Demands g $ m <#> allDemand >>> Demand
 
 addedDemands :: MDemands -> MDemands -> Array (Tuple ErlPattern ErlExpr)
-addedDemands (Multiplicative (Demands d1)) (Multiplicative (Demands d2)) =
+addedDemands (Multiplicative (Demands _ d1)) (Multiplicative (Demands _ d2)) =
   bindFlipped (\(Tuple v f) -> f v >>= addBinding) $ Map.toUnfoldable $ lift2 addedDemand d1 d2
   where
   -- Really this should look at the demand of the stuff getting added to the
@@ -245,9 +250,19 @@ addedDemands (Multiplicative (Demands d1)) (Multiplicative (Demands d2)) =
     _ -> pure $ Tuple pat expr
 addedDemands _ _ = []
 
+addedGlobalDemands :: MDemands -> MDemands -> Array (Tuple ErlPattern ErlExpr)
+addedGlobalDemands (Multiplicative (Demands g1 _)) (Multiplicative (Demands g2 _)) =
+  Array.fromFoldable $ Map.mapMaybeWithKey (#) $ lift2 addedDemand g1 g2
+  where
+  addedDemand (Demand prev) (Demand next) k | next > 1 =
+    Just $ Tuple (S.BindVar $ "V@@@" <> show (unwrap k)) $
+      applyCall unit k (callErl [])
+  addedDemand _ _ _ = Nothing
+addedGlobalDemands _ _ = []
+
 optimizeDemands :: MDemands -> Tuple MDemands ErlExpr -> ErlExpr
 optimizeDemands agg (Tuple this e) =
-  case addedDemands agg this of
+  case addedDemands agg this <> addedGlobalDemands agg this of
     [] -> e
     asgns -> Assignments (Array.reverse asgns) e
 
@@ -269,7 +284,7 @@ alts cases mapper = WriterT \r -> do
 spd x = spyWith x spyDemands
 
 removePats :: Array ErlPattern -> MDemands -> MDemands
-removePats pats (Multiplicative (Demands m)) = Multiplicative $ Demands $
+removePats pats (Multiplicative (Demands g m)) = Multiplicative $ Demands g $
   foldr (Map.delete) m (pats >>= names)
 removePats _ (Multiplicative NullAndVoid) = Multiplicative NullAndVoid
 
@@ -283,7 +298,7 @@ names (S.MatchTuple pats) = foldMap names pats
 names (S.MatchList pats mpat) = foldMap names pats <> foldMap names mpat
 
 spyDemands :: MDemands -> Array _
-spyDemands (Multiplicative (Demands ds)) =
+spyDemands (Multiplicative (Demands ds _)) =
   Map.toUnfoldable ds <#> \(Tuple a b) -> [a, unsafeCoerce b]
 spyDemands _ = []
 
@@ -296,13 +311,13 @@ knownFrom :: ErlExpr -> MDemands
 knownFrom (S.BinOp S.AndAlso e1 e2) = knownFrom e1 <> knownFrom e2
 knownFrom (S.Macro "IS_KNOWN_TAG" (Just args))
   | [S.Literal (S.Atom tag), S.Literal (S.Integer arity), S.Var name acsrs] <- NEA.toArray args =
-    Multiplicative $ Demands $ Map.singleton name $ demandAccessors' acsrs $ DemandADT 1 (Just (Tuple tag arity)) Map.empty
+    Multiplicative $ Demands Map.empty $ Map.singleton name $ demandAccessors' acsrs $ DemandADT 1 (Just (Tuple tag arity)) Map.empty
 knownFrom _ = mempty
 
 scoped :: forall a. W a -> W a
 scoped = censor $ over Multiplicative case _ of
-  NullAndVoid -> Demands Map.empty
-  Demands m -> Demands m
+  NullAndVoid -> Demands Map.empty Map.empty
+  Demands _ d -> Demands Map.empty d
 
 type W = WriterT MDemands ((->) MDemands)
 
@@ -351,7 +366,7 @@ optimizePatternDemand = case _ of
     pure $ S.If cases'
   e@(S.Var name acsrs) -> WriterT \r -> do
     let
-      d = Multiplicative $ Demands $ Map.singleton name $
+      d = Multiplicative $ Demands Map.empty $ Map.singleton name $
         demandAccessors acsrs * fromMaybe one (demandOf name r)
     Tuple e d
 
@@ -365,6 +380,10 @@ optimizePatternDemand = case _ of
   --   Tuple (Multiplicative NullAndVoid) s
   -- s@(S.FunCall (Just (S.Literal (S.Atom "erlang"))) (S.Literal (S.Atom "exit")) [_]) ->
   --   Tuple (Multiplicative NullAndVoid) s
+
+  s | Just global <- globalThunk s ->
+    s <$ tell do
+      Multiplicative $ Demands (Map.singleton global (Demand 1)) Map.empty
 
   e@(S.Literal _) -> pure e
   S.List es -> S.List <$> opds es
@@ -383,8 +402,17 @@ optimizePatternDemand = case _ of
   --   applyBinders
   --   returnAggregateDemand
 
+globalThunk :: ErlExpr -> Maybe GlobalErl
+globalThunk (S.FunCall Nothing (S.Literal (S.Atom name)) []) = Just (GlobalErl { module: Nothing, name })
+globalThunk (S.FunCall (Just (S.Literal (S.Atom mod))) (S.Literal (S.Atom name)) [])
+  | Just _ <- String.stripSuffix (String.Pattern "@ps") mod =
+  Just (GlobalErl { module: Just mod, name: name })
+globalThunk _ = Nothing
 
-type VRW = SemigroupMap String Rewrites
+type VRW =
+  { locals :: SemigroupMap String Rewrites
+  , calls :: SemigroupMap GlobalErl Rewrites
+  }
 data Rewrites = Rewrites ErlExpr (Map Accessor Rewrites)
 instance Semigroup Rewrites where
   append (Rewrites e1 rws1) (Rewrites e2 rws2) = Rewrites e3 $ Map.unionWith append rws1 rws2
@@ -396,7 +424,7 @@ instance Semigroup Rewrites where
       _, _ -> e2
 
 getVar :: String -> Accessors -> VRW -> ErlExpr
-getVar name acsrs (SemigroupMap vrw) = case Map.lookup name vrw of
+getVar name acsrs { locals: SemigroupMap vrw } = case Map.lookup name vrw of
   Nothing -> S.Var name acsrs
   Just rw0 ->
     let
@@ -422,14 +450,21 @@ bindVarFrom e (S.MatchList _ _) = Rewrites e Map.empty
 bindVar :: ErlPattern -> VRW -> VRW
 bindVar (S.MatchBoth name pat) = \vrw ->
   vrw <> do
-    SemigroupMap $ Map.singleton name $ bindVarFrom (S.Var name self) pat
+    { calls: mempty, locals: SemigroupMap $ Map.singleton name $ bindVarFrom (S.Var name self) pat }
 bindVar _ = identity
 
 bindVarWithin :: ErlExpr -> ErlPattern -> VRW -> VRW
 bindVarWithin (S.Var name acsrs) pat = \vrw ->
   vrw <> do
-    SemigroupMap $ Map.singleton name $
-      snd $ foldr (\acsr (Tuple soFar r) -> Tuple (Array.dropEnd 1 soFar) $ Rewrites (S.Var name soFar) $ Map.singleton acsr r) (Tuple (Array.dropEnd 1 acsrs) (bindVarFrom (S.Var name acsrs) pat)) acsrs
+    { calls: mempty, locals: _ } $
+      SemigroupMap $ Map.singleton name $
+        snd $ foldr (\acsr (Tuple soFar r) -> Tuple (Array.dropEnd 1 soFar) $ Rewrites (S.Var name soFar) $ Map.singleton acsr r) (Tuple (Array.dropEnd 1 acsrs) (bindVarFrom (S.Var name acsrs) pat)) acsrs
+bindVarWithin s pat | Just global <- globalThunk s = \vrw ->
+  vrw <> do
+    let e = applyCall unit global (callErl [])
+    { calls: _, locals: mempty } $
+      SemigroupMap $ Map.singleton global $
+        bindVarFrom e (spy "pat" pat)
 bindVarWithin _ pat = bindVar pat
 
 bindVars :: forall f. Foldable f => f ErlPattern -> VRW -> VRW
@@ -481,6 +516,11 @@ optimizePatternRewrite = case _ of
       pure $ IfClause cond' e'
     pure $ optimizeIf cases'
     -- pure $ S.If cases'
+
+  s | Just global <- globalThunk s -> \{ calls: SemigroupMap calls } ->
+    case Map.lookup global calls of
+      Just (Rewrites s' _) -> s'
+      Nothing -> s
 
   e@(S.Literal _) -> pure e
   S.List es -> S.List <$> oprs es
