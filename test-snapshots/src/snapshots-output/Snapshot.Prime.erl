@@ -161,7 +161,10 @@ useNormal(DictNormal) ->
    }.
 
 useNormal1() ->
-  (useNormal('instanceName\''()))('instanceName\''()).
+  begin
+    V = 'instanceName\''(),
+    (useNormal(V))(V)
+  end.
 
 useInstance() ->
   ((useNormal1())({f1}))({f2}).
@@ -203,11 +206,16 @@ useFooPrime1() ->
   'foo\''().
 
 result() ->
-  #{ test1 => ('foo\''()) =:= ('foo\''())
-   , test2 => ('foo\'\''()) =:= ('foo\'\''())
-   , test3 => ('foo\'oo'()) =:= ('foo\'oo'())
-   , useInstance => ((useNormal1())({f1}))({f2})
-   }.
+  begin
+    V = 'foo\'oo'(),
+    V@1 = 'foo\'\''(),
+    V@2 = 'foo\''(),
+    #{ test1 => V@2 =:= V@2
+     , test2 => V@1 =:= V@1
+     , test3 => V =:= V
+     , useInstance => ((useNormal1())({f1}))({f2})
+     }
+  end.
 
 foo() ->
   <<"foo">>.

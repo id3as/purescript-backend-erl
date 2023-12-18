@@ -32,27 +32,28 @@ zipWith4(F, As, Bs, Cs, Ds) ->
           fun
             (Acc, As1, Bs1, Cs1, Ds1) ->
               begin
-                V = (erl_data_list_types@ps:uncons())(Ds1),
-                V1 = (erl_data_list_types@ps:uncons())(Cs1),
-                V2 = (erl_data_list_types@ps:uncons())(Bs1),
-                V3 = (erl_data_list_types@ps:uncons())(As1),
+                V = erl_data_list_types@ps:uncons(),
+                V@1 = V(Ds1),
+                V1 = V(Cs1),
+                V2 = V(Bs1),
+                V3 = V(As1),
                 if
                   ?IS_KNOWN_TAG(just, 1, V3)
                     andalso (?IS_KNOWN_TAG(just, 1, V2)
                       andalso (?IS_KNOWN_TAG(just, 1, V1)
-                        andalso ?IS_KNOWN_TAG(just, 1, V))) ->
+                        andalso ?IS_KNOWN_TAG(just, 1, V@1))) ->
                     begin
-                      {just, #{ head := V@2, tail := V@3 }} = V,
+                      {just, #{ head := V@3, tail := V@4 }} = V@1,
                       {just, #{ head := V3@2, tail := V3@3 }} = V3,
                       {just, #{ head := V2@2, tail := V2@3 }} = V2,
                       {just, #{ head := V1@2, tail := V1@3 }} = V1,
                       (Go())
                       (
-                        [ (((F(V3@2))(V2@2))(V1@2))(V@2) | Acc ],
+                        [ (((F(V3@2))(V2@2))(V1@2))(V@3) | Acc ],
                         V3@3,
                         V2@3,
                         V1@3,
-                        V@3
+                        V@4
                       )
                     end;
                   true ->

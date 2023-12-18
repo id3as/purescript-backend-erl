@@ -159,7 +159,7 @@ runCompile { compile, filter, cwd } = do
             prevConventions <- liftEffect $ Ref.read conventionsRef
             let
               Tuple codegened nextConventions = codegenModule backend foreigns prevConventions
-            Console.log $ show $ sum $ unwrap <<< visit (const (Additive 1)) <<< (\(FunctionDefinition _ _ e) -> e) <$> codegened.definitions
+            -- Console.log $ show $ sum $ unwrap <<< visit (const (Additive 1)) <<< (\(FunctionDefinition _ _ e) -> e) <$> codegened.definitions
             let
               formatted =
                 Dodo.print plainText Dodo.twoSpaces

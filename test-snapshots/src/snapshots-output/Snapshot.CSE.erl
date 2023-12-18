@@ -22,23 +22,21 @@ ord() ->
 ord(V, V1) ->
   begin
     V@1 = data_ord@ps:ordInt(),
-    begin
-      V@2 =
-        ((erlang:map_get(compare, V@1))(erlang:element(2, V)))
-        (erlang:element(2, V1)),
-      V@3 =
-        ((erlang:map_get(compare, V@1))(erlang:element(3, V)))
-        (erlang:element(3, V1)),
-      case V@2 of
-        {lT} ->
-          {lT};
-        {gT} ->
-          {gT};
-        {eQ} ->
-          V@3;
-        _ ->
-          erlang:error({fail, <<"Failed pattern match">>})
-      end
+    V@2 =
+      ((erlang:map_get(compare, V@1))(erlang:element(2, V)))
+      (erlang:element(2, V1)),
+    V@3 =
+      ((erlang:map_get(compare, V@1))(erlang:element(3, V)))
+      (erlang:element(3, V1)),
+    case V@2 of
+      {lT} ->
+        {lT};
+      {gT} ->
+        {gT};
+      {eQ} ->
+        V@3;
+      _ ->
+        erlang:error({fail, <<"Failed pattern match">>})
     end
   end.
 

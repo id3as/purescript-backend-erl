@@ -18,9 +18,10 @@ renamed() ->
     fun
       () ->
         begin
+          V@1 = pure_(),
           A0 = V(),
-          A1 = ((pure_())(A0))(),
-          ((pure_())(A1))(),
+          A1 = (V@1(A0))(),
+          (V@1(A1))(),
           (effect_console@foreign:log(<<"Oh no">>))()
         end
     end
@@ -32,9 +33,10 @@ renamed0() ->
     fun
       () ->
         begin
+          V@1 = pure_(),
           A0 = V(),
-          A = ((pure_())(A0))(),
-          ((pure_())(A))(),
+          A = (V@1(A0))(),
+          (V@1(A))(),
           (effect_console@foreign:log(<<"Oh no">>))()
         end
     end
@@ -46,9 +48,10 @@ renamed1() ->
     fun
       () ->
         begin
+          V@1 = pure_(),
           A = V(),
-          A@1 = ((pure_())(A))(),
-          ((pure_())(A@1))(),
+          A@1 = (V@1(A))(),
+          (V@1(A@1))(),
           (effect_console@foreign:log(<<"Oh no">>))()
         end
     end
@@ -60,9 +63,10 @@ renamed2() ->
     fun
       () ->
         begin
+          V@1 = pure_(),
           A = V(),
-          A1 = ((pure_())(A))(),
-          ((pure_())(A1))(),
+          A1 = (V@1(A))(),
+          (V@1(A1))(),
           (effect_console@foreign:log(<<"Oh no">>))()
         end
     end
@@ -99,9 +103,10 @@ bug26() ->
     fun
       () ->
         begin
+          V@1 = pure_(),
           A = V(),
-          A@1 = ((pure_())(A))(),
-          ((pure_())(A@1))(),
+          A@1 = (V@1(A))(),
+          (V@1(A@1))(),
           (effect_console@foreign:log(<<"Oh no">>))()
         end
     end

@@ -458,13 +458,16 @@ bindVarWithin (S.Var name acsrs) pat = \vrw ->
   vrw <> do
     { calls: mempty, locals: _ } $
       SemigroupMap $ Map.singleton name $
-        snd $ foldr (\acsr (Tuple soFar r) -> Tuple (Array.dropEnd 1 soFar) $ Rewrites (S.Var name soFar) $ Map.singleton acsr r) (Tuple (Array.dropEnd 1 acsrs) (bindVarFrom (S.Var name acsrs) pat)) acsrs
+        snd $ foldr
+          (\acsr (Tuple soFar r) -> Tuple (Array.dropEnd 1 soFar) $ Rewrites (getVar name soFar vrw) $ Map.singleton acsr r)
+          (Tuple (Array.dropEnd 1 acsrs) (bindVarFrom (getVar name acsrs vrw) pat))
+          acsrs
 bindVarWithin s pat | Just global <- globalThunk s = \vrw ->
   vrw <> do
     let e = applyCall unit global (callErl [])
     { calls: _, locals: mempty } $
       SemigroupMap $ Map.singleton global $
-        bindVarFrom e (spy "pat" pat)
+        bindVarFrom e pat
 bindVarWithin _ pat = bindVar pat
 
 bindVars :: forall f. Foldable f => f ErlPattern -> VRW -> VRW

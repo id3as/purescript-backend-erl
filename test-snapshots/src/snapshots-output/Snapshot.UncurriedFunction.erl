@@ -71,13 +71,14 @@ main() ->
     fun
       () ->
         begin
+          V@1 = test_assert@ps:assert(),
           V(),
-          ((test_assert@ps:assert())((test2b()) =:= 1))(),
-          ((test_assert@ps:assert())((test3b()) =:= 2))(),
-          V@4 = (test4b())(),
-          ((test_assert@ps:assert())(V@4 =:= <<"test4b">>))(),
+          (V@1((test2b()) =:= 1))(),
+          (V@1((test3b()) =:= 2))(),
+          V@5 = (test4b())(),
+          (V@1(V@5 =:= <<"test4b">>))(),
           W = (test4a())(<<"test4b">>),
-          ((test_assert@ps:assert())(W =:= <<"test4b">>))()
+          (V@1(W =:= <<"test4b">>))()
         end
     end
   end.

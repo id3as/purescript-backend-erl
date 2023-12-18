@@ -210,6 +210,8 @@ printExpr' prec = case _ of
   S.MapUpdate e fields -> D.text "(" <> printAtomic e <> D.text ")#" <> printBraces_ (printField <$> fields)
 
   S.Assignments [] ret -> printExpr' prec ret
+  S.Assignments exprs1 (S.Assignments exprs2 ret) ->
+    printExpr' prec (S.Assignments (exprs1 <> exprs2) ret)
   S.Assignments exprs ret -> fold
     [ D.text "begin" <> D.break
     , D.indent $ fold
