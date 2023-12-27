@@ -269,9 +269,9 @@ printExpr' prec = case _ of
       <> D.break <>
     D.text "end"
 
-  S.BinOp S.IDivide e1 e2 ->
-    -- we're not going to inline this here; it requires some trickery to get right
-    printExpr' prec $ S.FunCall (Just (S.Literal (S.Atom "data_euclideanRing@foreign"))) (S.Literal (S.Atom "intDiv")) [e1, e2]
+  -- S.BinOp S.IDivide e1 e2 ->
+  --   -- we're not going to inline this here; it requires some trickery to get right
+  --   printExpr' prec $ S.FunCall (Just (S.Literal (S.Atom "data_euclideanRing@foreign"))) (S.Literal (S.Atom "intDiv")) [e1, e2]
 
   S.BinOp op e1 e2 ->
     parenPrec prec $
