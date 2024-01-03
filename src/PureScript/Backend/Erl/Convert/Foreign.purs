@@ -4,17 +4,19 @@ import Prelude
 
 import Control.Alt ((<|>))
 import Control.Apply (lift2)
+import Data.Array as A
 import Data.Array as Array
 import Data.Array.NonEmpty as NEA
+import Data.Bifunctor (bimap)
 import Data.Maybe (Maybe(..), fromMaybe', maybe)
 import Data.Newtype (unwrap)
 import Data.Traversable (sequence)
 import Data.Tuple (Tuple(..))
-import PureScript.Backend.Erl.Calling (CallPS(..), Conventions, Converter, Converters, applyConventions, arg, arg', arg'', callConverters, callErl, callPS, codegenArg, converts', func, getEnv, indexPatterns, noArgs, partial, qualErl, qualPS, thunkErl, withEnv)
-import PureScript.Backend.Erl.Convert.Common (toErlVarExpr, toErlVarPat)
+import PureScript.Backend.Erl.Calling (CallPS(..), Conventions, Converter, Converters, applyConventions, arg', argMatch, callConverters, callErl, callPS, codegenArg, converts', func, indexPatterns, noArgs, qualErl, qualPS, thunkErl, withEnv)
+import PureScript.Backend.Erl.Convert.Common (toErlVarPat)
 import PureScript.Backend.Erl.Syntax (ErlExpr, FunHead(..))
 import PureScript.Backend.Erl.Syntax as S
-import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal(..), ModuleName(..), Prop(..), Qualified(..))
+import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal(..), ModuleName(..), Qualified(..))
 import PureScript.Backend.Optimizer.Semantics (NeutralExpr(..))
 import PureScript.Backend.Optimizer.Syntax (BackendSyntax(..))
 
@@ -34,7 +36,7 @@ codegenForeign' codegenExpr s
     Nothing
 
 converters :: Converters
-converters = applyConventions ffiSpecs <> indexPatterns (tupleCalls <> specificCalls)
+converters = indexPatterns (tupleCalls <> specificCalls) <> applyConventions ffiSpecs
 
 tupleCalls :: Array Converter
 tupleCalls = [1,2,3,4,5,6,7,8,9,10] >>= \arity ->
@@ -109,6 +111,18 @@ specificCalls =
   , func "Erl.Data.List.Types.null" $ S.BinOp S.IdenticalTo (S.List []) <$> codegenArg
   , func "Erl.Data.Map.empty" $ noArgs $> S.Map []
   , func "Erl.Data.Map.isEmpty" $ S.BinOp S.IdenticalTo (S.Map []) <$> codegenArg
+  , func "Erl.Data.Map.insert" ado
+      key <- codegenArg
+      value <- codegenArg
+      container <- codegenArg
+      in S.MapUpdate container [ Tuple key value ]
+
+  , func "Erl.Data.Map.fromFoldable" ado
+      _ <- argMatch $ func "Data.List.Types.foldableList" noArgs
+      list <- withEnv $ arg' \l ->
+        (\items codegen -> join bimap codegen <$> items) $
+          unTuple <$> gatherList l
+      in S.Map list
 
   -- Needs some mechanism for fresh names :(
   -- , func "Erl.Data.Variant.matchImpl" $ partial ado
@@ -132,6 +146,15 @@ specificCalls =
 
   , func "Partial._unsafePartial" $ S.curriedApp <$> codegenArg <@> [S.atomLiteral "unit"]
   ]
+
+gatherList :: Partial => NeutralExpr -> Array NeutralExpr
+gatherList (NeutralExpr (CtorSaturated (Qualified (Just (ModuleName "Data.List.Types")) (Ident ctor)) _ _ _ fields)) =
+  case ctor, fields of
+    "Nil", [] -> []
+    "Cons", [Tuple _ a, Tuple _ as] -> A.cons a (gatherList as)
+
+unTuple :: Partial => NeutralExpr -> Tuple NeutralExpr NeutralExpr
+unTuple (NeutralExpr (CtorSaturated (Qualified (Just (ModuleName "Data.Tuple")) (Ident "Tuple")) _ _ _ [Tuple _ l, Tuple _ r])) = Tuple l r
 
 ffiSpecs :: Conventions
 ffiSpecs = callConverters

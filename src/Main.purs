@@ -6,23 +6,19 @@ import Ansi.Codes (Color(..))
 import Ansi.Output (foreground, withGraphics)
 import ArgParse.Basic (ArgParser)
 import ArgParse.Basic as ArgParser
-import Data.Array (notElem)
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Bifunctor (lmap)
 import Data.Either (Either(..), either)
-import Data.Foldable (for_, sum, traverse_)
+import Data.Foldable (for_, traverse_)
 import Data.List as List
-import Data.Map as Map
-import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Maybe (Maybe, fromMaybe)
 import Data.Monoid (power)
-import Data.Monoid.Additive (Additive(..))
 import Data.Newtype (unwrap)
 import Data.Set as Set
 import Data.String as String
 import Data.String.CodeUnits as SCU
 import Data.Tuple (Tuple(..))
-import Debug (traceM)
 import Dodo (plainText)
 import Dodo as Dodo
 import Effect (Effect)
@@ -40,16 +36,14 @@ import Parsing (parseErrorMessage)
 import PureScript.Backend.Erl.Constants (erlExt)
 import PureScript.Backend.Erl.Convert (codegenModule, initAcrossModules)
 import PureScript.Backend.Erl.Convert.Common (erlModuleNamePs, erlModuleNameForeign)
-import PureScript.Backend.Erl.Foreign (erlForeignSemantics)
+import PureScript.Backend.Erl.Foreign (fullForeignSemantics)
 import PureScript.Backend.Erl.Foreign.Analyze (analyzeCustom)
 import PureScript.Backend.Erl.Parser (parseFile)
 import PureScript.Backend.Erl.Printer as P
-import PureScript.Backend.Erl.Syntax (ErlDefinition(..), visit)
 import PureScript.Backend.Optimizer.Builder (buildModules)
-import PureScript.Backend.Optimizer.CoreFn (Ident, Module(..), ModuleName(..), Qualified(..))
+import PureScript.Backend.Optimizer.CoreFn (Module(..), ModuleName(..))
 import PureScript.Backend.Optimizer.Directives (parseDirectiveFile)
 import PureScript.Backend.Optimizer.Directives.Defaults (defaultDirectives)
-import PureScript.Backend.Optimizer.Semantics.Foreign (ForeignEval, coreForeignSemantics)
 import Test.Utils (coreFnModulesFromOutput, errored, mkdirp)
 
 type MainArgs =
@@ -85,14 +79,6 @@ main = do
       Console.error $ ArgParser.printArgError err
     Right args ->
       launchAff_ $ runCompile args
-
-foreignSemantics :: Map.Map (Qualified Ident) ForeignEval
-foreignSemantics = Map.union erlForeignSemantics $
-  coreForeignSemantics # Map.filterKeys
-    \(Qualified mod _) -> mod `notElem`
-      [ Just (ModuleName "Effect.Ref")
-      , Just (ModuleName "Control.Monad.ST.Internal")
-      ]
 
 moreDirectives :: String
 moreDirectives = """
@@ -136,7 +122,7 @@ runCompile { compile, filter, cwd } = do
       coreFnModules # buildModules
         { directives
         , analyzeCustom
-        , foreignSemantics
+        , foreignSemantics: fullForeignSemantics
         , traceIdents: mempty
         , onCodegenModule: \_ (Module { name: ModuleName name, path: reportedPath, exports }) (backend) _ -> do
             -- Sorry, working around a weird language server bug

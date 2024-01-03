@@ -6,7 +6,7 @@ import Data.Array as Array
 import Data.Array.NonEmpty as NEA
 import Data.Foldable (foldMap)
 import Data.Maybe (Maybe(..))
-import PureScript.Backend.Optimizer.Analysis (BackendAnalysis, ResultTerm(..), analysisOf, bump, withResult)
+import PureScript.Backend.Optimizer.Analysis (BackendAnalysis(..), Complexity(..), ResultTerm(..), analysisOf, bump, complex, externs, usedDep, withResult)
 import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal(..), ModuleName(..), Qualified(..))
 import PureScript.Backend.Optimizer.Semantics (BackendExpr(..), Ctx)
 import PureScript.Backend.Optimizer.Syntax (BackendSyntax(..))

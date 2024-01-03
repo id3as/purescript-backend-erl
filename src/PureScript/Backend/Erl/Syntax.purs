@@ -41,9 +41,13 @@ data ErlExpr
   -- | An erlang tuple { E1, E2, ... }
   | Tupled (Array ErlExpr)
   -- | A map expression #{ X => E }
-  | Map (Array (Tuple String ErlExpr))
+  | Map (Array (Tuple ErlExpr ErlExpr))
   -- | A map update expression M#{ X => E }
-  | MapUpdate ErlExpr (Array (Tuple String ErlExpr))
+  | MapUpdate ErlExpr (Array (Tuple ErlExpr ErlExpr))
+  -- | A map expression #{ X => E }
+  | Record (Array (Tuple String ErlExpr))
+  -- | A map update expression M#{ X => E }
+  | RecordUpdate ErlExpr (Array (Tuple String ErlExpr))
 
   | Assignments (Array (Tuple ErlPattern ErlExpr)) ErlExpr
   -- |
@@ -238,6 +242,8 @@ visit f = go
     Tupled es -> goes es
     Map kvs -> foldMap (go <<< snd) kvs
     MapUpdate e kvs -> go e <> foldMap (go <<< snd) kvs
+    Record kvs -> foldMap (go <<< snd) kvs
+    RecordUpdate e kvs -> go e <> foldMap (go <<< snd) kvs
     Assignments es e -> foldMap (go <<< snd) es <> go e
     Fun _ heads -> foldMap (bifoldMap goFunHead go) heads
     FunCall me e es -> foldMap go me <> go e <> goes es

@@ -81,10 +81,10 @@ test5() ->
       end
   end.
 
-test5(_, V@1 = {first, V@2}) ->
-  case V@1 of
+test5(_, V = {first, V@1}) ->
+  case V of
     {first, _} ->
-      V@2;
+      V@1;
     _ ->
       erlang:error({fail, <<"Failed pattern match">>})
   end.

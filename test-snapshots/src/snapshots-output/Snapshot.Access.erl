@@ -18,8 +18,8 @@ f() ->
 
 f(I) ->
   begin
-    #{ x := V@1, y := V@2 } = foo(I),
-    V@1 * V@2
+    #{ x := V, y := V@1 } = foo(I),
+    V * V@1
   end.
 
 bar() ->
@@ -28,8 +28,8 @@ bar() ->
       bar(V)
   end.
 
-bar(#{ x := V@1, y := V@2 }) ->
-  (V@1 - V@2) * V@2.
+bar(#{ x := V, y := V@1 }) ->
+  (V - V@1) * V@1.
 
 g() ->
   fun

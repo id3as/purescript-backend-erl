@@ -14,7 +14,7 @@ import Data.Compactable (class Compactable, compact, separateDefault)
 import Data.Either (Either(..), hush)
 import Data.Filterable (class Filterable, filterDefault, partitionDefault, partitionMapDefault)
 import Data.Foldable (class Foldable, foldl, sum)
-import Data.FunctorWithIndex (mapWithIndex)
+import Data.FunctorWithIndex (class FunctorWithIndex, mapWithIndex)
 import Data.Lazy (defer, force)
 import Data.Lens (APrism', Prism', preview, prism', review, withPrism)
 import Data.List (List(..))
@@ -24,7 +24,7 @@ import Data.Map as Map
 import Data.Maybe (Maybe(..), isNothing)
 import Data.Newtype (class Newtype, un, unwrap, wrap)
 import Data.Profunctor (class Profunctor, dimap)
-import Data.Semigroup.Last (Last(..))
+import Data.Semigroup.First (First(..))
 import Data.String as String
 import Data.Traversable (class Traversable, for, mapAccumR, sequence, traverse)
 import Data.Tuple (Tuple(..), fst, uncurry)
@@ -71,6 +71,10 @@ derive instance ordCallPS :: Ord a => Ord (CallPS a)
 derive instance functorCallPS :: Functor CallPS
 derive instance foldableCallPS :: Foldable CallPS
 derive instance traversableCallPS :: Traversable CallPS
+instance functorWithIndexCallPS :: FunctorWithIndex Int CallPS where
+  mapWithIndex f (Curried fa) = Curried (mapWithIndex f fa)
+  mapWithIndex f (Uncurried fa) = Uncurried (mapWithIndex f fa)
+  mapWithIndex f (UncurriedEffect fa) = UncurriedEffect (mapWithIndex f fa)
 data CallingPS a
   = BasePS
   | CallingPS (CallingPS a) (CallPS a)
@@ -88,6 +92,12 @@ instance ordCallingPS :: Ord a => Ord (CallingPS a) where
 derive instance functorCallingPS :: Functor CallingPS
 derive instance foldableCallingPS :: Foldable CallingPS
 derive instance traversableCallingPS :: Traversable CallingPS
+instance FunctorWithIndex Int CallingPS where
+  mapWithIndex _ BasePS = BasePS
+  mapWithIndex f (CallingPS prev last) =
+    CallingPS
+      (mapWithIndex f prev)
+      (mapWithIndex (f <<< add (arity prev)) last)
 
 instance altCallingPS :: Alt CallingPS where
   alt calls BasePS = calls
@@ -136,7 +146,8 @@ derive instance functorCallErl :: Functor CallErl
 derive instance foldableCallErl :: Foldable CallErl
 derive instance traversableCallErl :: Traversable CallErl
 derive instance eqCallErl :: Eq a => Eq (CallErl a)
--- But a global definition cannot be called zero times
+-- But a global definition can only be called zero times if it is referenced
+-- by a specific arity
 newtype CallingErl a = CallingErl (NonEmptyArray (CallErl a))
 derive instance newtypeCallingErl :: Newtype (CallingErl a) _
 instance altCallingErl :: Alt CallingErl where
@@ -162,7 +173,7 @@ thunkErl = CallingErl $ pure $ Thunk
 type Conventions =
   SemigroupMap (Qualified Ident)
   ( SemigroupMap ArityPS
-    (Last (CWB CallingErl GlobalErl Unit))
+    (First (CWB CallingErl GlobalErl Unit))
   )
 
 callAs :: Qualified Ident -> ArityPS -> ArityErl -> Conventions
@@ -173,7 +184,7 @@ callAs' qi arity erl call
   | CWB erl call == conventionWithBase identity (CWB qi arity)
   = mempty
 callAs' qi arity erl call =
-  SemigroupMap $ Map.singleton qi $ SemigroupMap $ Map.singleton arity $ Last $
+  SemigroupMap $ Map.singleton qi $ SemigroupMap $ Map.singleton arity $ First $
     CWB erl call
 
 toGlobalErl :: Qualified Ident -> GlobalErl
@@ -204,6 +215,11 @@ localConvention f = \calls -> go calls empty
     go more $ NEA.toArray (unwrap (callConvention f call)) <|> acc
   go BasePS acc =
     CallingErl <$> NEA.fromArray acc
+
+flatCallConvention :: forall a b. (a -> b) -> CallingPS a -> CallingErl b
+flatCallConvention f ps = case customConvention (const <<< f) ps $ CallingErl $ pure $ Call $ Array.replicate (arity ps) unit of
+  Just r -> r
+  Nothing -> unsafeCrashWith "flatCallConvention failed"
 
 callConvention :: forall a b. (a -> b) -> CallPS a -> CallingErl b
 callConvention f = case _ of
@@ -395,12 +411,12 @@ matchBasePattern ::
     Calling call =>
     ToBase call expr base env =>
   (env -> o -> call expr -> o) ->
-  SemigroupMap base (SemigroupMap (call Unit) (Last (Pattern env (CWB call base) expr o))) ->
+  SemigroupMap base (SemigroupMap (call Unit) (First (Pattern env (CWB call base) expr o))) ->
   env ->
   expr ->
   Maybe o
 matchBasePattern conv bases env expr = do
-  Tuple { matched, unmatched } (Last pat) <- matchBase bases env expr
+  Tuple { matched, unmatched } (First pat) <- matchBase bases env expr
   case pat of
     Pure _ -> Nothing
     Pattern _ parse -> do
@@ -561,7 +577,7 @@ instance
     Sem.evalUncurriedApp env (from expr) args
   applyCWB env (CWB expr (UncurriedEffect args)) =
     Sem.evalUncurriedEffectApp env (from expr) args
-  matchCall = matchCall' false
+  matchCall = matchCall' 1
     where
     matchCall' _ _ (Sem.SemRef r [Sem.ExternApp call'] _) (Curried callSpec)
       | Just call <- NEA.fromArray call'
@@ -601,8 +617,8 @@ instance
         { matched: CWB (to fn) (UncurriedEffect (Array.zip call callSpec))
         , unmatched: Nothing
         }
-    matchCall' true env (Sem.SemRef _ _ more) spec =
-      matchCall' false env (force more) spec
+    matchCall' count env (Sem.SemRef _ _ more) spec | count > 0 =
+      matchCall' (count - 1) env (force more) spec
     matchCall' _ _ _ _ = Nothing
 
 class Inj a b where
@@ -879,15 +895,15 @@ callConverters options = options # Array.foldMap \option ->
       callAs' option.ps reduced option.erl (option.call <|> map absurd r)
 
 applyConventions :: Conventions -> Converters
-applyConventions = mapWithIndex \qi -> mapWithIndex \arity (Last (CWB erlBase convention)) ->
-  Last $ Pattern (CWB qi arity) \codegenExpr (CWB _old matched) -> do
+applyConventions = mapWithIndex \qi -> mapWithIndex \arity (First (CWB erlBase convention)) ->
+  First $ Pattern (CWB qi arity) \codegenExpr (CWB _old matched) -> do
     calls <- customConvention (codegenExpr >>> const) matched convention
     pure $ applyCall unit erlBase calls
 
 type Converters =
   SemigroupMap (Qualified Ident)
   ( SemigroupMap ArityPS
-    ( Last Converter
+    ( First Converter
     )
   )
 type Converter =
@@ -898,11 +914,11 @@ indexPatterns ::
     Ord base =>
     Ord (call Unit) =>
   Array (Pattern env (CWB call base) i o) ->
-  SemigroupMap base (SemigroupMap (call Unit) (Last (Pattern env (CWB call base) i o)))
+  SemigroupMap base (SemigroupMap (call Unit) (First (Pattern env (CWB call base) i o)))
 indexPatterns pats = pats # Array.foldMap \pat -> case pat of
   Pure _ -> mempty
   Pattern (CWB base arity) _ -> do
-    SemigroupMap $ Map.singleton base $ SemigroupMap $ Map.singleton arity $ Last pat
+    SemigroupMap $ Map.singleton base $ SemigroupMap $ Map.singleton arity $ First pat
 
 converts :: Array Converter -> (NeutralExpr -> ErlExpr) -> NeutralExpr -> Maybe ErlExpr
 converts = indexPatterns >>> converts'

@@ -8,30 +8,29 @@ import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NEA
 import Data.Bifunctor (lmap)
 import Data.Foldable (class Foldable, foldMap, foldr)
-import Data.FunctorWithIndex (mapWithIndex)
+import Data.FoldableWithIndex (foldMapWithIndex)
+import Data.FunctorWithIndex (class FunctorWithIndex, mapWithIndex)
 import Data.Map (Map, SemigroupMap(..))
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (over, unwrap)
-import Data.Profunctor (dimap)
 import Data.Profunctor.Strong ((&&&))
 import Data.Set as Set
 import Data.Tuple (Tuple(..), fst, snd, uncurry)
-import Debug (spy, spyWith)
-import Dodo as Dodo
 import Partial.Unsafe (unsafeCrashWith)
-import PureScript.Backend.Erl.Calling (CallPS(..), CallingPS(..), Conventions, Converters, GlobalErl(..), applyConventions, callAs, callAs', callErl, callPS, converts', thunkErl)
+import PureScript.Backend.Erl.Calling (ArityPS, CWB(..), CallPS(..), CallingPS(..), Conventions, Converters, GlobalErl(..), applyCall, applyConventions, arity, callAs, callAs', callErl, callPS, converts', thunkErl, toBase, zipAgainst)
 import PureScript.Backend.Erl.Constants as C
-import PureScript.Backend.Erl.Convert.After (optimizePatterns, optimizePatternsDecl)
-import PureScript.Backend.Erl.Convert.Common (erlModuleNameForeign, erlModuleNamePs, tagAtom, toAtomName, toErlVar, toErlVarExpr, toErlVarName, toErlVarPat, toErlVarWith)
+import PureScript.Backend.Erl.Convert.After (optimizePatternsDecl)
+import PureScript.Backend.Erl.Convert.Common (erlModuleNameForeign, erlModuleNamePs, tagAtom, toAtomName, toErlVar, toErlVarName, toErlVarPat, toErlVarWith)
 import PureScript.Backend.Erl.Convert.Foreign (codegenForeign)
+import PureScript.Backend.Erl.Foreign (fullForeignSemantics)
+import PureScript.Backend.Erl.Foreign.Analyze (analyzeCustom)
 import PureScript.Backend.Erl.Parser (ForeignDecls)
-import PureScript.Backend.Erl.Printer (printAtomic)
 import PureScript.Backend.Erl.Syntax (Accessor(..), ErlDefinition(..), ErlExport(..), ErlExpr, ErlModule, ErlPattern, access, atomLiteral, mIS_KNOWN_TAG, self)
 import PureScript.Backend.Erl.Syntax as S
-import PureScript.Backend.Optimizer.Convert (BackendModule, BackendBindingGroup)
+import PureScript.Backend.Optimizer.Convert (BackendBindingGroup, BackendModule, ConvertEnv, getCtx, makeExternEvalRef, makeExternEvalSpine)
 import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal(..), ModuleName(..), Prop(..), Qualified(..))
-import PureScript.Backend.Optimizer.Semantics (NeutralExpr)
+import PureScript.Backend.Optimizer.Semantics (BackendExpr(..), BackendSemantics(..), Ctx(..), Env(..), LocalBinding(..), NeutralExpr(..), foldBackendExpr, optimize)
 import PureScript.Backend.Optimizer.Syntax (BackendAccessor(..), BackendOperator(..), BackendOperator1(..), BackendOperator2(..), BackendOperatorNum(..), BackendOperatorOrd(..), BackendSyntax(..), Level(..), Pair(..))
 
 type CodegenEnv =
@@ -49,22 +48,39 @@ type AcrossModules =
   , constructors :: Map (Qualified Ident) Int
   }
 
+initAcrossModules :: AcrossModules
 initAcrossModules = { callingConventions: mempty, constructors: Map.empty }
 
 codegenModule :: BackendModule -> ForeignDecls -> AcrossModules -> Tuple ErlModule AcrossModules
-codegenModule { name: currentModule, bindings, imports, foreign: foreign_, dataTypes, exports: moduleExports } foreigns rolling =
+codegenModule backendModule@{ name: currentModule, bindings, imports, foreign: foreign_, dataTypes, exports: moduleExports } foreigns rolling =
   let
-    Tuple thisModuleConventions thisModuleBindings = foldMap (codegenTopLevelBindingGroup currentModule) bindings
+    allBindings = bindings >>= _.bindings
+    Tuple thisModuleConventions thisModuleBindings = foldMap (codegenTopLevelBinding currentModule) allBindings
+
+    -- Transitively uncurry some definitions
+    moreModuleStuff = uncurryMore backendModule (withForeignConventions <> thisModuleConventions) allBindings
+    moreModuleBindings = snd moreModuleStuff
+    moreModuleConventions = thisModuleConventions <> fst moreModuleStuff
+
     withForeignConventions = rolling.callingConventions <> foldMap fst reexportForeigns
-    callingConventions = withForeignConventions <> thisModuleConventions
-    -- We do not qualify same-module bindings
-    localConventions = thisModuleConventions <#> (map <<< map <<< lmap) (over GlobalErl _ { module = Nothing })
-    localCallingConventions = withForeignConventions <> localConventions
-    constructors = Map.union rolling.constructors $ Map.fromFoldable $ Array.fromFoldable dataTypes >>= \{ constructors: cTors } ->
-      Map.toUnfoldable cTors <#> \(Tuple ctor { fields }) -> Tuple (Qualified (Just currentModule) ctor) (Array.length fields)
+
+    -- Calling conventions to export
+    callingConventions = withForeignConventions <> moreModuleConventions
+    -- Locally we do not qualify same-module bindings
+    localConventions = moreModuleConventions <#> (map <<< map <<< lmap) (over GlobalErl _ { module = Nothing })
+    localCallingConventions = localConventions <> withForeignConventions
+
+    -- Constructors to export
+    constructors = Map.union rolling.constructors $ Map.fromFoldable $
+      Array.fromFoldable dataTypes >>= \{ constructors: cTors } ->
+        Map.toUnfoldable cTors <#> \(Tuple ctor { fields }) ->
+          Tuple (Qualified (Just currentModule) ctor) (Array.length fields)
+
+    -- Performance boost by filtering the calling conventions to the imports
     narrowToImports = over SemigroupMap $ Map.filterKeys case _ of
       Qualified (Just mn) _ -> Set.member mn imports || mn == currentModule
       _ -> true
+
     codegenEnv =
       { currentModule
       , substitutions: Map.empty
@@ -77,22 +93,22 @@ codegenModule { name: currentModule, bindings, imports, foreign: foreign_, dataT
     definitions = Array.concat
       [ thisModuleBindings <@> codegenEnv
       , reexportForeigns <#> snd
+      , moreModuleBindings <@> codegenEnv
       ] <#> optimizePatternsDecl
 
     reexportForeigns :: Array (Tuple Conventions ErlDefinition)
     reexportForeigns = foreigns.exported >>= \(Tuple decl arity) -> do
       guard $ Ident decl `Set.member` foreign_
       let
-        Tuple pats vars = patsAndVars $
-          Array.replicate arity unit
-            # mapWithIndex \i _ ->
-              toErlVar Nothing (Level i)
+        Tuple pats vars = patsAndVars $ autoVars $ Array.replicate arity unit
         calling =
           case NEA.fromArray (void vars) of
+            -- Foreign imports with arity 0 are taken as-is
             Nothing ->
               callAs' (Qualified (Just currentModule) (Ident decl)) BasePS
                 (GlobalErl { module: Just $ erlModuleNameForeign currentModule, name: decl })
                 (callErl [])
+            -- Foreign imports with nonzero arity get curried by that amount
             Just vars' ->
               callAs' (Qualified (Just currentModule) (Ident decl)) (callPS (Curried vars'))
                 (GlobalErl { module: Just $ erlModuleNameForeign currentModule, name: decl })
@@ -120,12 +136,109 @@ definitionExports = case _ of
   FunctionDefinition f a _ ->
     Export f (Array.length a)
 
-codegenTopLevelBindingGroup
-  :: ModuleName
-  -> BackendBindingGroup Ident NeutralExpr
-  -> Tuple Conventions (Array (CodegenEnv -> ErlDefinition))
-codegenTopLevelBindingGroup currentModule { bindings } =
-  foldMap (codegenTopLevelBinding currentModule) bindings
+reOptimize :: BackendModule -> Qualified Ident -> Array (Tuple (Maybe Ident) Level) -> NeutralExpr -> NeutralExpr
+reOptimize thisModule qualifiedIdent addedLocals neutralExpr =
+  foldBackendExpr NeutralExpr (\_ neutExpr -> neutExpr) $ snd $
+    optimize false ctx evalEnv qualifiedIdent 100 backendExpr
+  where
+  env = (convertEnv thisModule)
+    { currentLevel = Array.length addedLocals
+    , toLevel = Map.fromFoldable $ addedLocals # Array.mapMaybe \(Tuple mi l) -> Tuple <$> mi <@> l
+    }
+  ctx = getCtx env
+  Ctx { analyze } = ctx
+  toBackendExpr (NeutralExpr syntax) =
+    let syntax' = syntax <#> toBackendExpr
+    in ExprSyntax (analyze ctx syntax') syntax'
+  backendExpr = toBackendExpr neutralExpr
+  evalEnv = Env
+    { currentModule: env.currentModule
+    , evalExternRef: makeExternEvalRef env
+    , evalExternSpine: makeExternEvalSpine env
+    , locals: addedLocals <#> One <<< uncurry NeutLocal
+    , directives: env.directives
+    }
+
+shift :: Int -> NeutralExpr -> NeutralExpr
+shift amt (NeutralExpr (Local i (Level l))) = NeutralExpr (Local i (Level (l + amt)))
+shift amt (NeutralExpr (Abs ils a)) = NeutralExpr (Abs (map (map \(Level l) -> Level (l + amt)) ils) (shift amt a))
+shift amt (NeutralExpr (UncurriedAbs ils a)) = NeutralExpr (UncurriedAbs (map (map \(Level l) -> Level (l + amt)) ils) (shift amt a))
+shift amt (NeutralExpr (UncurriedEffectAbs ils a)) = NeutralExpr (UncurriedEffectAbs (map (map \(Level l) -> Level (l + amt)) ils) (shift amt a))
+shift amt (NeutralExpr (LetRec (Level l) as a)) = NeutralExpr (LetRec (Level (l + amt)) (map (shift amt) <$> as) (shift amt a))
+shift amt (NeutralExpr (Let i (Level l) a1 a2)) = NeutralExpr (Let i (Level (l + amt)) (shift amt a1) (shift amt a2))
+shift amt (NeutralExpr (EffectBind i (Level l) a1 a2)) = NeutralExpr (EffectBind i (Level (l + amt)) (shift amt a1) (shift amt a2))
+shift amt (NeutralExpr x) = NeutralExpr (map (shift amt) x)
+
+convertEnv :: BackendModule -> ConvertEnv
+convertEnv { name, implementations, directives } =
+  { analyzeCustom
+  , currentModule: name
+  , currentLevel: 0
+  , toLevel: Map.empty
+  , implementations
+  , moduleImplementations: Map.empty
+  , directives
+  , dataTypes: Map.empty
+  , foreignSemantics: fullForeignSemantics
+  , rewriteLimit: 10_000
+  , traceIdents: mempty
+  , optimizationSteps: []
+  }
+
+uncurryMore ::
+  BackendModule ->
+  Conventions ->
+  Array (Tuple Ident NeutralExpr) ->
+  Tuple Conventions (Array (CodegenEnv -> ErlDefinition))
+uncurryMore mod c0 decls = go mempty []
+  where
+  go c1 added =
+    case foldMap (uncurryMore1 mod (c0 <> c1)) decls of
+      Tuple _ [] -> Tuple c1 added
+      Tuple c2 more ->
+        go (c1 <> c2) (added <> more)
+
+uncurryMore1 ::
+  BackendModule ->
+  Conventions ->
+  Tuple Ident NeutralExpr ->
+  Tuple Conventions (Array (CodegenEnv -> ErlDefinition))
+uncurryMore1 backendModule (SemigroupMap conventions) (Tuple (Ident i) n) =
+  -- Dredge up some partially applied definitions
+  case toBase unit n of
+    Just (CWB qi args) | Just arities <- Map.lookup qi conventions ->
+      arities # foldMapWithIndex case _, _ of
+        psCall, _erlConvention
+          | arity psCall > arity args -- this is not redundant with the next line
+          , Just { matched, unmatched: Just unmatched } <- zipAgainst psCall args
+          , isNewOptimization thisBinding unmatched (SemigroupMap conventions) ->
+            -- abstract out the unmatched variables
+            let Tuple abstracted localVars = psPatsAndVars $ autoPSVars unmatched in
+            -- the Erlang definition will be called with them all flat
+            let abstractedFlat = toErlVarPat <$> Array.fromFoldable abstracted in
+            -- Record the optimization
+            callThisAs unmatched (void $ callErl abstractedFlat) $
+              Array.singleton $
+                \codegenEnv -> FunctionDefinition i abstractedFlat $ codegenExpr codegenEnv $
+                  -- catch some optimizations, like `+` inlining and MagicDo
+                  reOptimize backendModule thisBinding (Array.fromFoldable abstracted) $
+                    -- stitch together the new call with the extra variables,
+                    -- which will trigger specialization in `codegenExpr` if
+                    -- it isn't already optimized by the backend-optimizer
+                    applyCall unit qi $
+                      shift (arity localVars) <$> args <|> localVars
+        _, _ -> mempty
+    _ -> mempty
+  where
+  thisBinding = Qualified (Just backendModule.name) (Ident i)
+  callThisAs x y = Tuple (callAs thisBinding x y)
+
+isNewOptimization :: Qualified Ident -> ArityPS -> Conventions -> Boolean
+isNewOptimization qi callingPS (SemigroupMap conventions) =
+  case Map.lookup qi conventions of
+    Nothing -> true
+    Just (SemigroupMap arities) ->
+      not Map.member callingPS arities
 
 codegenTopLevelBinding
   :: ModuleName
@@ -219,7 +332,7 @@ codegenExpr codegenEnv0@{ currentModule } s | codegenEnv <- setCallsHandled fals
     access (AcsElement (i + 2)) (codegenExpr codegenEnv e)
 
   Update e props ->
-    S.MapUpdate (codegenExpr codegenEnv e) ((\(Prop name p) -> Tuple name (codegenExpr codegenEnv p)) <$> props)
+    S.RecordUpdate (codegenExpr codegenEnv e) ((\(Prop name p) -> Tuple name (codegenExpr codegenEnv p)) <$> props)
 
   CtorSaturated _ _ _ tagName xs ->
     S.Tupled $ [ tagAtom tagName ] <> map (codegenExpr codegenEnv <<< snd) xs
@@ -279,7 +392,7 @@ codegenLiteral codegenEnv = case _ of
   LitArray a ->
     S.FunCall (Just $ atomLiteral C.array) (atomLiteral C.from_list)
       [ S.List $ codegenExpr codegenEnv <$> a ]
-  LitRecord r -> S.Map $ (\(Prop f e) -> Tuple f (codegenExpr codegenEnv e)) <$> r
+  LitRecord r -> S.Record $ (\(Prop f e) -> Tuple f (codegenExpr codegenEnv e)) <$> r
 
 type ChainMode = { effect :: Boolean }
 
@@ -344,9 +457,20 @@ locals = locals' >>> patsAndVars
 patsAndVars :: Array String -> Tuple (Array ErlPattern) (Array ErlExpr)
 patsAndVars = map S.bindOrDiscard &&& map (S.Var <@> self)
 
+autoVars :: forall a. Array a -> Array String
+autoVars = mapWithIndex \i _ ->
+  toErlVar Nothing (Level i)
+
 locals' :: forall f. Foldable f => f (Tuple (Maybe Ident) Level) -> Array String
 locals' = Array.fromFoldable >>> mapWithIndex \idx (Tuple name _) ->
   toErlVarWith "Local" name (Level idx)
+
+psPatsAndVars :: forall f. Functor f => f (Tuple (Maybe Ident) Level) -> Tuple (f (Tuple (Maybe Ident) Level)) (f NeutralExpr)
+psPatsAndVars = identity &&& map (NeutralExpr <<< uncurry Local)
+
+autoPSVars :: forall f a. FunctorWithIndex Int f => f a -> f (Tuple (Maybe Ident) Level)
+autoPSVars = mapWithIndex \i _ ->
+  Tuple Nothing (Level i)
 
 codegenLetRec ::
   CodegenEnv ->

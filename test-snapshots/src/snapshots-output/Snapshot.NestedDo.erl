@@ -7,6 +7,7 @@
         , do1/0
         , do0/0
         , bug26/0
+        , pure_/1
         ]).
 -compile(no_auto_import).
 pure_() ->
@@ -14,14 +15,13 @@ pure_() ->
 
 renamed() ->
   begin
-    V = (pure_())(unit),
+    V = pure_(unit),
     fun
       () ->
         begin
-          V@1 = pure_(),
           A0 = V(),
-          A1 = (V@1(A0))(),
-          (V@1(A1))(),
+          A1 = (pure_(A0))(),
+          (pure_(A1))(),
           (effect_console@foreign:log(<<"Oh no">>))()
         end
     end
@@ -29,14 +29,13 @@ renamed() ->
 
 renamed0() ->
   begin
-    V = (pure_())(unit),
+    V = pure_(unit),
     fun
       () ->
         begin
-          V@1 = pure_(),
           A0 = V(),
-          A = (V@1(A0))(),
-          (V@1(A))(),
+          A = (pure_(A0))(),
+          (pure_(A))(),
           (effect_console@foreign:log(<<"Oh no">>))()
         end
     end
@@ -44,14 +43,13 @@ renamed0() ->
 
 renamed1() ->
   begin
-    V = (pure_())(unit),
+    V = pure_(unit),
     fun
       () ->
         begin
-          V@1 = pure_(),
           A = V(),
-          A@1 = (V@1(A))(),
-          (V@1(A@1))(),
+          A@1 = (pure_(A))(),
+          (pure_(A@1))(),
           (effect_console@foreign:log(<<"Oh no">>))()
         end
     end
@@ -59,14 +57,13 @@ renamed1() ->
 
 renamed2() ->
   begin
-    V = (pure_())(unit),
+    V = pure_(unit),
     fun
       () ->
         begin
-          V@1 = pure_(),
           A = V(),
-          A1 = (V@1(A))(),
-          (V@1(A1))(),
+          A1 = (pure_(A))(),
+          (pure_(A1))(),
           (effect_console@foreign:log(<<"Oh no">>))()
         end
     end
@@ -74,12 +71,12 @@ renamed2() ->
 
 do1() ->
   begin
-    V = (pure_())(unit),
+    V = pure_(unit),
     fun
       () ->
         begin
           A = V(),
-          ((pure_())(A))(),
+          (pure_(A))(),
           (effect_console@foreign:log(<<"Oh no">>))()
         end
     end
@@ -87,7 +84,7 @@ do1() ->
 
 do0() ->
   begin
-    V = (pure_())(unit),
+    V = pure_(unit),
     fun
       () ->
         begin
@@ -99,16 +96,21 @@ do0() ->
 
 bug26() ->
   begin
-    V = (pure_())(unit),
+    V = pure_(unit),
     fun
       () ->
         begin
-          V@1 = pure_(),
           A = V(),
-          A@1 = (V@1(A))(),
-          (V@1(A@1))(),
+          A@1 = (pure_(A))(),
+          (pure_(A@1))(),
           (effect_console@foreign:log(<<"Oh no">>))()
         end
     end
+  end.
+
+pure_(V) ->
+  fun
+    () ->
+      V
   end.
 

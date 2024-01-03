@@ -6,14 +6,13 @@ import Control.Alt ((<|>))
 import Control.Alternative (guard)
 import Control.Apply (lift2)
 import Control.Bind (bindFlipped)
-import Control.Extend (duplicate)
-import Control.Monad.Reader (local)
-import Control.Monad.Writer (WriterT(..), censor, listen, runWriterT, tell)
+import Control.Monad.Writer (WriterT(..), censor, runWriterT, tell)
 import Control.Plus (empty)
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NEA
 import Data.Bifunctor (lmap)
+import Data.Bitraversable (bitraverse)
 import Data.FoldableWithIndex (foldMapWithIndex)
 import Data.Functor.Compose (Compose(..))
 import Data.FunctorWithIndex (mapWithIndex)
@@ -24,17 +23,15 @@ import Data.Monoid.Additive (Additive(..))
 import Data.Monoid.Endo (Endo(..))
 import Data.Monoid.Multiplicative (Multiplicative(..))
 import Data.Newtype (over, unwrap)
-import Data.Semigroup.First (First(..))
-import Data.Semigroup.Last (Last(..))
 import Data.String as String
-import Data.Traversable (class Foldable, class Traversable, foldMap, foldl, foldr, for, mapAccumL, sequence, sum, traverse, traverse_)
-import Data.Tuple (Tuple(..), fst, snd, uncurry)
-import Debug (spy, spyWith)
+import Data.Traversable (class Foldable, class Traversable, foldMap, foldl, foldr, for, mapAccumL, sequence, sum, traverse)
+import Data.Tuple (Tuple(..), fst, snd)
+import Debug (spyWith)
 import Partial.Unsafe (unsafeCrashWith)
 import Prim.Coerce (class Coercible)
 import PureScript.Backend.Erl.Calling (GlobalErl(..), applyCall, callErl)
 import PureScript.Backend.Erl.Convert.Scoping (renameRoot)
-import PureScript.Backend.Erl.Syntax (Accessor(..), Accessors, CaseClause(..), ErlDefinition(..), ErlExpr(..), ErlPattern, FunHead(..), Guard(..), IfClause(..), access, assignments, self)
+import PureScript.Backend.Erl.Syntax (Accessor(..), Accessors, CaseClause(..), ErlDefinition(..), ErlExpr(..), ErlPattern, FunHead(..), Guard(..), IfClause(..), access, self)
 import PureScript.Backend.Erl.Syntax as S
 import Safe.Coerce (coerce)
 import Unsafe.Coerce (unsafeCoerce)
@@ -138,7 +135,9 @@ optimizePatterns = identity
     >>> flip runWriterT mempty
     >>> (\(Tuple e _) -> optimizePatternRewrite e mempty)
     >>> renameRoot
-
+    -- Run it twice since otherwise there are gaps in the chosen numbered
+    -- variables from variables that did not end up being necessary
+    >>> renameRoot
 
 opd :: ErlExpr -> W ErlExpr
 opd e = optimizePatternDemand e
@@ -152,7 +151,7 @@ opdg mg = traverse (coerce opd) mg
 choosePattern :: MDemands -> ErlPattern -> ErlPattern
 choosePattern (Multiplicative (Demands _ m)) = case _ of
   S.BindVar v | Just d <- Map.lookup v m -> do
-    S.MatchBoth v (flatPat (makePatterns v NoDemand d))
+    v `andMatch` flatPat (makePatterns v NoDemand d)
   p -> p
 choosePattern _ = identity
 
@@ -281,8 +280,6 @@ alts cases mapper = WriterT \r -> do
             Tuple (coerce (removePats pats d) :: ADemands) (a d)
   Tuple (cases' <@> d) d
 
-spd x = spyWith x spyDemands
-
 removePats :: Array ErlPattern -> MDemands -> MDemands
 removePats pats (Multiplicative (Demands g m)) = Multiplicative $ Demands g $
   foldr (Map.delete) m (pats >>= names)
@@ -297,7 +294,7 @@ names (S.MatchMap pats) = foldMap (names <<< snd) pats
 names (S.MatchTuple pats) = foldMap names pats
 names (S.MatchList pats mpat) = foldMap names pats <> foldMap names mpat
 
-spyDemands :: MDemands -> Array _
+spyDemands :: MDemands -> Array (Array GlobalErl)
 spyDemands (Multiplicative (Demands ds _)) =
   Map.toUnfoldable ds <#> \(Tuple a b) -> [a, unsafeCoerce b]
 spyDemands _ = []
@@ -360,7 +357,7 @@ optimizePatternDemand = case _ of
       cond' <- opd cond
       let k = knownFrom (coerce cond)
       e' <- withKnown k (opd e)
-      pure $ Tuple [] \d ds -> IfClause cond' (optimizeDemands ds e')
+      pure $ Tuple [] \_d ds -> IfClause cond' (optimizeDemands ds e')
     -- The first conditional always runs, so we want to include it in the analysis
     -- void $ censor justDemands $ opd $ (\(IfClause cond _) -> cond) (NEA.head cases)
     pure $ S.If cases'
@@ -389,8 +386,10 @@ optimizePatternDemand = case _ of
   S.List es -> S.List <$> opds es
   S.ListCons es e -> S.ListCons <$> opds es <*> opd e
   S.Tupled es -> S.Tupled <$> opds es
-  S.Map kvs -> S.Map <$> coerce (opds (Compose kvs))
-  S.MapUpdate e kvs -> S.MapUpdate <$> opd e <*> opdss kvs
+  S.Map kvs -> S.Map <$> traverse (bitraverse opd opd) kvs
+  S.MapUpdate e kvs -> S.MapUpdate <$> opd e <*> traverse (bitraverse opd opd) kvs
+  S.Record kvs -> S.Record <$> coerce (opds (Compose kvs))
+  S.RecordUpdate e kvs -> S.RecordUpdate <$> opd e <*> opdss kvs
   S.FunCall me e es -> S.FunCall <$> opds me <*> opd e <*> opds es
   S.Macro name margs -> S.Macro name <$> opdss margs
   S.BinOp op e1 e2 -> S.BinOp op <$> opd e1 <*> opd e2
@@ -489,7 +488,7 @@ optimizePatternRewrite = case _ of
     let
       asgn1 vrw (Tuple pat e) =
         case S.optimizePattern pat, opr e vrw of
-          S.Discard, _ -> { value: Nothing, accum: vrw }
+          S.Discard, e' | S.guardExpr e' -> { value: Nothing, accum: vrw }
           S.BindVar v', S.Var v [] -> { value: Nothing, accum: bindVarWithin (S.Var v' []) (S.BindVar v) vrw }
           S.MatchBoth v' pat', e'@(S.Var v []) ->
             { value: Just (Tuple pat' e'), accum: bindVarWithin e pat' (bindVarWithin (S.Var v' []) (S.BindVar v) vrw) }
@@ -529,8 +528,10 @@ optimizePatternRewrite = case _ of
   S.List es -> S.List <$> oprs es
   S.ListCons es e -> S.ListCons <$> oprs es <*> opr e
   S.Tupled es -> S.Tupled <$> oprs es
-  S.Map kvs -> S.Map <$> coerce (oprs (Compose kvs))
-  S.MapUpdate e kvs -> S.MapUpdate <$> opr e <*> oprss kvs
+  S.Map kvs -> S.Map <$> traverse (bitraverse opr opr) kvs
+  S.MapUpdate e kvs -> S.MapUpdate <$> opr e <*> traverse (bitraverse opr opr) kvs
+  S.Record kvs -> S.Record <$> coerce (oprs (Compose kvs))
+  S.RecordUpdate e kvs -> S.RecordUpdate <$> opr e <*> oprss kvs
   S.FunCall me e es -> S.FunCall <$> oprs me <*> opr e <*> oprs es
   S.Macro name margs -> S.Macro name <$> oprss margs
   S.BinOp op e1 e2 -> S.BinOp op <$> opr e1 <*> opr e2

@@ -8,17 +8,19 @@ import Control.Monad.State (State, evalState, gets, modify_, state)
 import Data.Array (all)
 import Data.Array as Array
 import Data.Array.NonEmpty as NEA
+import Data.Bitraversable (bitraverse)
 import Data.Functor.Compose (Compose(..))
 import Data.Identity (Identity(..))
-import Data.Map (Map)
+import Data.Map (Map, SemigroupMap(..))
 import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
-import Data.Newtype (unwrap)
+import Data.Newtype (unwrap, un)
 import Data.Profunctor (dimap)
 import Data.Semigroup.Last (Last(..))
 import Data.String.CodeUnits as CU
 import Data.Traversable (class Traversable, foldr, for, traverse)
 import Data.Tuple (Tuple(..), snd, uncurry)
+import Debug (spy, spyWith)
 import PureScript.Backend.Erl.Syntax (CaseClause(..), ErlExpr, ErlPattern, FunHead(..), Guard(..), IfClause(..), self)
 import PureScript.Backend.Erl.Syntax as S
 import Safe.Coerce (coerce)
@@ -39,11 +41,11 @@ type Renaming = ReaderT Renamings (State Found)
 scope :: forall a. Renaming a -> Renaming a
 scope inner = do
   s <- gets _.duplicates
+  -- Do not reset usages because they may refer to outer scopes still
   inner <* modify_ _ { duplicates = s }
 
 use :: Rename -> Map Rename Int -> Map Rename Int
-use renamed =
-  Map.alter (Just <<< maybe 1 (add 1)) renamed
+use = Map.alter (Just <<< maybe 1 (add 1))
 
 reference :: Name -> Renaming Rename
 reference name = do
@@ -66,13 +68,13 @@ ensure n = case CU.takeWhile (_ /= '@') n of
 choose :: Name -> Renaming Rename
 choose name = state \found ->
   let i = fromMaybe 0 (Map.lookup name found.duplicates)
-  in Tuple (newName name i) found { duplicates = Map.insert name (i+1) found.duplicates }
-
-chooseMany :: forall f. Traversable f => f Name -> Renaming (f Rename)
-chooseMany = traverse choose
-
-choosePat :: ErlPattern -> Renaming ErlPattern
-choosePat = overNames choose
+      rename = chooseNewName name i
+  in Tuple rename
+    { duplicates: Map.insert name (i+1) found.duplicates
+    -- Usage does not get reset when pushing scopes horizontally (in scope)
+    -- so we reset the new binding as we push it down vertically
+    , usages: Map.delete rename found.usages
+    }
 
 overNames :: forall f. Applicative f => (Name -> f Name) -> ErlPattern -> f ErlPattern
 overNames f = case _ of
@@ -90,27 +92,30 @@ overNames f = case _ of
     <$> traverse (overNames f) pats
     <*> traverse (overNames f) mpat
 
-newName :: String -> Int -> Rename
-newName i 0 = i
-newName "_" _ = "_"
-newName i lvl = i <> "@" <> show lvl
+chooseNewName :: String -> Int -> Rename
+chooseNewName i 0 = i
+chooseNewName "_" _ = "_"
+chooseNewName i lvl = i <> "@" <> show lvl
 
-asdf :: forall f. Traversable f => f ErlPattern -> Compose Renaming (Tuple (Map String (Last String))) (f ErlPattern)
-asdf = traverse $ overNames \name -> Compose do
+renameMany :: forall f. Traversable f => f ErlPattern -> Compose Renaming (Tuple (SemigroupMap String (Last String))) (f ErlPattern)
+renameMany = traverse $ overNames \name -> Compose do
   choose (ensure name) <#> \rename ->
-    Tuple (Map.singleton name (Last rename)) rename
-  -- Compose $ choose (ensure name) <#> \rename ->
+    Tuple (SemigroupMap $ Map.singleton name $ Last rename) rename
 
+-- Bind some names in scope while renaming `inner` that linger around
+-- afterwards due to the scoping rules of Erlang.
 binding ::
   forall f b.
     Traversable f =>
   f ErlPattern -> Renaming b ->
   Renaming (Tuple (f ErlPattern) b)
 binding names inner = do
-  Tuple mapping renames <- unwrap $ asdf names
+  Tuple (SemigroupMap mapping) renames <- un Compose $ renameMany names
   let renaming = local $ Map.union $ unwrap <$> mapping
   flip Tuple <$> renaming inner <*> traverse (overNames isUnused) renames
 
+-- Bind some names in scope while renaming `inner` that do NOT linger around
+-- afterwards, explicitly for function scopes.
 scopedBinding ::
   forall f b.
     Traversable f =>
@@ -127,6 +132,10 @@ scopedBindingName name inner = scope do
   let renaming = local $ Map.insert name newName
   flip Tuple <$> renaming inner <*> isUnused newName
 
+alias :: forall b. Name -> Name -> Renaming b -> Renaming b
+alias new old inner = do
+  commonRename <- asks $ fromMaybe old <<< Map.lookup old
+  local (Map.insert new commonRename) inner
 
 opr :: ErlExpr -> Renaming ErlExpr
 opr e = renameTree e
@@ -138,6 +147,8 @@ oprg :: Maybe Guard -> Renaming (Maybe Guard)
 oprg mg = traverse (dimap coerce (map coerce) opr) mg
 
 floating :: ErlExpr -> Tuple (ErlExpr -> ErlExpr) ErlExpr
+floating (S.Assignments asgns1 (S.Assignments asgns2 e)) = floating (S.Assignments (asgns1 <> asgns2) e)
+floating (S.Assignments [] e) = Tuple identity e
 floating (S.Assignments asgns e) = Tuple (S.Assignments asgns) e
 floating e = Tuple identity e
 
@@ -146,6 +157,8 @@ renameTree = case _ of
   S.Var name acsrs -> S.Var <$> (reference name) <@> acsrs
   S.Assignments asgns ret -> do
     let
+      asgn1 (Tuple (S.BindVar new) (S.Var old [])) more = do
+        alias new old more
       asgn1 (Tuple pat e) more = ado
         e' <- opr e
         Tuple (Identity pat') (Tuple asgns' final) <- binding (Identity pat) more
@@ -178,8 +191,17 @@ renameTree = case _ of
   S.List es -> S.List <$> oprs es
   S.ListCons es e -> S.ListCons <$> oprs es <*> opr e
   S.Tupled es -> S.Tupled <$> oprs es
-  S.Map kvs -> coerce S.Map <$> (oprs (Compose kvs))
-  S.MapUpdate e kvs -> S.MapUpdate <$> opr e <*> oprss kvs
+  S.Map kvs -> S.Map <$> traverse (bitraverse opr opr) kvs
+  S.MapUpdate e kvs -> S.MapUpdate <$> opr e <*> traverse (bitraverse opr opr) kvs
+  S.Record kvs -> coerce S.Record <$> (oprs (Compose kvs))
+  S.RecordUpdate e kvs -> S.RecordUpdate <$> opr e <*> oprss kvs
+
+  -- Beta-reduce, since erlc sometimes struggles with it
+  S.FunCall Nothing fn args
+    | Tuple floated (S.Fun Nothing [Tuple (FunHead pats Nothing) body]) <- floating fn
+    , Array.length pats == Array.length args -> do
+      renameTree $ floated <<< S.Assignments (Array.zip pats args) $ body
+  -- Otherwise do the usual thing
   S.FunCall me e es -> S.FunCall <$> oprs me <*> opr e <*> oprs es
 
   -- S.Macro name margs -> S.Macro name <$> traverse (traverse renameTree) margs

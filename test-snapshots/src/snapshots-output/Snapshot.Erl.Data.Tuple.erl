@@ -9,6 +9,8 @@
         , result/0
         , fsttf2/0
         , fstt2/0
+        , uncurriedMore/1
+        , uncurried/1
         ]).
 -compile(no_auto_import).
 uncurriedMore() ->
@@ -50,7 +52,7 @@ r5() ->
   {7, <<"hithere">>}.
 
 result() ->
-  (((uncurriedMore())({3, 4, <<"hi">>, <<"there">>, $V}))
+  ((uncurriedMore({3, 4, <<"hi">>, <<"there">>, $V}))
    (fun
      (_) ->
        <<"">>
@@ -62,4 +64,22 @@ fsttf2() ->
 
 fstt2() ->
   4.
+
+uncurriedMore(V) ->
+  begin
+    {A, B, C, D, E} = V,
+    fun
+      (F) ->
+        fun
+          ({G, H}) ->
+            {(A + B) + G, <<C/binary, D/binary, (F(E))/binary, H/binary>>}
+        end
+    end
+  end.
+
+uncurried(V) ->
+  begin
+    {A, B, C, D, _} = V,
+    {A + B, <<C/binary, D/binary>>}
+  end.
 

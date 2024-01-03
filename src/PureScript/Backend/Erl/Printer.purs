@@ -165,7 +165,7 @@ printPattern = case _ of
   S.MatchLiteral s@(S.String _) -> printBinaryLiteral (S.Literal s)
 
   S.MatchTuple a -> printBraces' $ D.indent <<< printPattern <$> a
-  S.MatchMap fields -> D.text "#" <> printBraces_ (D.indent <<< printFieldPattern <$> fields)
+  S.MatchMap fields -> D.text "#" <> printBraces_ (D.indent <<< printFieldPattern (D.text <<< escapeAtom) <$> fields)
   S.MatchList a Nothing -> printBrackets' $ D.indent <<< printPattern <$> a
   S.MatchList [] (Just rest) -> printPattern rest
   S.MatchList a (Just rest) -> printBrackets_ $ a # mapWithIndex \i item ->
@@ -205,9 +205,12 @@ printExpr' prec = case _ of
       <> if i /= Array.length a - 1 then mempty else
         D.flexAlt (D.space <> D.text "|") (D.break <> D.text "|") <> D.space <> D.indent (printAtomic rest)
   S.Tupled a -> printBraces' $ D.indent <<< printAtomic <$> a
-  S.Map fields -> D.text "#" <> printBraces_ (D.indent <<< printField <$> fields)
-  S.MapUpdate e fields | tiny e -> printAtomic e <> D.text "#" <> printBraces_ (printField <$> fields)
-  S.MapUpdate e fields -> D.text "(" <> printAtomic e <> D.text ")#" <> printBraces_ (printField <$> fields)
+  S.Map fields -> D.text "#" <> printBraces_ (D.indent <<< printField printAtomic <$> fields)
+  S.MapUpdate e fields | tiny e -> printAtomic e <> D.text "#" <> printBraces_ (printField printAtomic <$> fields)
+  S.MapUpdate e fields -> D.text "(" <> printAtomic e <> D.text ")#" <> printBraces_ (printField printAtomic <$> fields)
+  S.Record fields -> D.text "#" <> printBraces_ (D.indent <<< printField (D.text <<< escapeAtom) <$> fields)
+  S.RecordUpdate e fields | tiny e -> printAtomic e <> D.text "#" <> printBraces_ (printField (D.text <<< escapeAtom) <$> fields)
+  S.RecordUpdate e fields -> D.text "(" <> printAtomic e <> D.text ")#" <> printBraces_ (printField (D.text <<< escapeAtom) <$> fields)
 
   S.Assignments [] ret -> printExpr' prec ret
   S.Assignments exprs1 (S.Assignments exprs2 ret) ->
@@ -413,13 +416,13 @@ printBinaryLiteral = finish <<< go
     | otherwise = [ D.text $ "\"" <> escapeErlString s <> "\"/utf8" ]
   go s = [ printExpr s <> D.text "/binary" ]
 
-printField :: Tuple String ErlExpr -> Doc Void
-printField (Tuple f e) =
-  D.text (escapeAtom f) <> D.text " =>" <> D.flexGroup (D.spaceBreak <> printAtomic e)
+printField :: forall k. (k -> Doc Void) -> Tuple k ErlExpr -> Doc Void
+printField k (Tuple f e) =
+  k f <> D.text " =>" <> D.flexGroup (D.spaceBreak <> printAtomic e)
 
-printFieldPattern :: Tuple String ErlPattern -> Doc Void
-printFieldPattern (Tuple f e) =
-  D.text (escapeAtom f) <> D.text " :=" <> D.flexGroup (D.spaceBreak <> printPattern e)
+printFieldPattern :: forall k. (k -> Doc Void) -> Tuple k ErlPattern -> Doc Void
+printFieldPattern k (Tuple f e) =
+  k f <> D.text " :=" <> D.flexGroup (D.spaceBreak <> printPattern e)
 
 isAscii :: String -> Boolean
 isAscii = toCodePointArray >>> all U.isAscii

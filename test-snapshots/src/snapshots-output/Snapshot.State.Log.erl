@@ -7,8 +7,8 @@ freshE() ->
       freshE(DictMonadState)
   end.
 
-freshE(#{ state := DictMonadState@1 }) ->
-  DictMonadState@1(fun
+freshE(#{ state := DictMonadState }) ->
+  DictMonadState(fun
     (S) ->
       {tuple, S, S + 1}
   end).

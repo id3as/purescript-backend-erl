@@ -39,7 +39,7 @@ uncons0() ->
   end.
 
 uncons0(L) ->
-  (erl_data_list_types@ps:uncons())(L ++ L).
+  erl_data_list_types@ps:uncons(L ++ L).
 
 n() ->
   [].

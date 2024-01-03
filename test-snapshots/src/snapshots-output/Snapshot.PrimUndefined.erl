@@ -7,8 +7,8 @@ testCase() ->
       testCase(DictRing)
   end.
 
-testCase(#{ 'Semiring0' := DictRing@1 }) ->
-  erlang:map_get(add, DictRing@1(undefined)).
+testCase(#{ 'Semiring0' := DictRing }) ->
+  erlang:map_get(add, DictRing(undefined)).
 
 main() ->
   (test_assert@ps:assert())((((testCase(data_ring@ps:ringInt()))(1))(1)) =:= 2).

@@ -118,8 +118,8 @@ normal() ->
       normal(Dict)
   end.
 
-normal(#{ normal := Dict@1 }) ->
-  Dict@1.
+normal(#{ normal := Dict }) ->
+  Dict.
 
 useNormal() ->
   fun
@@ -175,8 +175,8 @@ ignore() ->
       ignore(Dict)
   end.
 
-ignore(#{ ignore := Dict@1 }) ->
-  Dict@1.
+ignore(#{ ignore := Dict }) ->
+  Dict.
 
 useClass() ->
   fun
@@ -226,8 +226,8 @@ foo() ->
       'classMember\''(Dict)
   end.
 
-'classMember\''(#{ 'classMember\'' := Dict@1 }) ->
-  Dict@1.
+'classMember\''(#{ 'classMember\'' := Dict }) ->
+  Dict.
 
 useMember() ->
   fun

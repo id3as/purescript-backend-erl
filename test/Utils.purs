@@ -26,9 +26,11 @@ import Data.Maybe (Maybe(..), maybe)
 import Data.Posix.Signal (Signal(..))
 import Data.Set as Set
 import Data.Set.NonEmpty as NonEmptySet
+import Data.String as String
 import Data.Tuple (Tuple(..))
 import Effect.Aff (Aff, effectCanceler, error, makeAff, throwError)
 import Effect.Class (liftEffect)
+import Effect.Class.Console (log)
 import Effect.Class.Console as Console
 import Foreign.Object as FO
 import Node.Buffer (Buffer, freeze)
@@ -109,10 +111,13 @@ loadModuleMain
   -> Aff (Either ExecaResult ExecaResult)
 loadModuleMain { modulePath, ebin, runMain } = do
   -- Console.log $ "compile " <> modulePath
-  spawned1 <- execa "erlc" [ "+no_ssa_opt", "-o", ebin, "-W0", modulePath ] identity
+  spawned1 <- execa "erlc" [ "+no_ssa_opt", "-o", ebin, modulePath ] identity
   spawned1.getResult >>= case _, runMain of
     e, _ | errored e -> pure (Left e)
-    r, Nothing -> pure (Right r)
+    r, Nothing -> do
+      when (not String.null r.stdout) do
+        log r.stdout
+      pure (Right r)
     _, Just { scriptFile, moduleName, expected } -> do
       let mod = ModuleName moduleName
       let init x = "(" <> erlModuleNamePs mod <> ":" <> x <> "())"

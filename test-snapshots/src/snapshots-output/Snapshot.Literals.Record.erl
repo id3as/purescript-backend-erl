@@ -7,6 +7,6 @@ recordAccess() ->
       recordAccess(V)
   end.
 
-recordAccess(#{ fooBarBaz := V@1 }) ->
-  V@1.
+recordAccess(#{ fooBarBaz := V }) ->
+  V.
 

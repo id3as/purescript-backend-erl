@@ -1,7 +1,8 @@
-module PureScript.Backend.Erl.Foreign ( erlForeignSemantics ) where
+module PureScript.Backend.Erl.Foreign ( fullForeignSemantics, erlForeignSemantics ) where
 
 import Prelude
 
+import Data.Array (notElem)
 import Data.Array as Array
 import Data.Array.NonEmpty as NonEmptyArray
 import Data.Filterable (compact, filterMap)
@@ -12,11 +13,22 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Tuple (Tuple(..))
-import PureScript.Backend.Erl.Calling (arg, arg', arg'', argMatch, curried, evaluator, evaluators, func, getEnv, many, partial, uncurried)
+import PureScript.Backend.Erl.Calling (arg, arg', arg'', argMatch, curried, evaluator, evaluators, func, getEnv, many, noArgs, partial, qualPS, uncurried)
 import PureScript.Backend.Optimizer.CoreFn (ConstructorType(..), Ident(..), Literal(..), ModuleName(..), Prop(..), ProperName(..), Qualified(..), findProp)
 import PureScript.Backend.Optimizer.Semantics (BackendSemantics(..), EvalRef(..), ExternSpine(..), SemConditional(..), evalApp, evalPrimOp, liftInt, makeLet)
-import PureScript.Backend.Optimizer.Semantics.Foreign (ForeignEval, ForeignSemantics, qualified)
+import PureScript.Backend.Optimizer.Semantics.Foreign (ForeignEval, ForeignSemantics, coreForeignSemantics, qualified)
 import PureScript.Backend.Optimizer.Syntax (BackendOperator(..), BackendOperator1(..), BackendOperator2(..), BackendOperatorOrd(..))
+
+stop :: String -> Tuple (Qualified Ident) ForeignEval
+stop name = evaluator $ func name $ noArgs $> NeutStop (qualPS name)
+
+fullForeignSemantics :: Map.Map (Qualified Ident) ForeignEval
+fullForeignSemantics = Map.union erlForeignSemantics $
+  coreForeignSemantics # Map.filterKeys
+    \(Qualified mod _) -> mod `notElem`
+      [ Just (ModuleName "Effect.Ref")
+      , Just (ModuleName "Control.Monad.ST.Internal")
+      ]
 
 erlForeignSemantics :: Map (Qualified Ident) ForeignEval
 erlForeignSemantics = Map.fromFoldable $
@@ -30,6 +42,9 @@ erlForeignSemantics = Map.fromFoldable $
   [ erl_data_tuple_uncurryN
   , erl_atom
   , recognizeCoercions
+  , stop <$>
+    [ "Erl.Data.Map.fromFoldable"
+    ]
   ]
 
 helper :: String -> String -> Int -> BackendSemantics -> Maybe (Array BackendSemantics)

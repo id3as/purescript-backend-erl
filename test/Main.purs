@@ -18,7 +18,6 @@ import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Either (Either(..), either)
 import Data.Foldable (elem, for_)
 import Data.Foldable as Foldable
-import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, isJust)
 import Data.Monoid (power)
 import Data.Newtype (unwrap)
@@ -46,17 +45,16 @@ import Parsing (parseErrorMessage)
 import PureScript.Backend.Erl.Constants (erlExt)
 import PureScript.Backend.Erl.Convert (codegenModule, initAcrossModules)
 import PureScript.Backend.Erl.Convert.Common (erlModuleNamePs, erlModuleNameForeign)
-import PureScript.Backend.Erl.Foreign (erlForeignSemantics)
+import PureScript.Backend.Erl.Foreign (fullForeignSemantics)
 import PureScript.Backend.Erl.Foreign.Analyze (analyzeCustom)
 import PureScript.Backend.Erl.Parser (parseFile)
 import PureScript.Backend.Erl.Printer as P
 import PureScript.Backend.Optimizer.Builder (buildModules)
 import PureScript.Backend.Optimizer.Convert (BackendModule)
-import PureScript.Backend.Optimizer.CoreFn (Comment(..), Ident(..), Module(..), ModuleName(..), Qualified(..))
+import PureScript.Backend.Optimizer.CoreFn (Comment(..), Ident(..), Module(..), ModuleName(..))
 import PureScript.Backend.Optimizer.Directives (parseDirectiveFile)
 import PureScript.Backend.Optimizer.Directives.Defaults (defaultDirectives)
-import PureScript.Backend.Optimizer.Semantics.Foreign (ForeignEval, coreForeignSemantics)
-import Test.Utils (bufferToUTF8, coreFnModulesFromOutput, cpr, errored, execWithStdin, loadModuleMain, mkdirp, rmrf, spawnFromParent)
+import Test.Utils (bufferToUTF8, coreFnModulesFromOutput, errored, execWithStdin, loadModuleMain, mkdirp, rmrf, spawnFromParent)
 
 type TestArgs =
   { accept :: Boolean
@@ -99,11 +97,6 @@ main = do
     Right args ->
       launchAff_ $ runSnapshotTests args { compile = args.compile || args.run }
 
-foreignSemantics :: Map.Map (Qualified Ident) ForeignEval
-foreignSemantics = Map.union erlForeignSemantics $
-  coreForeignSemantics # Map.filterKeys
-    \(Qualified mod _) -> mod /= Just (ModuleName "Effect.Ref")
-
 runSnapshotTests :: TestArgs -> Aff Unit
 runSnapshotTests { accept, compile, run, filter } = do
   Console.log "Hi"
@@ -135,7 +128,7 @@ runSnapshotTests { accept, compile, run, filter } = do
       coreFnModules # buildModules
         { directives
         , analyzeCustom
-        , foreignSemantics
+        , foreignSemantics: fullForeignSemantics
         , traceIdents: mempty
         , onCodegenModule: \_ (Module { name: ModuleName name, path: reportedPath, exports }) (backend) _ -> do
             -- Sorry, working around a weird language server bug

@@ -25,6 +25,7 @@
         , inlineBinary/0
         , inlineBinary/5
         , inlineAtom/0
+        , inlineOver2/2
         ]).
 -compile(no_auto_import).
 min() ->
@@ -183,7 +184,7 @@ inlineBinary() ->
   end.
 
 inlineBinary(I, N, B, S, C) ->
-  #{ divInt => data_euclideanRing@foreign:intDiv(I, I)
+  #{ divInt => I div I
    , divNum => N / N
    , andBool => B andalso B
    , orBool => B orelse B
@@ -221,4 +222,7 @@ inlineBinary(I, N, B, S, C) ->
 
 inlineAtom() ->
   an_atom.
+
+inlineOver2(V, V@1) ->
+  V + V@1.
 

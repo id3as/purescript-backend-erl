@@ -6,6 +6,7 @@
         , atomId/0
         , atomEq/0
         , appends/0
+        , atomId/1
         ]).
 -compile(no_auto_import).
 memptys() ->
@@ -113,4 +114,10 @@ appends() ->
          end
      end
    }.
+
+atomId(V) ->
+  begin
+    {S, A} = V,
+    {S, A}
+  end.
 
