@@ -13,7 +13,7 @@ import Data.Bifunctor (class Bifunctor)
 import Data.Compactable (class Compactable, compact, separateDefault)
 import Data.Either (Either(..), hush)
 import Data.Filterable (class Filterable, filterDefault, partitionDefault, partitionMapDefault)
-import Data.Foldable (class Foldable, foldl, sum)
+import Data.Foldable (class Foldable, findMap, foldl, sum)
 import Data.FunctorWithIndex (class FunctorWithIndex, mapWithIndex)
 import Data.Lazy (defer, force)
 import Data.Lens (APrism', Prism', preview, prism', review, withPrism)
@@ -405,19 +405,20 @@ matchBase (SemigroupMap bases) env expr = do
       r
 
 matchBasePattern ::
-  forall call expr base env o.
+  forall call expr base env o f.
     Ord (call Unit) =>
     Ord base =>
     Calling call =>
     ToBase call expr base env =>
+    Foldable f =>
   (env -> o -> call expr -> o) ->
-  SemigroupMap base (SemigroupMap (call Unit) (First (Pattern env (CWB call base) expr o))) ->
+  SemigroupMap base (SemigroupMap (call Unit) (f (Pattern env (CWB call base) expr o))) ->
   env ->
   expr ->
   Maybe o
 matchBasePattern conv bases env expr = do
-  Tuple { matched, unmatched } (First pat) <- matchBase bases env expr
-  case pat of
+  Tuple { matched, unmatched } pats <- matchBase bases env expr
+  pats # findMap case _ of
     Pure _ -> Nothing
     Pattern _ parse -> do
       r <- parse env (map fst matched)
@@ -896,29 +897,31 @@ callConverters options = options # Array.foldMap \option ->
 
 applyConventions :: Conventions -> Converters
 applyConventions = mapWithIndex \qi -> mapWithIndex \arity (First (CWB erlBase convention)) ->
-  First $ Pattern (CWB qi arity) \codegenExpr (CWB _old matched) -> do
+  NEA.singleton $ Pattern (CWB qi arity) \codegenExpr (CWB _old matched) -> do
     calls <- customConvention (codegenExpr >>> const) matched convention
     pure $ applyCall unit erlBase calls
 
 type Converters =
   SemigroupMap (Qualified Ident)
   ( SemigroupMap ArityPS
-    ( First Converter
+    ( NonEmptyArray Converter
     )
   )
 type Converter =
   Pattern (NeutralExpr -> ErlExpr) (CWB CallingPS (Qualified Ident)) NeutralExpr ErlExpr
 
 indexPatterns ::
-  forall env call base i o.
+  forall env call base i o f.
     Ord base =>
     Ord (call Unit) =>
+    Applicative f =>
+    Semigroup (f (Pattern env (CWB call base) i o)) =>
   Array (Pattern env (CWB call base) i o) ->
-  SemigroupMap base (SemigroupMap (call Unit) (First (Pattern env (CWB call base) i o)))
+  SemigroupMap base (SemigroupMap (call Unit) (f (Pattern env (CWB call base) i o)))
 indexPatterns pats = pats # Array.foldMap \pat -> case pat of
   Pure _ -> mempty
   Pattern (CWB base arity) _ -> do
-    SemigroupMap $ Map.singleton base $ SemigroupMap $ Map.singleton arity $ First pat
+    SemigroupMap $ Map.singleton base $ SemigroupMap $ Map.singleton arity $ pure pat
 
 converts :: Array Converter -> (NeutralExpr -> ErlExpr) -> NeutralExpr -> Maybe ErlExpr
 converts = indexPatterns >>> converts'

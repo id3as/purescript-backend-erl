@@ -4,30 +4,34 @@ import Prelude
 
 import Control.Alt ((<|>))
 import Control.Apply (lift2)
+import Control.Monad.Writer (Writer)
 import Data.Array as A
 import Data.Array as Array
 import Data.Array.NonEmpty as NEA
-import Data.Bifunctor (bimap)
+import Data.Bifunctor (bimap, lmap)
 import Data.Maybe (Maybe(..), fromMaybe', maybe)
-import Data.Newtype (unwrap)
+import Data.Monoid.Endo (Endo(..))
+import Data.Newtype (over, unwrap)
 import Data.Traversable (sequence)
-import Data.Tuple (Tuple(..))
+import Data.Tuple (Tuple(..), uncurry)
+import Data.Tuple.Nested ((/\))
 import PureScript.Backend.Erl.Calling (CallPS(..), Conventions, Converter, Converters, applyConventions, arg', argMatch, callConverters, callErl, callPS, codegenArg, converts', func, indexPatterns, noArgs, qualErl, qualPS, thunkErl, withEnv)
-import PureScript.Backend.Erl.Convert.Common (toErlVarPat)
+import PureScript.Backend.Erl.Convert.Common (toErlVar, toErlVarPat)
 import PureScript.Backend.Erl.Syntax (ErlExpr, FunHead(..))
 import PureScript.Backend.Erl.Syntax as S
 import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal(..), ModuleName(..), Qualified(..))
 import PureScript.Backend.Optimizer.Semantics (NeutralExpr(..))
 import PureScript.Backend.Optimizer.Syntax (BackendSyntax(..))
 
-codegenForeign :: (NeutralExpr -> ErlExpr) -> NeutralExpr -> Maybe ErlExpr
-codegenForeign codegenExpr s = case unwrap s of
-  Var _ -> codegenForeign' codegenExpr s
-  App (NeutralExpr (Var _)) _ -> codegenForeign' codegenExpr s
-  _ -> Nothing
+couldBeInteresting :: NeutralExpr -> Boolean
+couldBeInteresting s = case unwrap s of
+  Var _ -> true
+  App (NeutralExpr (Var _)) _ -> true
+  _ -> false
 
-codegenForeign' :: (NeutralExpr -> ErlExpr) -> NeutralExpr -> Maybe ErlExpr
-codegenForeign' codegenExpr s
+codegenForeign :: (NeutralExpr -> ErlExpr) -> NeutralExpr -> Maybe ErlExpr
+codegenForeign codegenExpr s
+  | not couldBeInteresting s = Nothing
   | Just result <- converts' converters codegenExpr s =
     Just result
   | Just result <- codegenList codegenExpr s =
@@ -100,6 +104,7 @@ codegenList codegenExpr = gather [] <@> finish where
 specificCalls :: Array Converter
 specificCalls =
   [ func "Erl.Atom.atom" $ arg' \(NeutralExpr (Lit (LitString s))) -> S.Literal (S.Atom s)
+  , func "Erl.Atom.eqImpl" $ S.BinOp S.IdenticalTo <$> codegenArg <*> codegenArg
   , func "Data.Unit.unit" noArgs $> S.Literal (S.Atom "unit")
   , func "Erl.Data.Binary.Type.mempty_" noArgs $> S.Literal (S.String "")
   , func "Erl.Data.Binary.IOData.mempty_" noArgs $> S.List []
@@ -119,10 +124,10 @@ specificCalls =
 
   , func "Erl.Data.Map.fromFoldable" ado
       _ <- argMatch $ func "Data.List.Types.foldableList" noArgs
-      list <- withEnv $ arg' \l ->
-        (\items codegen -> join bimap codegen <$> items) $
-          unTuple <$> gatherList l
-      in S.Map list
+      Tuple floated list <- withEnv $ arg' $ floating' \l ->
+        unTuple <$> gatherList l #
+          (\items codegen -> join bimap codegen <$> items)
+      in floated $ S.Map list
 
   -- Needs some mechanism for fresh names :(
   -- , func "Erl.Data.Variant.matchImpl" $ partial ado
@@ -146,6 +151,18 @@ specificCalls =
 
   , func "Partial._unsafePartial" $ S.curriedApp <$> codegenArg <@> [S.atomLiteral "unit"]
   ]
+
+floating' :: forall r. (NeutralExpr -> (NeutralExpr -> ErlExpr) -> r) -> NeutralExpr -> (NeutralExpr -> ErlExpr) -> Tuple (ErlExpr -> ErlExpr) r
+floating' f e = do
+  let
+    Tuple bindings e' = float e
+    r = f e'
+  \codegen -> S.assignments (map codegen <$> bindings) /\ r codegen
+
+float :: NeutralExpr -> Tuple (Array (Tuple String NeutralExpr)) NeutralExpr
+float (NeutralExpr (Let i l v body)) =
+  lmap (_ <> [toErlVar i l /\ v]) (float body)
+float body = Tuple [] body
 
 gatherList :: Partial => NeutralExpr -> Array NeutralExpr
 gatherList (NeutralExpr (CtorSaturated (Qualified (Just (ModuleName "Data.List.Types")) (Ident ctor)) _ _ _ fields)) =
