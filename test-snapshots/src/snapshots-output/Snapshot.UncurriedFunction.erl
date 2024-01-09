@@ -10,6 +10,7 @@
         , test2b/0
         , test1a/0
         , test1b/0
+        , 'main.0'/0
         , main/0
         ]).
 -compile(no_auto_import).
@@ -65,21 +66,21 @@ test1a() ->
 test1b() ->
   data_function_uncurried@foreign:runFn0(test1a()).
 
+'main.0'() ->
+  (test_assert@ps:assert())((test1b()) =:= 1).
+
 main() ->
-  begin
-    V = (test_assert@ps:assert())((test1b()) =:= 1),
-    fun
-      () ->
-        begin
-          V@1 = test_assert@ps:assert(),
-          V(),
-          (V@1((test2b()) =:= 1))(),
-          (V@1((test3b()) =:= 2))(),
-          V@2 = (test4b())(),
-          (V@1(V@2 =:= <<"test4b">>))(),
-          W = (test4a())(<<"test4b">>),
-          (V@1(W =:= <<"test4b">>))()
-        end
-    end
+  fun
+    () ->
+      begin
+        V = test_assert@ps:assert(),
+        ('main.0'())(),
+        (V((test2b()) =:= 1))(),
+        (V((test3b()) =:= 2))(),
+        V@1 = (test4b())(),
+        (V(V@1 =:= <<"test4b">>))(),
+        W = (test4a())(<<"test4b">>),
+        (V(W =:= <<"test4b">>))()
+      end
   end.
 

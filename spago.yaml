@@ -112,7 +112,7 @@ workspace:
         - "unsafe-coerce"
     backend-optimizer:
       git: https://github.com/aristanetworks/purescript-backend-optimizer
-      ref: 798396a76006243c4ccc29ab02798c33e7c2215f
+      ref: nf/float-top-level-lets
       dependencies:
         - aff
         - ansi

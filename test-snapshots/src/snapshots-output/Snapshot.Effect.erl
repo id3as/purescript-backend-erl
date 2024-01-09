@@ -1,7 +1,9 @@
 -module(snapshot_effect@ps).
 -export([ 'don\'tInlineMeMe'/0
         , 'don\'tInlineMeMe'/1
+        , 'lastComponentIsRun.0'/0
         , lastComponentIsRun/0
+        , 'lastPureIsUnwrapped.0'/0
         , lastPureIsUnwrapped/0
         , main/0
         ]).
@@ -18,30 +20,30 @@
       unit
   end.
 
+'lastComponentIsRun.0'() ->
+  'don\'tInlineMeMe'(<<"a">>).
+
 lastComponentIsRun() ->
-  begin
-    V = 'don\'tInlineMeMe'(<<"a">>),
-    fun
-      () ->
-        begin
-          V(),
-          ('don\'tInlineMeMe'(<<"b">>))(),
-          ('don\'tInlineMeMe'(<<"c">>))()
-        end
-    end
+  fun
+    () ->
+      begin
+        ('lastComponentIsRun.0'())(),
+        ('don\'tInlineMeMe'(<<"b">>))(),
+        ('don\'tInlineMeMe'(<<"c">>))()
+      end
   end.
 
+'lastPureIsUnwrapped.0'() ->
+  'don\'tInlineMeMe'(<<"a">>).
+
 lastPureIsUnwrapped() ->
-  begin
-    V = 'don\'tInlineMeMe'(<<"a">>),
-    fun
-      () ->
-        begin
-          Value = V(),
-          ('don\'tInlineMeMe'(<<"b">>))(),
-          Value
-        end
-    end
+  fun
+    () ->
+      begin
+        Value = ('lastPureIsUnwrapped.0'())(),
+        ('don\'tInlineMeMe'(<<"b">>))(),
+        Value
+      end
   end.
 
 main() ->

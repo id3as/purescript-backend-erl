@@ -1,18 +1,20 @@
 -module(snapshot_let_fib@ps).
--export([result/0]).
+-export(['result.fib'/0, 'result.fib'/1, result/0]).
 -compile(no_auto_import).
-result() ->
-  begin
-    Fib =
-      fun
-        Fib (V) ->
-          if
-            V < 2 ->
-              V;
-            true ->
-              (Fib(V - 1)) + (Fib(V - 2))
-          end
-      end,
-    Fib(6)
+'result.fib'() ->
+  fun
+    (V) ->
+      'result.fib'(V)
   end.
+
+'result.fib'(V) ->
+  if
+    V < 2 ->
+      V;
+    true ->
+      ('result.fib'(V - 1)) + ('result.fib'(V - 2))
+  end.
+
+result() ->
+  'result.fib'(6).
 
