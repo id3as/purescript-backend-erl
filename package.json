@@ -1,9 +1,30 @@
 {
+  "name": "purescript-backend-erl",
+  "version": "0.0.1",
+  "description": "PureScript to Erlang, based on purescript-backend-optimizer.",
+  "main": "index.js",
+  "type": "module",
+  "files": [
+    "index.js",
+    "bundle/index.js"
+  ],
+  "bin": {
+    "purs-backend-erl": "./index.js"
+  },
   "private": true,
   "scripts": {
-    "test": "spago test"
+    "test": "spago test -- --run",
+    "build": "spago build && purs-backend-es bundle-module --platform=node --to=bundle/index.js",
+    "prepublishOnly": "rm -rf bundle output output-es && npm run build"
   },
-  "dependencies": {
+  "devDependencies": {
     "spago": "^0.93.2"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/id3as/purescript-backend-erl.git"
+  },
+  "keywords": [
+    "PureScript"
+  ]
 }
