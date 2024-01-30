@@ -12,7 +12,6 @@
   "bin": {
     "purs-backend-erl": "./index.js"
   },
-  "private": true,
   "scripts": {
     "test": "spago test -- --run",
     "build": "spago build && purs-backend-es bundle-module --platform=node --to=bundle/index.js",
