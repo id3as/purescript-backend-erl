@@ -1,5 +1,5 @@
 {
-  "name": "purescript-backend-erl",
+  "name": "purs-backend-erl",
   "version": "0.0.1",
   "description": "PureScript to Erlang optimizing compiler, based on purescript-backend-optimizer.",
   "main": "index.js",
