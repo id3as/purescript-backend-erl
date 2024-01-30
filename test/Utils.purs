@@ -13,9 +13,8 @@ import Control.Monad.Except (ExceptT(..), lift, runExceptT)
 import Control.Parallel (parTraverse)
 import Data.Argonaut as Json
 import Data.Array (intercalate)
-import Data.Array as Array
 import Data.Array.NonEmpty as NonEmptyArray
-import Data.Array.NonEmpty.Internal (NonEmptyArray(..))
+import Data.Array.NonEmpty.Internal (NonEmptyArray)
 import Data.Bifunctor (lmap)
 import Data.Compactable (separate)
 import Data.Either (Either(..))
@@ -23,7 +22,6 @@ import Data.Foldable (foldl)
 import Data.Lazy as Lazy
 import Data.List (List)
 import Data.Maybe (Maybe(..), maybe)
-import Data.Posix.Signal (Signal(..))
 import Data.Set as Set
 import Data.Set.NonEmpty as NonEmptySet
 import Data.String as String
@@ -54,9 +52,6 @@ import PureScript.Backend.Erl.Convert.Common (erlModuleNamePs)
 import PureScript.Backend.Optimizer.CoreFn (Ann, Module, ModuleName(..))
 import PureScript.Backend.Optimizer.CoreFn.Json (decodeModule)
 import PureScript.Backend.Optimizer.CoreFn.Sort (emptyPull, pullResult, resumePull, sortModules)
-import PureScript.CST (RecoveredParserResult(..), parseModule)
-import PureScript.CST.Errors (printParseError)
-import PureScript.CST.Types as CSTT
 
 spawnFromParent :: String -> Array String -> Aff Unit
 spawnFromParent command args = makeAff \k -> do
@@ -189,50 +184,3 @@ readCoreFnModule filePath = do
       pure $ Left $ Tuple filePath err
     Right mod ->
       pure $ Right mod
-
--- | Returns `Right true` if the source code has this type signature
--- | somewhere in it:
--- | ```
--- | main :: Effect Unit
--- | ```
--- |
--- | If `Effect` or `Unit` are qualified by a module alias,
--- | this will not return `true`.
--- | ```
--- | main :: Effect.Effect Prelude.Unit
--- | ```
-canRunMain :: String -> Either String Boolean
-canRunMain sourceCode =
-  case parseModule sourceCode of
-    ParseSucceeded (CSTT.Module { body: CSTT.ModuleBody { decls } }) ->
-      pure $ Array.any isMain decls
-    ParseSucceededWithErrors _ errs ->
-      Left $ Array.intercalate "\n"
-        [ "canRunMain - could not completely parse file."
-        , Array.intercalate "\n" $ map printPositionedError $ NonEmptyArray.toArray errs
-        ]
-    ParseFailed err ->
-      Left $ Array.intercalate "\n"
-        [ "canRunMain - could not parse file."
-        , printPositionedError err
-        ]
-  where
-  printPositionedError err = Array.intercalate "\n"
-    [ ""
-    , "Position: " <> show err.position
-    , "Reason: " <> printParseError err.error
-    ]
-  isMain = case _ of
-    CSTT.DeclSignature
-      ( CSTT.Labeled
-          { label: CSTT.Name { name: CSTT.Ident "main" }
-          , value:
-              CSTT.TypeApp
-                (CSTT.TypeConstructor (CSTT.QualifiedName { name: CSTT.Proper "Effect" }))
-                ( NonEmptyArray
-                    [ CSTT.TypeConstructor (CSTT.QualifiedName { name: CSTT.Proper "Unit" })
-                    ]
-                )
-          }
-      ) -> true
-    _ -> false
