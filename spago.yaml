@@ -2,35 +2,63 @@ package:
   name: purerl
   dependencies:
     - aff
-    - argonaut
+    - ansi
+    - argparse-basic
     - arrays
     - backend-optimizer
+    - bifunctors
     - console
     - control
+    - debug
     - dodo-printer
     - effect
+    - either
+    - enums
+    - exceptions
+    - filterable
     - foldable-traversable
+    - functors
+    - identity
+    - integers
+    - lazy
+    - lists
     - maybe
     - newtype
+    - node-buffer
+    - node-execa
+    - node-fs
+    - node-path
+    - node-process
     - ordered-collections
+    - parsing
+    - partial
     - prelude
+    - profunctor
+    - profunctor-lenses
+    - refs
     - safe-coerce
     - strings
     - transformers
     - tuples
+    - type-equality
+    - unfoldable
+    - unicode
+    - unsafe-coerce
   test:
     main: Test.Main
     dependencies:
       - ansi
+      - argonaut
       - argparse-basic
       - bifunctors
       - either
       - filterable
-      - language-cst-parser
+      - foreign-object
       - lazy
       - lists
       - node-buffer
       - node-child-process
+      - node-event-emitter
       - node-execa
       - node-fs
       - node-glob-basic
@@ -38,8 +66,6 @@ package:
       - node-process
       - node-streams
       - parallel
-      - partial
-      - posix-types
       - refs
 workspace:
   package_set:
