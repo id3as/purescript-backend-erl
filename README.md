@@ -2,12 +2,14 @@
 
 _PureScript to Erlang optimizing compiler, based on [`backend-optimizer`](https://github.com/aristanetworks/purescript-backend-optimizer)._
 
-`purescript-backend-erl` aims to be compatible with [`purerl`](https://github.com/purerl/purerl) code.
+`purescript-backend-erl` aims to be source-compatible with [`purerl`](https://github.com/purerl/purerl) code.
 In particular, the representation of datatypes remains unchanged and existing FFI files should work as-is.
+(The generated Erlang files will not be compatible.)
 
-The main differences are uncurrying (which may affect the public API of generated modules) and what errors may be thrown.
+The main visible differences are uncurrying (which may affect the public API of generated modules) and the details of what errors may be thrown.
 
-Note: big integer literals are currently unsupported and you will get JSON decoding errors if you use them in your source code.
+Warning: bigint literals are currently unsupported and you will get JSON decoding errors if you use them in your source code.
+You can encode them with arithmetic as a workaround until things are patched.
 
 ## Usage
 
@@ -21,6 +23,11 @@ Note: `purescript-backend-erl` is the name of the repository, while `purs-backen
 Run tests with `spago test -- --accept --run` to accept new golden output and compile and run the resulting Erlang tests.
 (Not all tests have assertions (yet).)
 
+## Results
+
+Like `purescript-backend-optimizer`, performance improvement can be around 30% or even 40%.
+The size of the compiled BEAM files is comparable to that of `purerl`.
+
 ## Optimizations
 
 Optimizations are largely those provided by [`backend-optimizer`](https://github.com/aristanetworks/purescript-backend-optimizer), adapted as necessary for the Erlang code generation and purerl libraries.
@@ -33,7 +40,7 @@ The additional Erlang-specific optimizations take place at various stages of the
 - [Complexity analysis](https://github.com/id3as/purescript-backend-erl/blob/main/src/PureScript/Backend/Erl/Foreign/Analyze.purs) to guide inlining during `backend-optimizer`'s evaluation
 - [Evaluation of known foreign functions in PS semantics](https://github.com/id3as/purescript-backend-erl/blob/main/src/PureScript/Backend/Erl/Foreign.purs) (they do not have to be foreign, strictly speaking)
 - [Specializing known foreign functions during Erlang codegen](https://github.com/id3as/purescript-backend-erl/blob/main/src/PureScript/Backend/Erl/Convert/Foreign.purs)
-  - This is where Erlang Lists and Tuples get specialized, since they work with Erlang data structures that cannot be represented by the `backend-optimizer`.
+  - This is where Erlang Lists and Tuples get specialized, since they work with Erlang data structures that cannot be represented by `backend-optimizer`.
 - [Uncurrying during codegen](https://github.com/id3as/purescript-backend-erl/blob/main/src/PureScript/Backend/Erl/Convert.purs)
 - [After Erlang codegen](https://github.com/id3as/purescript-backend-erl/blob/main/src/PureScript/Backend/Erl/Convert/After.purs)
   - This is Common Subexpression Elimination part 2, Erlang Edition.
@@ -41,6 +48,8 @@ The additional Erlang-specific optimizations take place at various stages of the
 
 The cherry on top is that Erlang has weird scoping rules, so the final step of codegen is [renaming local variables](https://github.com/id3as/purescript-backend-erl/blob/main/src/PureScript/Backend/Erl/Convert/Scoping.purs) throughout the whole AST.
 Final beta-reduction of applied lambdas plus re-scoping of macros also happens there.
+
+These optimizations were guided by inspecting the optimizations that Erlang performs, see [./opts](./opts/README.md).
 
 ### Uncurrying
 
@@ -53,9 +62,10 @@ This makes it less predictable and may change the public API of PureScript modul
 - Uncurrying is affected by `backend-optimizer` inlining directives (inlining `f arity=2` in the above example will also uncurry `g/2`, but via inlining this time, not by calling `f/4`).
 
 The calling convention is that generated _nullary_ Erlang functions are always _pure_ wrappers around the code corresponding to a PureScript declaration.
-Non-nullary Erlang functions may correspond to any of the three types of functions (curried, uncurried, or uncurried effectful), based upon their definition.
+Non-nullary *generated* Erlang functions may correspond to any of the three types of functions (curried, uncurried, or uncurried effectful), based upon their definition.
+Non-nullary *FFI* functions only correspond to curried functions (`_ -> _ -> _`), not `FnX` nor `EffectFnX`.
 
-### Inlining and specialization:
+### Inlining and specialization
 
 - Foreign functions in core libraries are specialized and inlined when possible, especially Erlang BIFs.
 - [Erlang Tuple](https://github.com/purerl/purescript-erl-tuples/blob/master/src/Erl/Data/Tuple.purs) operations are always inlined.
@@ -75,3 +85,11 @@ This is one of the main downsides of the Erlang codegen: top-level declarations 
 
 Some pattern matches are rewritten back to Erlang case trees for legibility (the `backend-optimizer` uses Boolean branching and unsafe accessors exclusively).
 (TODO: do this for product-like datatypes.)
+
+### TODO
+
+- Pull out typeclass methods
+- More uncurrying (e.g. for `compareImpl LT EQ GT`)
+- Ensure generics always inline
+- Test optimizations
+- Make it extensible?

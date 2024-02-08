@@ -24,3 +24,8 @@
 /test-snapshots/generated-docs
 /test-snapshots/test-out/
 /.direnv
+
+# /opts/
+/opts/*/opt
+/opts/*/no_opt
+/opts/*/*.*.diff
