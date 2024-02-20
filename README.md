@@ -11,6 +11,8 @@ The main visible differences are uncurrying (which may affect the public API of 
 Warning: bigint literals are currently unsupported and you will get JSON decoding errors if you use them in your source code.
 You can encode them with arithmetic as a workaround until things are patched.
 
+Also, due to inlining, inlining of `div` for `Int` will occur more often, and this optimization is unsafe since it is optimized to `div` in Erlang which has different semantics for negative numbers and dividing by zero.
+
 ## Usage
 
 `purs-backend-erl` compiles code from CoreFn in `./output` (`./output/Module.Name/corefn.json`) to Erlang modules in `./output-erl` (`./output-erl/Module.Name/module_name@{ps,foreign}.erl`).
