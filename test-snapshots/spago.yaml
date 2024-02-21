@@ -17,9 +17,58 @@ package:
     - refs
     - transformers
     - tuples
+    - erl-variant
 workspace:
   package_set:
     url: https://raw.githubusercontent.com/purerl/package-sets/erl-0.15.3-20220629/packages.json
     hash: sha256-kLmZv2u5dWVUUaQEwK0b3T1Ghce5a/hG0zlizaYfcXs=
   backend:
     cmd: purerl
+  extra_packages:
+    erl-variant:
+      dependencies:
+        - debugged
+        - either
+        - erl-atom
+        - foldable-traversable
+        - maybe
+        - partial
+        - prelude
+        - unsafe-coerce
+        - control
+        - enums
+        - lists
+        - type-equality
+      git: https://github.com/id3as/purescript-erl-variant.git
+      ref: f14e3cca6726c1c6c50cc7499df04de15619c820
+    debugged:
+      dependencies:
+        - arrays
+        - bifunctors
+        - console
+        - datetime
+        - debug
+        - effect
+        - either
+        - enums
+        - erl-atom
+        - erl-binary
+        - erl-lists
+        - erl-maps
+        - erl-process
+        - erl-tuples
+        - foldable-traversable
+        - foreign
+        - lists
+        - maybe
+        - newtype
+        - numbers
+        - ordered-collections
+        - partial
+        - prelude
+        - record
+        - strings
+        - tuples
+        - variant
+      git: https://github.com/id3as/purescript-debugged
+      ref: f844c7bf711be81cc0d6ac57f251db56354c2b85

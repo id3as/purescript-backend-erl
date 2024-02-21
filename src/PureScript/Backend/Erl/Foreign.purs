@@ -37,7 +37,7 @@ erlForeignSemantics = Map.fromFoldable $
   , erl_data_list_types_uncons
   , erl_data_tuple_fst
   , erl_data_tuple_snd
-  , erl_data_variant_matchImpl
+  , erl_data_variant_internal_matchImpl
   ] <> join
   [ erl_data_tuple_uncurryN
   , erl_atom
@@ -227,9 +227,9 @@ erl_atom =
     s2 <- literal
     in NeutLit (LitBoolean (s1 == s2))
 
-erl_data_variant_matchImpl :: ForeignSemantics
-erl_data_variant_matchImpl = evaluator $ func "Erl.Data.Variant.matchImpl" $ compact $ partial ado
-  NeutLit (LitRecord fns) <- arg
+erl_data_variant_internal_matchImpl :: ForeignSemantics
+erl_data_variant_internal_matchImpl = evaluator $ func "Erl.Data.Variant.Internal.matchImpl" $ compact $ partial ado
+  fns <- arg' \(NeutLit (LitRecord fns)) -> fns
   Tuple (NeutLit (LitString variantType)) variantValue <- arg'' \(NeutLit (LitRecord props)) ->
     Tuple <$> findProp "type" props <*> findProp "value" props
   env <- getEnv

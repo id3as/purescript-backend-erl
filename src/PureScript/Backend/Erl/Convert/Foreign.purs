@@ -15,11 +15,11 @@ import Data.Newtype (over, unwrap)
 import Data.Traversable (sequence)
 import Data.Tuple (Tuple(..), uncurry)
 import Data.Tuple.Nested ((/\))
-import PureScript.Backend.Erl.Calling (CallPS(..), Conventions, Converter, Converters, applyConventions, arg', argMatch, callConverters, callErl, callPS, codegenArg, converts', func, indexPatterns, noArgs, qualErl, qualPS, thunkErl, withEnv)
+import PureScript.Backend.Erl.Calling (CallPS(..), Conventions, Converter, Converters, applyConventions, arg, arg', arg'', argMatch, callConverters, callErl, callPS, codegenArg, converts', func, getEnv, indexPatterns, noArgs, partial, qualErl, qualPS, thunkErl, withEnv)
 import PureScript.Backend.Erl.Convert.Common (toErlVar, toErlVarPat)
 import PureScript.Backend.Erl.Syntax (ErlExpr, FunHead(..))
 import PureScript.Backend.Erl.Syntax as S
-import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal(..), ModuleName(..), Qualified(..))
+import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal(..), ModuleName(..), Prop(..), Qualified(..))
 import PureScript.Backend.Optimizer.Semantics (NeutralExpr(..))
 import PureScript.Backend.Optimizer.Syntax (BackendSyntax(..))
 
@@ -129,25 +129,36 @@ specificCalls =
           (\items codegen -> join bimap codegen <$> items)
       in floated $ S.Map list
 
+  , func "Erl.Data.Variant.match" $ partial ado
+    _dictRL <- arg
+    _dictCases <- arg
+    _dictUnion <- arg
+    NeutralExpr (Lit (LitRecord fns)) <- arg
+    codegenExpr <- getEnv
+    in S.Fun Nothing $ fns <#> \(Prop variantType fn) -> Tuple
+      do S.FunHead [S.MatchMap [Tuple "type" (S.MatchLiteral (S.Atom variantType)), Tuple "value" (S.BindVar "Value")]] Nothing
+      do S.curriedApp (codegenExpr fn) [S.Var "Value" []]
+
   -- Needs some mechanism for fresh names :(
-  -- , func "Erl.Data.Variant.matchImpl" $ partial ado
+  -- Needs some way to unpack locals into literals ...
+  -- , func "Erl.Data.Variant.Internal.matchImpl" $ partial ado
   --     fns <- arg'' \(NeutralExpr (Lit (LitRecord fns))) -> NEA.fromArray fns
   --     variant <- codegenArg
   --     codegenExpr <- getEnv
   --     in S.Case variant $ fns <#> \(Prop variantType fn) ->
   --       S.CaseClause (S.MatchMap [Tuple "type" (S.MatchLiteral (S.Atom variantType)), Tuple "value" (S.BindVar "Value")]) Nothing
-  --       do S.curriedApp (codegenExpr fn) [S.Var "Value"]
-  -- , func "Erl.Data.Variant.matchImpl" $ partial ado
+  --       do S.curriedApp (codegenExpr fn) [S.Var "Value" []]
+  -- , func "Erl.Data.Variant.Internal.matchImpl" $ partial ado
   --     NeutralExpr (Lit (LitRecord fns)) <- arg
   --     codegenExpr <- getEnv
   --     in S.Fun Nothing $ fns <#> \(Prop variantType fn) -> Tuple
   --       do S.FunHead [S.MatchMap [Tuple "type" (S.MatchLiteral (S.Atom variantType)), Tuple "value" (S.BindVar "Value")]] Nothing
-  --       do S.curriedApp (codegenExpr fn) [S.Var "Value"]
-  -- , func "Erl.Data.Variant.matchImpl" ado
+  --       do S.curriedApp (codegenExpr fn) [S.Var "Value" []]
+  -- , func "Erl.Data.Variant.Internal.matchImpl" ado
   --     fns <- codegenArg
   --     in S.Fun Nothing $ pure $ Tuple
   --       do S.FunHead [S.MatchMap [Tuple "type" (S.BindVar "Type"), Tuple "value" (S.BindVar "Value")]] Nothing
-  --       do S.curriedApp (S.qualified "erlang" "map_get" [S.Var "Type", fns]) [S.Var "Value"]
+  --       do S.curriedApp (S.callGlobal "erlang" "map_get" [S.Var "Type" [], fns]) [S.Var "Value" []]
 
   , func "Partial._unsafePartial" $ S.curriedApp <$> codegenArg <@> [S.atomLiteral "unit"]
   ]

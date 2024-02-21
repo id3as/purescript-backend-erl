@@ -12,6 +12,7 @@ workspace:
         - erl-kernel
         - erl-lists
         - erl-tuples
+        - erl-variant
         - functions
         - integers
         - partial
@@ -30,6 +31,8 @@ workspace:
         - control
         - convertable-options
         - datetime
+        - debug
+        - debugged
         - distributive
         - effect
         - either
@@ -42,6 +45,7 @@ workspace:
         - erl-process
         - erl-tuples
         - erl-untagged-union
+        - erl-variant
         - exceptions
         - exists
         - filterable
@@ -76,6 +80,7 @@ workspace:
         - typelevel-prelude
         - unfoldable
         - unsafe-coerce
+        - variant
   package_set:
     address:
       hash: sha256-kLmZv2u5dWVUUaQEwK0b3T1Ghce5a/hG0zlizaYfcXs=
@@ -1251,7 +1256,54 @@ workspace:
           - record
           - tuples
           - unsafe-coerce
-  extra_packages: {}
+  extra_packages:
+    debugged:
+      git: https://github.com/id3as/purescript-debugged
+      ref: f844c7bf711be81cc0d6ac57f251db56354c2b85
+      dependencies:
+        - arrays
+        - bifunctors
+        - console
+        - datetime
+        - debug
+        - effect
+        - either
+        - enums
+        - erl-atom
+        - erl-binary
+        - erl-lists
+        - erl-maps
+        - erl-process
+        - erl-tuples
+        - foldable-traversable
+        - foreign
+        - lists
+        - maybe
+        - newtype
+        - numbers
+        - ordered-collections
+        - partial
+        - prelude
+        - record
+        - strings
+        - tuples
+        - variant
+    erl-variant:
+      git: https://github.com/id3as/purescript-erl-variant.git
+      ref: f14e3cca6726c1c6c50cc7499df04de15619c820
+      dependencies:
+        - control
+        - debugged
+        - either
+        - enums
+        - erl-atom
+        - foldable-traversable
+        - lists
+        - maybe
+        - partial
+        - prelude
+        - type-equality
+        - unsafe-coerce
 packages:
   arrays:
     type: git
@@ -1348,6 +1400,44 @@ packages:
       - partial
       - prelude
       - tuples
+  debug:
+    type: git
+    url: https://github.com/purerl/purescript-debug.git
+    rev: 3f6d18679e224249685bc690dfd5f0884a580374
+    dependencies:
+      - prelude
+  debugged:
+    type: git
+    url: https://github.com/id3as/purescript-debugged
+    rev: f844c7bf711be81cc0d6ac57f251db56354c2b85
+    dependencies:
+      - arrays
+      - bifunctors
+      - console
+      - datetime
+      - debug
+      - effect
+      - either
+      - enums
+      - erl-atom
+      - erl-binary
+      - erl-lists
+      - erl-maps
+      - erl-process
+      - erl-tuples
+      - foldable-traversable
+      - foreign
+      - lists
+      - maybe
+      - newtype
+      - numbers
+      - ordered-collections
+      - partial
+      - prelude
+      - record
+      - strings
+      - tuples
+      - variant
   distributive:
     type: git
     url: https://github.com/purescript/purescript-distributive.git
@@ -1483,6 +1573,23 @@ packages:
       - partial
       - prelude
       - typelevel-prelude
+      - unsafe-coerce
+  erl-variant:
+    type: git
+    url: https://github.com/id3as/purescript-erl-variant.git
+    rev: f14e3cca6726c1c6c50cc7499df04de15619c820
+    dependencies:
+      - control
+      - debugged
+      - either
+      - enums
+      - erl-atom
+      - foldable-traversable
+      - lists
+      - maybe
+      - partial
+      - prelude
+      - type-equality
       - unsafe-coerce
   exceptions:
     type: git
@@ -1824,3 +1931,16 @@ packages:
     url: https://github.com/purerl/purescript-unsafe-coerce.git
     rev: 7150d261d40cd92112e8c2064124c5682627f137
     dependencies: []
+  variant:
+    type: git
+    url: https://github.com/natefaubion/purescript-variant.git
+    rev: 3f12411ede5edd342d25340c1babce9ae81d6793
+    dependencies:
+      - enums
+      - lists
+      - maybe
+      - partial
+      - prelude
+      - record
+      - tuples
+      - unsafe-coerce

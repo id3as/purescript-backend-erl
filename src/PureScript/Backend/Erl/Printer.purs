@@ -233,13 +233,14 @@ printExpr' prec = case _ of
           printParens' (printPattern <$> exprs) <>
           sepMaybe (D.text " when ") (coerce printAtomic) g <>
           D.text " ->" <> D.break <>
-          D.indent (printAtomic e) <> D.break
+          D.indent (printAtomic e)
 
     D.text "fun" <> D.break
       <> D.indent (
-        D.lines $ printFunHead <$> heads
+        intercalate (D.text ";" <> D.break) $
+          printFunHead <$> heads
       )
-      <> D.text "end"
+      <> D.break <> D.text "end"
 
   S.FunCall qualifier function [] ->
     parenPrec prec $
