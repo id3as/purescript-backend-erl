@@ -2,9 +2,8 @@ module PureScript.Backend.Erl.Convert.Scoping where
 
 import Prelude
 
-import Control.Apply (lift2)
-import Control.Monad.Reader (ReaderT, asks, local, runReaderT)
-import Control.Monad.State (State, evalState, gets, modify_, state)
+import Control.Monad.Reader (ReaderT(..), asks, local, runReaderT)
+import Control.Monad.State (State, StateT(..), evalState, gets, modify_, state)
 import Data.Array (all)
 import Data.Array as Array
 import Data.Array.NonEmpty as NEA
@@ -20,7 +19,6 @@ import Data.Semigroup.Last (Last(..))
 import Data.String.CodeUnits as CU
 import Data.Traversable (class Traversable, foldr, for, traverse)
 import Data.Tuple (Tuple(..), snd, uncurry)
-import Debug (spy, spyWith)
 import PureScript.Backend.Erl.Syntax (CaseClause(..), ErlExpr, ErlPattern, FunHead(..), Guard(..), IfClause(..), self)
 import PureScript.Backend.Erl.Syntax as S
 import Safe.Coerce (coerce)
@@ -38,12 +36,14 @@ type Found =
 
 type Renaming = ReaderT Renamings (State Found)
 
+-- | Revert scope when leaving function scopes.
 scope :: forall a. Renaming a -> Renaming a
 scope inner = do
   s <- gets _.duplicates
   -- Do not reset usages because they may refer to outer scopes still
   inner <* modify_ _ { duplicates = s }
 
+-- | Mark a variable as used.
 use :: Rename -> Map Rename Int -> Map Rename Int
 use = Map.alter (Just <<< maybe 1 (add 1))
 
@@ -61,10 +61,13 @@ isUnused rename = gets $ _.usages
 ensure :: Name -> String
 ensure n = case CU.takeWhile (_ /= '@') n of
   "" -> "V"
-  -- For things like `_@dollar__unused`
+  -- For things like `_@dollar__unused`, which do in fact get used as
+  -- intermediate variables in currying/other function conversions,
+  -- and we use `"_"` as a sentinel value for `Discard`.
   "_" -> "V"
   r -> r
 
+-- | Choose a fresh name for a variable
 choose :: Name -> Renaming Rename
 choose name = state \found ->
   let i = fromMaybe 0 (Map.lookup name found.duplicates)
@@ -76,6 +79,12 @@ choose name = state \found ->
     , usages: Map.delete rename found.usages
     }
 
+chooseNewName :: String -> Int -> Rename
+chooseNewName i 0 = i
+chooseNewName "_" _ = "_"
+chooseNewName i lvl = i <> "@" <> show lvl
+
+-- | Traverse names in a pattern.
 overNames :: forall f. Applicative f => (Name -> f Name) -> ErlPattern -> f ErlPattern
 overNames f = case _ of
   S.Discard -> pure S.Discard
@@ -92,18 +101,15 @@ overNames f = case _ of
     <$> traverse (overNames f) pats
     <*> traverse (overNames f) mpat
 
-chooseNewName :: String -> Int -> Rename
-chooseNewName i 0 = i
-chooseNewName "_" _ = "_"
-chooseNewName i lvl = i <> "@" <> show lvl
-
-renameMany :: forall f. Traversable f => f ErlPattern -> Compose Renaming (Tuple (SemigroupMap String (Last String))) (f ErlPattern)
+-- | Rename several patterns at once.
+renameMany :: forall f. Traversable f => f ErlPattern ->
+  Compose Renaming (Tuple (SemigroupMap String (Last String))) (f ErlPattern)
 renameMany = traverse $ overNames \name -> Compose do
   choose (ensure name) <#> \rename ->
     Tuple (SemigroupMap $ Map.singleton name $ Last rename) rename
 
--- Bind some names in scope while renaming `inner` that linger around
--- afterwards due to the scoping rules of Erlang.
+-- | Bind some names in scope while renaming `inner` that linger around
+-- | afterwards due to the scoping rules of Erlang.
 binding ::
   forall f b.
     Traversable f =>
@@ -114,8 +120,8 @@ binding names inner = do
   let renaming = local $ Map.union $ unwrap <$> mapping
   flip Tuple <$> renaming inner <*> traverse (overNames isUnused) renames
 
--- Bind some names in scope while renaming `inner` that do NOT linger around
--- afterwards, explicitly for function scopes.
+-- | Bind some names in scope while renaming `inner` that do NOT linger around
+-- | afterwards, explicitly for function scopes.
 scopedBinding ::
   forall f b.
     Traversable f =>
@@ -146,6 +152,8 @@ oprss ess = traverse (traverse opr) ess
 oprg :: Maybe Guard -> Renaming (Maybe Guard)
 oprg mg = traverse (dimap coerce (map coerce) opr) mg
 
+-- | Float any assignments from the expression, returning them as a function
+-- | to apply the floated variables again.
 floating :: ErlExpr -> Tuple (ErlExpr -> ErlExpr) ErlExpr
 floating (S.Assignments asgns1 (S.Assignments asgns2 e)) = floating (S.Assignments (asgns1 <> asgns2) e)
 floating (S.Assignments [] e) = Tuple identity e
@@ -185,7 +193,7 @@ renameTree = case _ of
       CaseClause pat' mg' e'
   S.If cases ->
     S.If <$> for cases \(IfClause cond e) ->
-      IfClause <$> opr cond <*> opr e
+      IfClause <$> coerce opr cond <*> opr e
 
   e@(S.Literal _) -> pure e
   S.List es -> S.List <$> oprs es
@@ -220,6 +228,7 @@ renameTree = case _ of
   S.UnaryOp op e -> S.UnaryOp op <$> opr e
   S.BinaryAppend e1 e2 -> S.BinaryAppend <$> opr e1 <*> opr e2
 
+-- | Trivial expressions do not need to be duplicated for macros.
 trivialExpr :: ErlExpr -> Boolean
 trivialExpr (S.Var _ _) = true
 trivialExpr (S.Literal _) = true

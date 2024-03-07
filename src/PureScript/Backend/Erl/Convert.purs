@@ -28,7 +28,7 @@ import PureScript.Backend.Erl.Foreign.Analyze (analyzeCustom)
 import PureScript.Backend.Erl.Parser (ForeignDecls)
 import PureScript.Backend.Erl.Syntax (Accessor(..), ErlDefinition(..), ErlExport(..), ErlExpr, ErlModule, ErlPattern, access, atomLiteral, mIS_KNOWN_TAG, self)
 import PureScript.Backend.Erl.Syntax as S
-import PureScript.Backend.Optimizer.Convert (BackendBindingGroup, BackendModule, ConvertEnv, getCtx, makeExternEvalRef, makeExternEvalSpine)
+import PureScript.Backend.Optimizer.Convert (BackendModule, ConvertEnv, getCtx, makeExternEvalRef, makeExternEvalSpine)
 import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal(..), ModuleName(..), Prop(..), Qualified(..))
 import PureScript.Backend.Optimizer.Semantics (BackendExpr(..), BackendSemantics(..), Ctx(..), Env(..), LocalBinding(..), NeutralExpr(..), foldBackendExpr, optimize)
 import PureScript.Backend.Optimizer.Syntax (BackendAccessor(..), BackendOperator(..), BackendOperator1(..), BackendOperator2(..), BackendOperatorNum(..), BackendOperatorOrd(..), BackendSyntax(..), Level(..), Pair(..))
@@ -89,12 +89,13 @@ codegenModule backendModule@{ name: currentModule, bindings, imports, foreign: f
       , constructors
       }
 
-    definitions :: Array ErlDefinition
-    definitions = Array.concat
+    rawDefinitions :: Array ErlDefinition
+    rawDefinitions = Array.concat
       [ thisModuleBindings <@> codegenEnv
       , reexportForeigns <#> snd
       , moreModuleBindings <@> codegenEnv
-      ] <#> optimizePatternsDecl
+      ]
+    definitions = optimizePatternsDecl <$> rawDefinitions
 
     reexportForeigns :: Array (Tuple Conventions ErlDefinition)
     reexportForeigns = foreigns.exported >>= \(Tuple decl arity) -> do
@@ -124,6 +125,7 @@ codegenModule backendModule@{ name: currentModule, bindings, imports, foreign: f
     Tuple
       { moduleName: erlModuleNamePs currentModule
       , definitions
+      , rawDefinitions
       , exports
       , comments: []
       }
@@ -350,11 +352,11 @@ codegenExpr codegenEnv0@{ currentModule } s | codegenEnv <- setCallsHandled fals
       goPair (Pair c e) = Tuple (codegenExpr codegenEnv c) (codegenExpr codegenEnv e)
 
       go (Tuple c e) ee | S.guardExpr c =
-        case ee of
+        S.If $ S.IfClause (S.Guard c) e NEA.: case ee of
           S.If clauses ->
-            S.If (S.IfClause c e NEA.: clauses)
+            clauses
           _ ->
-            S.If (S.IfClause c e NEA.: NEA.singleton (S.IfClause (S.Literal $ S.Atom "true") ee))
+            NEA.singleton (S.IfClause (S.Guard $ S.Literal $ S.Atom "true") ee)
       go (Tuple c e) ee =
         S.Case c
           ( S.CaseClause (S.MatchLiteral (S.Atom C.true_)) Nothing e NEA.:

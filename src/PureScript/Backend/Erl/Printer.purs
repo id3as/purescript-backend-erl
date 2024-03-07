@@ -295,7 +295,7 @@ tiny (S.Literal (S.Atom _)) = true
 tiny _ = false
 
 printIfClause :: IfClause -> Doc Void
-printIfClause (IfClause guard e) =
+printIfClause (IfClause (Guard guard) e) =
   printAtomic guard <> D.text " ->"  <> D.break <> D.indent (printAtomic e)
 
 printCaseClause :: CaseClause -> Doc Void

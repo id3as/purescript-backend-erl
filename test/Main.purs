@@ -54,6 +54,7 @@ import PureScript.Backend.Optimizer.Convert (BackendModule)
 import PureScript.Backend.Optimizer.CoreFn (Comment(..), Ident(..), Module(..), ModuleName(..))
 import PureScript.Backend.Optimizer.Directives (parseDirectiveFile)
 import PureScript.Backend.Optimizer.Directives.Defaults (defaultDirectives)
+import Test.Eval as Eval
 import Test.Utils (bufferToUTF8, coreFnModulesFromOutput, errored, execWithStdin, loadModuleMain, mkdirp, rmrf, spawnFromParent)
 
 type TestArgs =
@@ -151,6 +152,9 @@ runSnapshotTests { accept, compile, run, filter } = do
               formatted =
                 Dodo.print plainText Dodo.twoSpaces
                   $ P.printModule codegened
+            -- Check that the Erlang optimizations are sound
+            -- Only runs if `test-snapshots/debug` exists
+            Eval.printModule codegened
             liftEffect $ Ref.write nextConventions conventionsRef
             -- liftEffect $ debugModule backend  -- show backend
             mkdirp testFileDir

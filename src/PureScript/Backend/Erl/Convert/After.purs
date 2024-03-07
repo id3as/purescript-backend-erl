@@ -1,3 +1,16 @@
+-- | This runs after the PureScript gets converted to Erlang. It handles several
+-- | aspects to produce better Erlang. It optimizes pattern matching in two passes
+-- | and it calls `Scoping` (one pass, twice) to convert the PureScript-y variable
+-- | scoping into Erlang variable scoping (where variables can leak out of cases).
+-- |
+-- | The two passes here:
+-- |   - `optimizePatternDemand` analyzes demand for fields of variables and
+-- |     inserts patterns to take advantage of that. It also hoists global pure
+-- |     calls and turns `if`s into `case`s.
+-- |   - `optimizePatternRewrite` inlines those added patterns, so variables
+-- |     are referenced directly. It also does beta-reduction of simple
+-- |     functions directly applied to their arguments and hoists arguments
+-- |     to macros (since macros are fussy).
 module PureScript.Backend.Erl.Convert.After where
 
 import Prelude
@@ -26,7 +39,6 @@ import Data.Newtype (over, unwrap)
 import Data.String as String
 import Data.Traversable (class Foldable, class Traversable, foldMap, foldl, foldr, for, mapAccumL, sequence, sum, traverse)
 import Data.Tuple (Tuple(..), fst, snd)
-import Debug (spyWith)
 import Partial.Unsafe (unsafeCrashWith)
 import Prim.Coerce (class Coercible)
 import PureScript.Backend.Erl.Calling (GlobalErl(..), applyCall, callErl)
@@ -36,11 +48,18 @@ import PureScript.Backend.Erl.Syntax as S
 import Safe.Coerce (coerce)
 import Unsafe.Coerce (unsafeCoerce)
 
+-- Demand analysis for variables, nested through records and ADTs.
 data Demand
   = Unreachable
   | NoDemand
+  -- A basic count of demand
   | Demand Int
+  -- The demand for the gestalt specifically
+  -- If we know the constructor, tagname and arity
+  -- And then a map of demand for each field (indexed by ??)
   | DemandADT Int (Maybe (Tuple String Int)) (Map Int Demand)
+  -- The demand for the gestalt specifically
+  -- Map of demand for each field
   | DemandRecord Int (Map String Demand)
 
 -- | `add` handles combining demands across cases, `mul` handles combining
@@ -95,16 +114,20 @@ common :: forall a. Eq a => Maybe a -> Maybe a -> Maybe (Maybe a)
 common (Just a) (Just b) | a /= b = Nothing
 common a b = Just (a <|> b)
 
+-- | We keep track of demands for pure Erlang functions and each local variable.
 data Demands
   = Demands (Map GlobalErl Demand) (Map String Demand)
   | NullAndVoid
 
+-- | Lookup demand of a variable.
 demandOf :: forall d. Coercible d Demands => String -> d -> Maybe Demand
 demandOf n = coerce case _ of
   Demands _ m -> Map.lookup n m
   NullAndVoid -> Nothing
 
+-- | Type synonym for tracking demand through a single branch of control flow.
 type MDemands = Multiplicative Demands
+-- | Type synonym for tracking demand through separate cases.
 type ADemands = Additive Demands
 
 instance semiringDemands :: Semiring Demands where
@@ -112,6 +135,8 @@ instance semiringDemands :: Semiring Demands where
   one = Demands Map.empty Map.empty
 
   add (Demands g1 d1) (Demands g2 d2) = Demands
+    -- Add demands for variables across cases, and `NoDemand` for variables
+    -- missing in one case.
     (Map.union (lift2 add g1 g2) (NoDemand <$ (g1 <|> g2)))
     (Map.union (lift2 add d1 d2) (NoDemand <$ (d1 <|> d2)))
   add d@(Demands _ _) NullAndVoid = d
@@ -122,13 +147,16 @@ instance semiringDemands :: Semiring Demands where
     (Map.unionWith mul d1 d2)
   mul _ _ = NullAndVoid
 
+-- | Run optimizations on `ErlDefinition`.
 optimizePatternsDecl :: ErlDefinition -> ErlDefinition
 optimizePatternsDecl (FunctionDefinition name args expr) =
+  -- Run it as a function definition.
   case optimizePatterns (S.Fun Nothing [ Tuple (FunHead args Nothing) expr ]) of
     S.Fun Nothing [ Tuple (FunHead args' Nothing) expr' ] ->
       FunctionDefinition name args' expr'
     _ -> unsafeCrashWith "Did not rewrite to function of right shape in optimizePatternsDecl"
 
+-- | Optimize the Erlang: optimize patterns in two passes and do renaming.
 optimizePatterns :: ErlExpr -> ErlExpr
 optimizePatterns = identity
     >>> optimizePatternDemand
@@ -148,6 +176,7 @@ opdss ess = traverse (traverse opd) ess
 opdg :: Maybe Guard -> W (Maybe Guard)
 opdg mg = traverse (coerce opd) mg
 
+-- | Use demand analysis to supplement patterns.
 choosePattern :: MDemands -> ErlPattern -> ErlPattern
 choosePattern (Multiplicative (Demands _ m)) = case _ of
   S.BindVar v | Just d <- Map.lookup v m -> do
@@ -159,10 +188,16 @@ flatPat :: Array (Tuple ErlPattern ErlExpr) -> ErlPattern
 flatPat [Tuple pat _] = pat
 flatPat _ = S.Discard
 
+-- | Optimized `MatchBoth` / `BindVar`
 andMatch :: String -> ErlPattern -> ErlPattern
 andMatch v S.Discard = S.BindVar v
 andMatch v pat = S.MatchBoth v pat
 
+-- | Analyze demand to add patterns.
+-- |
+-- | Note that this invents strange variable names that are almost surely
+-- | not valid Erlang, so it does really need to be followed by `renameRoot`
+-- | at some point.
 makePatternsFrom :: String -> Tuple String Accessors -> Demand -> Demand -> Array (Tuple ErlPattern ErlExpr)
 makePatternsFrom _ _ _ (DemandRecord _ fields) | Map.isEmpty fields = []
 makePatternsFrom v (Tuple v0 acsrs) (DemandRecord _ prev) (DemandRecord _ fields) =
@@ -201,13 +236,20 @@ makePatterns v = makePatternsFrom v (Tuple v self)
 demandAccessors :: Accessors -> Demand
 demandAccessors = demandAccessors' <@> Demand 1
 
+-- | Embed demand through an accessor.
 demandAccessors' :: Accessors -> Demand -> Demand
 demandAccessors' =
   flip $ foldr $
     flip case _, _ of
+      -- Remember that the first field is the demand on the variable
+      -- specifically, so it is zero here
       d, AcsElement idx -> DemandADT 0 Nothing $ Map.singleton idx d
       d, AcsKey key -> DemandRecord 0 $ Map.singleton key d
+      -- We do not optimize the other accessors, so they revert to plain
+      -- `Demand`
+      d, _ -> Demand $ allDemand d
 
+-- | Count up all the demand (on accessors too).
 allDemand :: Demand -> Int
 allDemand (Demand i) = i
 allDemand (DemandADT i _ ds) = i + sum (allDemand <$> ds)
@@ -215,6 +257,7 @@ allDemand (DemandRecord i ds) = i + sum (allDemand <$> ds)
 allDemand NoDemand = 0
 allDemand Unreachable = 0
 
+-- | The immediate demand on the variable, not its children.
 selfDemand :: Demand -> Int
 selfDemand (Demand i) = i
 selfDemand (DemandADT i _ _) = i
@@ -222,9 +265,11 @@ selfDemand (DemandRecord i _) = i
 selfDemand NoDemand = 0
 selfDemand Unreachable = 0
 
+-- | The transitive demand on the variable's children, not itself.
 childDemand :: Demand -> Int
 childDemand = allDemand - selfDemand
 
+-- | Unused but nice for debugging.
 justDemands :: MDemands -> MDemands
 justDemands = over Multiplicative case _ of
   NullAndVoid -> NullAndVoid
@@ -265,12 +310,13 @@ optimizeDemands agg (Tuple this e) =
     [] -> e
     asgns -> Assignments (Array.reverse asgns) e
 
+-- | Handle control flow of separate branches.
 alts ::
-  forall f a.
+  forall f a b.
     Traversable f =>
   f a ->
-  (a -> W (Tuple (Array ErlPattern) (MDemands -> MDemands -> a))) ->
-  W (f a)
+  (a -> W (Tuple (Array ErlPattern) (MDemands -> MDemands -> b))) ->
+  W (f b)
 alts cases mapper = WriterT \r -> do
   let
     Tuple d cases' = coerce $ for cases $
@@ -304,6 +350,8 @@ knownByMatching expr (S.MatchLiteral (S.Atom "true")) =
   knownFrom expr
 knownByMatching _ _ = mempty
 
+-- | One of the key pieces: we need to listen to `?IS_KNOWN_TAG` to determine
+-- | what constructor applies to each branch. This is recorded as a `Demand`.
 knownFrom :: ErlExpr -> MDemands
 knownFrom (S.BinOp S.AndAlso e1 e2) = knownFrom e1 <> knownFrom e2
 knownFrom (S.Macro "IS_KNOWN_TAG" (Just args))
@@ -311,18 +359,26 @@ knownFrom (S.Macro "IS_KNOWN_TAG" (Just args))
     Multiplicative $ Demands Map.empty $ Map.singleton name $ demandAccessors' acsrs $ DemandADT 1 (Just (Tuple tag arity)) Map.empty
 knownFrom _ = mempty
 
+-- | Constrain information that can leak through function scopes. We allow only
+-- | global pure functions to be optimized through this (except if the function
+-- | always throws an error, as indicated by `NullAndVoid`).
 scoped :: forall a. W a -> W a
 scoped = censor $ over Multiplicative case _ of
   NullAndVoid -> Demands Map.empty Map.empty
   Demands _ d -> Demands Map.empty d
 
+-- | This is almost `StateT`. We pass demand information downwards mostly
+-- | because of `knownFrom`, which is annoying, but maybe is the right choice
+-- | anyways. (Can this be made one pass then?) Then the completed demand
+-- | analysis is written out.
 type W = WriterT MDemands ((->) MDemands)
 
 withKnown :: forall a. MDemands -> W a -> W (Tuple MDemands a)
 withKnown x (WriterT f) = WriterT \r -> case f (x <> r) of
   Tuple a y -> Tuple (Tuple y a) y
--- withKnown x = local (append x) >>> listen >>> map \(Tuple x y) -> Tuple y x
 
+-- | This analyzes demand (via Reader+Writer) and uses that information to
+-- | insert patterns to short-cut that demand.
 optimizePatternDemand :: ErlExpr -> W ErlExpr
 optimizePatternDemand = case _ of
   S.Assignments asgns ret -> WriterT \r -> do
@@ -354,7 +410,7 @@ optimizePatternDemand = case _ of
     pure $ S.Case expr' cases'
   S.If cases -> do
     cases' <- alts cases \(IfClause cond e) -> do
-      cond' <- opd cond
+      cond' <- coerce opd cond
       let k = knownFrom (coerce cond)
       e' <- withKnown k (opd e)
       pure $ Tuple [] \_d ds -> IfClause cond' (optimizeDemands ds e')
@@ -395,19 +451,20 @@ optimizePatternDemand = case _ of
   S.BinOp op e1 e2 -> S.BinOp op <$> opd e1 <*> opd e2
   S.UnaryOp op e -> S.UnaryOp op <$> opd e
   S.BinaryAppend e1 e2 -> S.BinaryAppend <$> opd e1 <*> opd e2
-  -- binders ->
-  --   collectDemand
-  --   decideBinders
-  --   applyBinders
-  --   returnAggregateDemand
 
+-- | Recognize a call to a global Erlang pure function (one with no arguments).
 globalThunk :: ErlExpr -> Maybe GlobalErl
+-- Unqualified references to functions in this module.
 globalThunk (S.FunCall Nothing (S.Literal (S.Atom name)) []) = Just (GlobalErl { module: Nothing, name })
+-- Qualified references to PureScript functions in other modules.
 globalThunk (S.FunCall (Just (S.Literal (S.Atom mod))) (S.Literal (S.Atom name)) [])
   | Just _ <- String.stripSuffix (String.Pattern "@ps") mod =
   Just (GlobalErl { module: Just mod, name: name })
 globalThunk _ = Nothing
 
+-- | The information we keep around for rewrites: how to get accessors of
+-- | variables/global calls. (Nested accessors may still rewrite to accessors,
+-- | though some will short-cut.)
 type VRW =
   { locals :: SemigroupMap String Rewrites
   , calls :: SemigroupMap GlobalErl Rewrites
@@ -481,12 +538,15 @@ oprss ess = traverse (traverse opr) ess
 oprg :: Maybe Guard -> VRW -> (Maybe Guard)
 oprg mg = traverse (coerce opr) mg
 
+-- | This optimizes patterns by looking up names bound in binders.
 optimizePatternRewrite :: ErlExpr -> VRW -> ErlExpr
 optimizePatternRewrite = case _ of
   S.Var name acsrs -> getVar name acsrs
   S.Assignments asgns ret -> do
     let
       asgn1 vrw (Tuple pat e) =
+        -- I think some of this is needless complexity that ended up not
+        -- being necessary?
         case S.optimizePattern pat, opr e vrw of
           S.Discard, e' | S.guardExpr e' -> { value: Nothing, accum: vrw }
           S.BindVar v', S.Var v [] -> { value: Nothing, accum: bindVarWithin (S.Var v' []) (S.BindVar v) vrw }
@@ -513,7 +573,7 @@ optimizePatternRewrite = case _ of
     pure $ S.Case expr' cases'
   S.If cases -> do
     cases' <- for cases \(IfClause cond e) -> do
-      cond' <- opr cond
+      cond' <- coerce opr cond
       e' <- opr e
       pure $ IfClause cond' e'
     pure $ optimizeIf cases'
@@ -539,21 +599,24 @@ optimizePatternRewrite = case _ of
   S.BinaryAppend e1 e2 -> S.BinaryAppend <$> opr e1 <*> opr e2
 
 matchTag
-  :: ErlExpr
+  :: Guard
   -> Maybe
     { acsrs :: Array Accessor
     , arity :: Int
     , name :: String
     , tag :: String
     }
-matchTag (S.Macro "IS_KNOWN_TAG" (Just args))
+matchTag (S.Guard (S.Macro "IS_KNOWN_TAG" (Just args)))
   | [S.Literal (S.Atom tag), S.Literal (S.Integer arity), S.Var name acsrs] <- NEA.toArray args
   = Just { tag, arity, name, acsrs }
 matchTag _ = Nothing
 
+-- | Admittedly this is mostly vanity, but it produces nicer Erlang to turn
+-- | the style of branching produced by backend-optimizer back into idiomatic
+-- | Erlang case expressions.
 optimizeIf :: NonEmptyArray IfClause -> ErlExpr
 optimizeIf cases = case NEA.head cases of
-  IfClause (S.Literal (S.Atom "true")) body -> body
+  IfClause (S.Guard (S.Literal (S.Atom "true"))) body -> body
   IfClause cond _
     | Just { name, acsrs } <- matchTag cond
     , Just newCases <- caseOn name acsrs cases
@@ -597,9 +660,6 @@ reassign name acsrs (S.Assignments asgns e) =
 reassign _ _ e = Just (Tuple S.Discard e)
 
 zipPats :: Array ErlPattern -> Maybe ErlPattern
--- zipPats [pat] = Just pat
--- zipPats _ = Nothing
--- zipPats [] = Nothing
 zipPats pats = foldl (\mp p -> mp >>= zipPat p) (Just S.Discard) pats
 
 zipPat :: ErlPattern -> ErlPattern -> Maybe ErlPattern

@@ -8,19 +8,19 @@ import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NEA
 import Data.Bifoldable (bifoldMap)
 import Data.Bifunctor (lmap)
-import Data.Foldable (class Foldable, foldMap, foldl, foldr)
+import Data.Foldable (class Foldable, foldMap, foldl, foldr, sum)
 import Data.Maybe (Maybe(..), maybe)
-import Data.Monoid.Disj (Disj(..))
+import Data.Monoid.Additive (Additive(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Set as Set
-import Data.Traversable (traverse)
-import Data.Tuple (Tuple(..), snd, uncurry)
+import Data.Tuple (Tuple(..), snd)
 import PureScript.Backend.Erl.Constants as C
 import Safe.Coerce (coerce)
 
 type ErlModule =
   { moduleName :: String
   , definitions :: Array ErlDefinition
+  , rawDefinitions :: Array ErlDefinition
   , exports :: Array ErlExport
   , comments :: Array String
   }
@@ -64,11 +64,15 @@ data ErlExpr
   | UnaryOp UnaryOperator ErlExpr
   | BinaryAppend ErlExpr ErlExpr
 
+-- Only used in Test.Eval
+derive instance eqErlExpr :: Eq ErlExpr
+
 type Accessors = Array Accessor
 data Accessor
   = AcsElement Int
   | AcsKey String
-  -- | AcsItem Int
+  | AcsItem Int
+  | AcsDrop Int
   -- | AcsTag String
 derive instance eqAccessor :: Eq Accessor
 derive instance ordAccessor :: Ord Accessor
@@ -86,12 +90,15 @@ data ErlPattern
 derive instance Eq ErlPattern
 
 data FunHead = FunHead (Array ErlPattern) (Maybe Guard)
-data IfClause = IfClause ErlExpr ErlExpr
-
+data IfClause = IfClause Guard ErlExpr
 data CaseClause = CaseClause ErlPattern (Maybe Guard) ErlExpr
+derive instance eqFunHead :: Eq FunHead
+derive instance eqIfClause :: Eq IfClause
+derive instance eqCaseClause :: Eq CaseClause
 
 newtype Guard = Guard ErlExpr
 derive instance Newtype Guard _
+derive newtype instance eqGuard :: Eq Guard
 
 data ErlLiteral
   = Integer Int
@@ -204,6 +211,8 @@ data BinaryOperator
   --
   | ListSubtract
 
+derive instance eqBinaryOperator :: Eq BinaryOperator
+
 -- |
 -- Built-in unary operators
 --
@@ -225,6 +234,8 @@ data UnaryOperator
   --
   | Positive
 
+derive instance eqUnaryOperator :: Eq UnaryOperator
+
 visit :: forall m. Monoid m => (ErlExpr -> m) -> ErlExpr -> m
 visit f = go
   where
@@ -232,7 +243,7 @@ visit f = go
   goes es = foldMap go es
   goFunHead :: FunHead -> m
   goFunHead (FunHead _ps mg) = foldMap (coerce go) mg
-  goIfClause (IfClause e1 e2) = go e1 <> go e2
+  goIfClause (IfClause e1 e2) = coerce go e1 <> go e2
   goCaseClause (CaseClause _p1 me2 e3) = foldMap (coerce go) me2 <> go e3
   go e0 = f e0 <> case e0 of
     Literal _ -> mempty
@@ -253,6 +264,13 @@ visit f = go
     BinOp _ e1 e2 -> go e1 <> go e2
     UnaryOp _ e1 -> go e1
     BinaryAppend e1 e2 -> go e1 <> go e2
+
+termSize :: ErlExpr -> Int
+termSize = unwrap <<< visit (const (Additive 1))
+
+moduleSize :: ErlModule -> Int
+moduleSize { definitions } = sum $ definitions <#>
+  \(FunctionDefinition _ _ expr) -> termSize expr
 
 macros :: ErlExpr -> Set.Set String
 macros = visit case _ of
@@ -316,12 +334,17 @@ access :: Accessor -> ErlExpr -> ErlExpr
 access = access' true
 
 applyAccessors :: ErlExpr -> Accessors -> ErlExpr
-applyAccessors = foldl (\e a -> access' false a e)
+applyAccessors = applyAccessors' false
+
+applyAccessors' :: Boolean -> ErlExpr -> Accessors -> ErlExpr
+applyAccessors' b = foldl (\e a -> access' b a e)
 
 access' :: Boolean -> Accessor -> ErlExpr -> ErlExpr
 access' true acs (Var v acrs) = Var v (acrs <> [acs])
 access' _ (AcsElement n) e = callGlobal "erlang" "element" [intLiteral n, e]
 access' _ (AcsKey k) e = callGlobal "erlang" "map_get" [atomLiteral k, e]
+access' _ (AcsItem n) e = callGlobal "lists" "nth" [intLiteral n, e]
+access' _ (AcsDrop n) e = callGlobal "lists" "nthtail" [intLiteral n, e]
 
 atomLiteral :: String -> ErlExpr
 atomLiteral = Literal <<< Atom
