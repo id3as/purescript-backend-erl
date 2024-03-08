@@ -43,7 +43,7 @@ import Node.Path as Path
 import Node.Process as Process
 import Parsing (parseErrorMessage)
 import PureScript.Backend.Erl.Constants (erlExt)
-import PureScript.Backend.Erl.Convert (codegenModule, initAcrossModules)
+import PureScript.Backend.Erl.Convert (Mode(..), codegenModule, initAcrossModules)
 import PureScript.Backend.Erl.Convert.Common (erlModuleNamePs, erlModuleNameForeign)
 import PureScript.Backend.Erl.Foreign (fullForeignSemantics)
 import PureScript.Backend.Erl.Foreign.Analyze (analyzeCustom)
@@ -123,7 +123,7 @@ runSnapshotTests { accept, compile, run, filter } = do
       for_ errors \(Tuple filePath err) -> do
         Console.error $ filePath <> " " <> err
       liftEffect $ Process.exit' 1
-    Right coreFnModules -> do
+    Right (Tuple coreFnModules timestamp) -> do
       Console.log "Got modules"
       let { directives } = parseDirectiveFile defaultDirectives
       coreFnModules # buildModules
@@ -148,7 +148,7 @@ runSnapshotTests { accept, compile, run, filter } = do
             foreigns <- either (throwError <<< Aff.error <<< parseErrorMessage) pure foreignsE
             prevConventions <- liftEffect $ Ref.read conventionsRef
             let
-              Tuple codegened nextConventions = codegenModule backend foreigns prevConventions
+              Tuple codegened nextConventions = codegenModule Debug backend foreigns prevConventions
               formatted =
                 Dodo.print plainText Dodo.twoSpaces
                   $ P.printModule codegened

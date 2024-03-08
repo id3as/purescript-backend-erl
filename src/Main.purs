@@ -10,11 +10,13 @@ import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Bifunctor (lmap)
 import Data.Either (Either(..), either)
-import Data.Foldable (for_, traverse_)
+import Data.Foldable (fold, foldMap, for_, traverse_)
 import Data.List as List
-import Data.Maybe (Maybe, fromMaybe)
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Monoid (power)
 import Data.Newtype (unwrap)
+import Data.Ord.Max (Max(..))
+import Data.Set (Set)
 import Data.Set as Set
 import Data.String as String
 import Data.String.CodeUnits as SCU
@@ -29,12 +31,13 @@ import Effect.Class.Console as Console
 import Effect.Ref as Ref
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff as FS
+import Node.FS.Stats (modifiedTimeMs)
 import Node.Library.Execa (execa)
 import Node.Path as Path
 import Node.Process as Process
 import Parsing (parseErrorMessage)
 import PureScript.Backend.Erl.Constants (erlExt)
-import PureScript.Backend.Erl.Convert (codegenModule, initAcrossModules)
+import PureScript.Backend.Erl.Convert (Mode(..), codegenModule, initAcrossModules)
 import PureScript.Backend.Erl.Convert.Common (erlModuleNamePs, erlModuleNameForeign)
 import PureScript.Backend.Erl.Foreign (fullForeignSemantics)
 import PureScript.Backend.Erl.Foreign.Analyze (analyzeCustom)
@@ -44,6 +47,7 @@ import PureScript.Backend.Optimizer.Builder (buildModules)
 import PureScript.Backend.Optimizer.CoreFn (Module(..), ModuleName(..))
 import PureScript.Backend.Optimizer.Directives (parseDirectiveFile)
 import PureScript.Backend.Optimizer.Directives.Defaults (defaultDirectives)
+import PureScript.CST.Errors (printParseError)
 import Test.Utils (coreFnModulesFromOutput, errored, mkdirp)
 
 type MainArgs =
@@ -104,21 +108,114 @@ runCompile { compile, filter, cwd } = do
   liftEffect $ traverse_ Process.chdir cwd
   currentDir <- liftEffect Process.cwd
   let outputDir = Path.concat [ currentDir, "output-erl" ]
-  let ebin = Path.concat [ outputDir, "ebin" ]
+  let buildFile = Path.concat [ outputDir, "build.txt" ]
   mkdirp outputDir
-  mkdirp ebin
-  erls <- liftEffect $ Ref.new []
-  conventionsRef <- liftEffect $ Ref.new initAcrossModules
-  coreFnModulesFromOutput "output" filter >>= case _ of
+  { coreFnModules, directives, finish } <- coreFnModulesFromOutput "output" filter >>= case _ of
     Left errors -> do
       for_ errors \(Tuple filePath err) -> do
         Console.error $ filePath <> " " <> err
       liftEffect $ Process.exit' 1
-    Right coreFnModules -> do
-      when (List.null coreFnModules) do
-        Console.log "No modules; try building"
+    Right (Tuple coreFnModules _) | List.null coreFnModules -> do
+      Console.log "No corefn modules found in ./output; try building"
+      liftEffect $ Process.exit' 0
+    Right (Tuple _ Nothing) -> do
+      Console.log "No corefn modules found in ./output; try building"
+      liftEffect $ Process.exit' 0
+    Right (Tuple coreFnModules (Just (Max timestamp))) -> do
+      let moduleNames = Set.fromFoldable $ coreFnModules <#> \(Module { name: ModuleName name }) -> name
       customDirectives <- map (either mempty identity) $ try $ FS.readTextFile UTF8 $ Path.concat [ currentDir, "directives.txt" ]
-      let { directives } = parseDirectiveFile (defaultDirectives <> moreDirectives <> customDirectives)
+      let allDirectives = defaultDirectives <> moreDirectives <> customDirectives
+      let { directives } = parseDirectiveFile allDirectives
+      do
+        let { errors: directivesErrors } = parseDirectiveFile customDirectives
+        when (not Array.null directivesErrors) do
+          Console.warn "Warning: errors parsing ./directives.txt:"
+          for_ directivesErrors \(Tuple lineContents { error, position: { line, column }}) -> do
+            Console.warn $ fold
+              [ "  Error at ./directives.txt:"
+              , show (line+1)
+              , ":"
+              , show (column+1)
+              , ":"
+              , "\n    "
+              , printParseError error
+              , ":"
+              , "\n      "
+              , lineContents
+              ]
+      buildTimestamp <- try $ modifiedTimeMs <$> FS.stat buildFile
+      case buildTimestamp of
+        Right lastBuild | lastBuild >= timestamp -> do
+          buildContents <- try $ FS.readTextFile UTF8 buildFile
+          case buildContents of
+            Right contents -> do
+              case parseBuildFile contents of
+                Just parsed
+                  | String.trim parsed.allDirectives /= String.trim allDirectives -> do
+                    Console.log "Rebuilding because directives changed"
+                  | not Set.subset moduleNames parsed.moduleNames -> do
+                    Console.log $ fold
+                      [ "Rebuilding with "
+                      , show (Set.size (Set.difference moduleNames parsed.moduleNames))
+                      , " new/different module(s)"
+                      ]
+                  | otherwise -> do
+                    checked <- try do
+                      Console.log "Checking FFI files ..."
+                      -- We need to check foreign files since their timestamps are
+                      -- not tracked: we can just copy them if their interface
+                      -- has not changed, otherwise we need to rebuild
+                      for_ coreFnModules \(Module { name: ModuleName name, path: reportedPath }) -> do
+                        let
+                          -- Sorry, working around a weird language server bug
+                          path = fromMaybe <*> String.stripPrefix (String.Pattern currentDir) $ reportedPath
+                          moduleOutputDir = Path.concat [ outputDir, name ]
+                          moduleOutputForeignPath = Path.concat [ moduleOutputDir, erlModuleNameForeign (ModuleName name) <> erlExt ]
+                          fileForeign =
+                            Path.concat [ currentDir, path ]
+                              # (fromMaybe <*> String.stripSuffix (String.Pattern ".purs"))
+                              # (_ <> ".erl")
+                        foreignFile <- try $ FS.readTextFile UTF8 fileForeign
+                        case foreignFile of
+                          -- Check that the FFI file has the same interface
+                          Right newContents -> do
+                            -- No `try`, this fails back to upper `try` to cancel
+                            -- if the file does not exist
+                            previous <- FS.readTextFile UTF8 moduleOutputForeignPath
+                            case parseFile previous, parseFile newContents of
+                              Right prev, Right next | prev == next -> do
+                                FS.writeTextFile UTF8 moduleOutputForeignPath newContents
+                              _, _ -> do
+                                throwError $ Aff.error $ "FFI interface changed " <> fileForeign
+                          -- Check that the FFI file did not exist
+                          -- (This requires that we delete FFI files from the
+                          -- build dir when they disappear too!)
+                          Left _ -> do
+                            try (FS.stat moduleOutputForeignPath) >>=
+                              case _ of
+                                -- The file exists in build dir
+                                Right _ -> throwError $ Aff.error $ "FFI file deleted " <> fileForeign
+                                -- Both files do not exist: OK
+                                Left _ -> pure unit
+                        -- If all looks good, we fall into this
+                      Console.log "... up to date!"
+                      Console.log "Run `rm ./output-erl/build.txt` to force a rebuild"
+                      liftEffect $ Process.exit' 0
+                    case checked of
+                      Right impossible -> absurd impossible
+                      Left err -> do
+                        Console.log $ "... " <> Aff.message err
+                Nothing -> do
+                  Console.warn "Could not parse ./output-erl/build.txt"
+            _ -> pure unit -- Build file does not exist
+        _ -> pure unit -- Build file does not exist
+      FS.writeTextFile UTF8 buildFile $ printBuildFile { moduleNames: mempty, allDirectives }
+      finish <- pure do
+        FS.writeTextFile UTF8 buildFile $ printBuildFile { moduleNames, allDirectives }
+      pure { coreFnModules, directives, finish }
+  do
+      erls <- liftEffect $ Ref.new []
+      conventionsRef <- liftEffect $ Ref.new initAcrossModules
       coreFnModules # buildModules
         { directives
         , analyzeCustom
@@ -144,7 +241,7 @@ runCompile { compile, filter, cwd } = do
             foreigns <- either (throwError <<< Aff.error) pure foreignsE
             prevConventions <- liftEffect $ Ref.read conventionsRef
             let
-              Tuple codegened nextConventions = codegenModule backend foreigns prevConventions
+              Tuple codegened nextConventions = codegenModule NoDebug backend foreigns prevConventions
             let
               formatted =
                 Dodo.print plainText Dodo.twoSpaces
@@ -152,9 +249,13 @@ runCompile { compile, filter, cwd } = do
             liftEffect $ Ref.write nextConventions conventionsRef
             mkdirp moduleOutputDir
             FS.writeTextFile UTF8 moduleOutputPath formatted
-            for_ foreignFile \x -> do
-              FS.writeTextFile UTF8 moduleOutputForeignPath x
-              liftEffect $ Ref.modify_ (_ <> [moduleOutputForeignPath]) erls
+            case foreignFile of
+              Right contents -> do
+                FS.writeTextFile UTF8 moduleOutputForeignPath contents
+                liftEffect $ Ref.modify_ (_ <> [moduleOutputForeignPath]) erls
+              Left _ -> do
+                void $ try $ FS.rm' moduleOutputForeignPath
+                  { force: false, maxRetries: 0, recursive: false, retryDelay: 10 }
             liftEffect $ Ref.modify_ (_ <> [moduleOutputPath]) erls
         , onPrepareModule: \build coreFnMod@(Module { name }) -> do
             let total = show build.moduleCount
@@ -163,12 +264,49 @@ runCompile { compile, filter, cwd } = do
             Console.log $ "[" <> padding <> index <> " of " <> total <> "] Building " <> unwrap name
             pure coreFnMod
         }
+      compiledFiles <- liftEffect $ Ref.read erls
       when compile do
-        filesToCompile <- liftEffect $ Ref.read erls
-        spawned <- execa "erlc" ([ "+no_ssa_opt", "-o", ebin, "-W0" ] <> filesToCompile) identity
+        let ebin = Path.concat [ outputDir, "ebin" ]
+        mkdirp ebin
+        spawned <- execa "erlc" ([ "+no_ssa_opt", "-o", ebin, "-W0" ] <> compiledFiles) identity
         spawned.getResult >>= case _ of
           e@{ message } | errored e -> do
             Console.log $ withGraphics (foreground Red) "✗ failed to compile."
             Console.log message
           _ -> pure unit
-      pure unit
+      FS.writeTextFile UTF8 (Path.concat [ outputDir, "build_products.txt" ]) $
+        String.joinWith "\n" compiledFiles <> "\n"
+      -- Write out build file
+      finish
+
+-- | We maintain `./output-erl/build.txt` as a record of what modules have been
+-- | built so we can avoid needless rebuilds. (Not a substitute for proper
+-- | incrementalism.)
+-- |
+-- | The inputs to the build are the CoreFn modules and the set of directives,
+-- | so we record them both, since `--filter` and `./directives.txt` can change.
+-- | Additionally, the timestamp of the file is compared to the timestamps
+-- | of the `corefn.json` files produced by `purs`.
+type BuildFileInfo =
+  { moduleNames :: Set String
+  , allDirectives :: String
+  }
+
+-- Can bump this to invalidate the build file between versions
+buildFileSep :: String
+buildFileSep = "#### 0.0.2 ####\n"
+
+printBuildFile :: BuildFileInfo -> String
+printBuildFile { moduleNames, allDirectives } = fold
+  [ moduleNames # foldMap \name -> name <> "\n"
+  , buildFileSep
+  , allDirectives
+  ]
+
+parseBuildFile :: String -> Maybe BuildFileInfo
+parseBuildFile whole = do
+  sepPos <- String.indexOf (String.Pattern buildFileSep) whole
+  let { before, after } = String.splitAt sepPos whole
+  allDirectives <- String.stripPrefix (String.Pattern buildFileSep) after
+  let moduleNames = Set.fromFoldable $ String.split (String.Pattern "\n") $ String.trim before
+  pure { moduleNames, allDirectives }

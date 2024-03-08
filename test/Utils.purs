@@ -9,7 +9,8 @@ module Test.Utils where
 
 import Prelude
 
-import Control.Monad.Except (ExceptT(..), lift, runExceptT)
+import Control.Monad.Except (ExceptT(..), runExceptT)
+import Control.Monad.Writer (WriterT(..), runWriterT)
 import Control.Parallel (parTraverse)
 import Data.Argonaut as Json
 import Data.Array (intercalate)
@@ -18,15 +19,17 @@ import Data.Array.NonEmpty.Internal (NonEmptyArray)
 import Data.Bifunctor (lmap)
 import Data.Compactable (separate)
 import Data.Either (Either(..))
-import Data.Foldable (foldl)
+import Data.Foldable (foldMap, foldl)
 import Data.Lazy as Lazy
 import Data.List (List)
 import Data.Maybe (Maybe(..), maybe)
+import Data.Ord.Max (Max(..))
 import Data.Set as Set
 import Data.Set.NonEmpty as NonEmptySet
 import Data.String as String
-import Data.Tuple (Tuple(..))
-import Effect.Aff (Aff, effectCanceler, error, makeAff, throwError)
+import Data.Tuple (Tuple(..), fst, snd)
+import Effect.Aff (Aff, Milliseconds, effectCanceler, error, makeAff, throwError)
+import Effect.Aff.Class (liftAff)
 import Effect.Class (liftEffect)
 import Effect.Class.Console (log)
 import Effect.Class.Console as Console
@@ -41,6 +44,7 @@ import Node.EventEmitter as EE
 import Node.FS.Aff as FS
 import Node.FS.Perms (mkPerms)
 import Node.FS.Perms as Perms
+import Node.FS.Stats (modifiedTimeMs)
 import Node.FS.Stats as Stats
 import Node.FS.Stream (createReadStream, createWriteStream)
 import Node.Glob.Basic (expandGlobs)
@@ -149,12 +153,19 @@ copyFile from to = do
       Stream.destroy dst
       Stream.destroy src
 
+type LastTimestamp = Maybe (Max Milliseconds)
+
+-- | Read `corefn.json` files and return the latest timestamp. Unlike `purs`
+-- | itself, which tracks timestamps exactly because source control systems
+-- | may revert to older timestamps and still require a rebuild, we can trust
+-- | the timestamps of `corefn.json` files since they are managed by the
+-- | compiler (`purs compile` and `purs ide`).
 coreFnModulesFromOutput
   :: String
   -> NonEmptyArray String
-  -> Aff (Either (NonEmptyArray (Tuple FilePath String)) (List (Module Ann)))
-coreFnModulesFromOutput path globs = runExceptT do
-  paths <- Set.toUnfoldable <$> lift
+  -> Aff (Either (NonEmptyArray (Tuple FilePath String)) (Tuple (List (Module Ann)) LastTimestamp))
+coreFnModulesFromOutput path globs = runExceptT $ runWriterT do
+  paths <- Set.toUnfoldable <$> liftAff
     (expandGlobs path ((_ <> "/corefn.json") <$> NonEmptyArray.toArray globs))
   case NonEmptyArray.toArray globs of
     [ "**" ] ->
@@ -162,9 +173,12 @@ coreFnModulesFromOutput path globs = runExceptT do
     _ ->
       go <<< foldl resumePull emptyPull =<< modulesFromPaths paths
   where
-  modulesFromPaths paths = ExceptT do
+  modulesFromPaths :: _ -> WriterT LastTimestamp (ExceptT (NonEmptyArray (Tuple FilePath String)) Aff) _
+  modulesFromPaths paths = WriterT $ ExceptT do
     { left, right } <- separate <$> parTraverse readCoreFnModule paths
-    pure $ maybe (Right right) Left $ NonEmptyArray.fromArray left
+    case NonEmptyArray.fromArray left of
+      Nothing -> pure $ Right $ Tuple (map fst right) (foldMap snd right)
+      Just errors -> pure $ Left errors
 
   pathFromModuleName (ModuleName mn) =
     path <> "/" <> mn <> "/corefn.json"
@@ -176,11 +190,12 @@ coreFnModulesFromOutput path globs = runExceptT do
     Right modules ->
       pure $ Lazy.force modules
 
-readCoreFnModule :: String -> Aff (Either (Tuple FilePath String) (Module Ann))
+readCoreFnModule :: String -> Aff (Either (Tuple FilePath String) (Tuple (Module Ann) LastTimestamp))
 readCoreFnModule filePath = do
   contents <- FS.readTextFile UTF8 filePath
+  time <- modifiedTimeMs <$> FS.stat filePath
   case lmap Json.printJsonDecodeError <<< decodeModule =<< Json.jsonParser contents of
     Left err -> do
       pure $ Left $ Tuple filePath err
     Right mod ->
-      pure $ Right mod
+      pure $ Right $ Tuple mod (Just (Max time))

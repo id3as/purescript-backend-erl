@@ -51,8 +51,10 @@ type AcrossModules =
 initAcrossModules :: AcrossModules
 initAcrossModules = { callingConventions: mempty, constructors: Map.empty }
 
-codegenModule :: BackendModule -> ForeignDecls -> AcrossModules -> Tuple ErlModule AcrossModules
-codegenModule backendModule@{ name: currentModule, bindings, imports, foreign: foreign_, dataTypes, exports: moduleExports } foreigns rolling =
+data Mode = Debug | NoDebug
+
+codegenModule :: Mode -> BackendModule -> ForeignDecls -> AcrossModules -> Tuple ErlModule AcrossModules
+codegenModule mode backendModule@{ name: currentModule, bindings, imports, foreign: foreign_, dataTypes, exports: moduleExports } foreigns rolling =
   let
     allBindings = bindings >>= _.bindings
     Tuple thisModuleConventions thisModuleBindings = foldMap (codegenTopLevelBinding currentModule) allBindings
@@ -89,14 +91,6 @@ codegenModule backendModule@{ name: currentModule, bindings, imports, foreign: f
       , constructors
       }
 
-    rawDefinitions :: Array ErlDefinition
-    rawDefinitions = Array.concat
-      [ thisModuleBindings <@> codegenEnv
-      , reexportForeigns <#> snd
-      , moreModuleBindings <@> codegenEnv
-      ]
-    definitions = optimizePatternsDecl <$> rawDefinitions
-
     reexportForeigns :: Array (Tuple Conventions ErlDefinition)
     reexportForeigns = foreigns.exported >>= \(Tuple decl arity) -> do
       guard $ Ident decl `Set.member` foreign_
@@ -117,6 +111,25 @@ codegenModule backendModule@{ name: currentModule, bindings, imports, foreign: f
       pure $ Tuple calling $ FunctionDefinition decl [] $
         S.curriedFun pats $
           S.FunCall (Just (S.atomLiteral (erlModuleNameForeign currentModule))) (S.atomLiteral decl) vars
+
+    { rawDefinitions, definitions } = case mode of
+      Debug ->
+        let
+          rawDefinitions = Array.concat
+            [ thisModuleBindings <@> codegenEnv
+            , reexportForeigns <#> snd
+            , moreModuleBindings <@> codegenEnv
+            ]
+          definitions = optimizePatternsDecl <$> rawDefinitions
+        in { rawDefinitions, definitions }
+      NoDebug ->
+        let
+          definitions = Array.concat
+            [ thisModuleBindings <@> codegenEnv
+            , reexportForeigns <#> snd
+            , moreModuleBindings <@> codegenEnv
+            ] <#> optimizePatternsDecl
+        in { rawDefinitions: definitions, definitions }
 
     exports :: Array ErlExport
     exports = definitionExports <$> definitions
