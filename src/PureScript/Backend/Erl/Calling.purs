@@ -801,7 +801,7 @@ codegenArg :: forall call i o. Structure call => Pattern (i -> o) call i o
 codegenArg = withEnv (map (#) arg)
 
 func :: forall env i o. String -> Pattern env CallingPS i o -> Pattern env (CWB CallingPS (Qualified Ident)) i o
-func _ (Pure o) = Pure o
+func name (Pure o) = Pattern (CWB (qualPS name) BasePS) \env _ -> o env
 func name (Pattern shape parser) =
   let qi = qualPS name in
   Pattern (CWB qi shape) \env -> case _ of

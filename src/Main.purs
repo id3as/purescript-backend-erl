@@ -1,4 +1,4 @@
-module Main where
+module PureScript.Backend.Erl.Main where
 
 import Prelude
 
@@ -36,17 +36,21 @@ import Node.Library.Execa (execa)
 import Node.Path as Path
 import Node.Process as Process
 import Parsing (parseErrorMessage)
+import PureScript.Backend.Erl.Calling (Converter, qualPS)
 import PureScript.Backend.Erl.Constants (erlExt)
 import PureScript.Backend.Erl.Convert (Mode(..), codegenModule, initAcrossModules)
 import PureScript.Backend.Erl.Convert.Common (erlModuleNamePs, erlModuleNameForeign)
+import PureScript.Backend.Erl.Convert.Foreign (mkConverters)
 import PureScript.Backend.Erl.Foreign (fullForeignSemantics)
-import PureScript.Backend.Erl.Foreign.Analyze (analyzeCustom)
+import PureScript.Backend.Erl.Foreign.Analyze (Analyzer, analyzeCustom)
 import PureScript.Backend.Erl.Parser (parseFile)
 import PureScript.Backend.Erl.Printer as P
 import PureScript.Backend.Optimizer.Builder (buildModules)
 import PureScript.Backend.Optimizer.CoreFn (Module(..), ModuleName(..))
 import PureScript.Backend.Optimizer.Directives (parseDirectiveFile)
 import PureScript.Backend.Optimizer.Directives.Defaults (defaultDirectives)
+import PureScript.Backend.Optimizer.Semantics.Foreign (ForeignSemantics)
+import PureScript.Backend.Optimizer.Tracer.Printer (printModuleSteps)
 import PureScript.CST.Errors (printParseError)
 import Test.Utils (coreFnModulesFromOutput, errored, mkdirp)
 
@@ -76,13 +80,16 @@ argParser =
     }
 
 main :: Effect Unit
-main = do
+main = customMain mempty
+
+customMain :: CustomCodegen -> Effect Unit
+customMain custom = do
   cliArgs <- Array.drop 2 <$> Process.argv
   case ArgParser.parseArgs "test" "" argParser cliArgs of
     Left err ->
       Console.error $ ArgParser.printArgError err
     Right args ->
-      launchAff_ $ runCompile args
+      launchAff_ $ runCompileCustom custom args
 
 moreDirectives :: String
 moreDirectives = """
@@ -102,15 +109,27 @@ Stetson.HandlerProxy.accept arity=1
 --   , flushBuffer: \buff -> buff
 --   }
 
+type CustomCodegen =
+  { customAnalysis :: Array Analyzer
+  , customEval :: Array ForeignSemantics
+  , customCodegen :: Array Converter
+  }
 
 runCompile :: MainArgs -> Aff Unit
-runCompile { compile, filter, cwd } = do
+runCompile = runCompileCustom mempty
+
+runCompileCustom :: CustomCodegen -> MainArgs -> Aff Unit
+runCompileCustom custom { compile, filter, cwd } = do
+  let
+    customEval = fullForeignSemantics custom.customEval
+    customCodegen = mkConverters custom.customCodegen
+    customAnalysis = custom.customAnalysis
   liftEffect $ traverse_ Process.chdir cwd
   currentDir <- liftEffect Process.cwd
   let outputDir = Path.concat [ currentDir, "output-erl" ]
   let buildFile = Path.concat [ outputDir, "build.txt" ]
   mkdirp outputDir
-  { coreFnModules, directives, finish } <- coreFnModulesFromOutput "output" filter >>= case _ of
+  { coreFnModules, directives, finish, traceIdents } <- coreFnModulesFromOutput "output" filter >>= case _ of
     Left errors -> do
       for_ errors \(Tuple filePath err) -> do
         Console.error $ filePath <> " " <> err
@@ -124,6 +143,16 @@ runCompile { compile, filter, cwd } = do
     Right (Tuple coreFnModules (Just (Max timestamp))) -> do
       let moduleNames = Set.fromFoldable $ coreFnModules <#> \(Module { name: ModuleName name }) -> name
       customDirectives <- map (either mempty identity) $ try $ FS.readTextFile UTF8 $ Path.concat [ currentDir, "directives.txt" ]
+      traceStrings <- map (either mempty identity) $ try $ FS.readTextFile UTF8 $ Path.concat [ currentDir, "traces.txt" ]
+      when (traceStrings /= mempty) do
+        FS.writeTextFile UTF8 "optimization-traces.txt" ""
+      let
+        traceIdents =
+          Set.fromFoldable $ String.split (String.Pattern "\n") traceStrings
+            # map (String.split (String.Pattern "#") >>> Array.head >>> fromMaybe "")
+            # map String.trim
+            # Array.filter (_ /= "")
+            # map qualPS
       let allDirectives = defaultDirectives <> moreDirectives <> customDirectives
       let { directives } = parseDirectiveFile allDirectives
       do
@@ -212,16 +241,16 @@ runCompile { compile, filter, cwd } = do
       FS.writeTextFile UTF8 buildFile $ printBuildFile { moduleNames: mempty, allDirectives }
       finish <- pure do
         FS.writeTextFile UTF8 buildFile $ printBuildFile { moduleNames, allDirectives }
-      pure { coreFnModules, directives, finish }
+      pure { coreFnModules, directives, finish, traceIdents }
   do
       erls <- liftEffect $ Ref.new []
       conventionsRef <- liftEffect $ Ref.new initAcrossModules
       coreFnModules # buildModules
         { directives
-        , analyzeCustom
-        , foreignSemantics: fullForeignSemantics
-        , traceIdents: mempty
-        , onCodegenModule: \_ (Module { name: ModuleName name, path: reportedPath, exports }) (backend) _ -> do
+        , analyzeCustom: analyzeCustom custom.customAnalysis
+        , foreignSemantics: customEval
+        , traceIdents: traceIdents
+        , onCodegenModule: \_ (Module { name: ModuleName name, path: reportedPath }) backend allSteps -> do
             -- Sorry, working around a weird language server bug
             let path = fromMaybe <*> String.stripPrefix (String.Pattern currentDir) $ reportedPath
             let moduleOutputDir = Path.concat [ outputDir, name ]
@@ -241,7 +270,8 @@ runCompile { compile, filter, cwd } = do
             foreigns <- either (throwError <<< Aff.error) pure foreignsE
             prevConventions <- liftEffect $ Ref.read conventionsRef
             let
-              Tuple codegened nextConventions = codegenModule NoDebug backend foreigns prevConventions
+              Tuple codegened nextConventions =
+                codegenModule { customEval, customCodegen, customAnalysis } NoDebug backend foreigns prevConventions
             let
               formatted =
                 Dodo.print plainText Dodo.twoSpaces
@@ -257,6 +287,9 @@ runCompile { compile, filter, cwd } = do
                 void $ try $ FS.rm' moduleOutputForeignPath
                   { force: false, maxRetries: 0, recursive: false, retryDelay: 10 }
             liftEffect $ Ref.modify_ (_ <> [moduleOutputPath]) erls
+            unless (Array.null allSteps) do
+              let allDoc = printModuleSteps (ModuleName name) allSteps <> Dodo.break <> Dodo.break
+              FS.appendTextFile UTF8 "optimization-traces.txt" $ Dodo.print Dodo.plainText Dodo.twoSpaces allDoc
         , onPrepareModule: \build coreFnMod@(Module { name }) -> do
             let total = show build.moduleCount
             let index = show (build.moduleIndex + 1)
@@ -294,7 +327,7 @@ type BuildFileInfo =
 
 -- Can bump this to invalidate the build file between versions
 buildFileSep :: String
-buildFileSep = "#### 0.0.2 ####\n"
+buildFileSep = "#### 0.0.3 ####\n"
 
 printBuildFile :: BuildFileInfo -> String
 printBuildFile { moduleNames, allDirectives } = fold

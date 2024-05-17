@@ -14,7 +14,7 @@
   },
   "scripts": {
     "test": "spago test -- --run",
-    "build": "spago build && purs-backend-es bundle-module --platform=node --to=bundle/index.js",
+    "build": "spago build && purs-backend-es bundle-module --main PureScript.Backend.Erl.Main --platform=node --to=bundle/index.js",
     "prepublishOnly": "rm -rf bundle/index.js output output-es && npm run build"
   },
   "devDependencies": {

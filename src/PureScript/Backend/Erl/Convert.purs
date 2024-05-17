@@ -23,14 +23,14 @@ import PureScript.Backend.Erl.Constants as C
 import PureScript.Backend.Erl.Convert.After (optimizePatternsDecl)
 import PureScript.Backend.Erl.Convert.Common (erlModuleNameForeign, erlModuleNamePs, tagAtom, toAtomName, toErlVar, toErlVarName, toErlVarPat, toErlVarWith)
 import PureScript.Backend.Erl.Convert.Foreign (codegenForeign)
-import PureScript.Backend.Erl.Foreign (fullForeignSemantics)
-import PureScript.Backend.Erl.Foreign.Analyze (analyzeCustom)
+import PureScript.Backend.Erl.Foreign.Analyze (Analyzer, analyzeCustom)
 import PureScript.Backend.Erl.Parser (ForeignDecls)
 import PureScript.Backend.Erl.Syntax (Accessor(..), ErlDefinition(..), ErlExport(..), ErlExpr, ErlModule, ErlPattern, access, atomLiteral, mIS_KNOWN_TAG, self)
 import PureScript.Backend.Erl.Syntax as S
 import PureScript.Backend.Optimizer.Convert (BackendModule, ConvertEnv, getCtx, makeExternEvalRef, makeExternEvalSpine)
 import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal(..), ModuleName(..), Prop(..), Qualified(..))
 import PureScript.Backend.Optimizer.Semantics (BackendExpr(..), BackendSemantics(..), Ctx(..), Env(..), LocalBinding(..), NeutralExpr(..), foldBackendExpr, optimize)
+import PureScript.Backend.Optimizer.Semantics.Foreign (ForeignEval)
 import PureScript.Backend.Optimizer.Syntax (BackendAccessor(..), BackendOperator(..), BackendOperator1(..), BackendOperator2(..), BackendOperatorNum(..), BackendOperatorOrd(..), BackendSyntax(..), Level(..), Pair(..))
 
 type CodegenEnv =
@@ -41,6 +41,13 @@ type CodegenEnv =
   , callingConventions :: Converters
   , callsHandled :: Boolean
   , constructors :: Map (Qualified Ident) Int
+  , custom :: CustomCodegen
+  }
+
+type CustomCodegen =
+  { customEval :: Map.Map (Qualified Ident) ForeignEval
+  , customCodegen :: Converters
+  , customAnalysis :: Array Analyzer
   }
 
 type AcrossModules =
@@ -53,14 +60,14 @@ initAcrossModules = { callingConventions: mempty, constructors: Map.empty }
 
 data Mode = Debug | NoDebug
 
-codegenModule :: Mode -> BackendModule -> ForeignDecls -> AcrossModules -> Tuple ErlModule AcrossModules
-codegenModule mode backendModule@{ name: currentModule, bindings, imports, foreign: foreign_, dataTypes, exports: moduleExports } foreigns rolling =
+codegenModule :: CustomCodegen -> Mode -> BackendModule -> ForeignDecls -> AcrossModules -> Tuple ErlModule AcrossModules
+codegenModule custom mode backendModule@{ name: currentModule, bindings, imports, foreign: foreign_, dataTypes } foreigns rolling =
   let
     allBindings = bindings >>= _.bindings
     Tuple thisModuleConventions thisModuleBindings = foldMap (codegenTopLevelBinding currentModule) allBindings
 
     -- Transitively uncurry some definitions
-    moreModuleStuff = uncurryMore backendModule (withForeignConventions <> thisModuleConventions) allBindings
+    moreModuleStuff = uncurryMore custom backendModule (withForeignConventions <> thisModuleConventions) allBindings
     moreModuleBindings = snd moreModuleStuff
     moreModuleConventions = thisModuleConventions <> fst moreModuleStuff
 
@@ -89,6 +96,7 @@ codegenModule mode backendModule@{ name: currentModule, bindings, imports, forei
       , callingConventions: applyConventions $ narrowToImports localCallingConventions
       , callsHandled: false
       , constructors
+      , custom
       }
 
     reexportForeigns :: Array (Tuple Conventions ErlDefinition)
@@ -151,12 +159,12 @@ definitionExports = case _ of
   FunctionDefinition f a _ ->
     Export f (Array.length a)
 
-reOptimize :: BackendModule -> Qualified Ident -> Array (Tuple (Maybe Ident) Level) -> NeutralExpr -> NeutralExpr
-reOptimize thisModule qualifiedIdent addedLocals neutralExpr =
+reOptimize :: CustomCodegen -> BackendModule -> Qualified Ident -> Array (Tuple (Maybe Ident) Level) -> NeutralExpr -> NeutralExpr
+reOptimize custom thisModule qualifiedIdent addedLocals neutralExpr =
   foldBackendExpr NeutralExpr (\_ neutExpr -> neutExpr) $ snd $
     optimize false ctx evalEnv qualifiedIdent 100 backendExpr
   where
-  env = (convertEnv thisModule)
+  env = (convertEnv custom thisModule)
     { currentLevel = Array.length addedLocals
     , toLevel = Map.fromFoldable $ addedLocals # Array.mapMaybe \(Tuple mi l) -> Tuple <$> mi <@> l
     }
@@ -184,9 +192,9 @@ shift amt (NeutralExpr (Let i (Level l) a1 a2)) = NeutralExpr (Let i (Level (l +
 shift amt (NeutralExpr (EffectBind i (Level l) a1 a2)) = NeutralExpr (EffectBind i (Level (l + amt)) (shift amt a1) (shift amt a2))
 shift amt (NeutralExpr x) = NeutralExpr (map (shift amt) x)
 
-convertEnv :: BackendModule -> ConvertEnv
-convertEnv { name, implementations, directives } =
-  { analyzeCustom
+convertEnv :: CustomCodegen -> BackendModule -> ConvertEnv
+convertEnv { customAnalysis, customEval } { name, implementations, directives } =
+  { analyzeCustom: analyzeCustom customAnalysis
   , currentModule: name
   , currentLevel: 0
   , toLevel: Map.empty
@@ -194,31 +202,33 @@ convertEnv { name, implementations, directives } =
   , moduleImplementations: Map.empty
   , directives
   , dataTypes: Map.empty
-  , foreignSemantics: fullForeignSemantics
+  , foreignSemantics: customEval
   , rewriteLimit: 10_000
   , traceIdents: mempty
   , optimizationSteps: []
   }
 
 uncurryMore ::
+  CustomCodegen ->
   BackendModule ->
   Conventions ->
   Array (Tuple Ident NeutralExpr) ->
   Tuple Conventions (Array (CodegenEnv -> ErlDefinition))
-uncurryMore mod c0 decls = go mempty []
+uncurryMore custom mod c0 decls = go mempty []
   where
   go c1 added =
-    case foldMap (uncurryMore1 mod (c0 <> c1)) decls of
+    case foldMap (uncurryMore1 custom mod (c0 <> c1)) decls of
       Tuple _ [] -> Tuple c1 added
       Tuple c2 more ->
         go (c1 <> c2) (added <> more)
 
 uncurryMore1 ::
+  CustomCodegen ->
   BackendModule ->
   Conventions ->
   Tuple Ident NeutralExpr ->
   Tuple Conventions (Array (CodegenEnv -> ErlDefinition))
-uncurryMore1 backendModule (SemigroupMap conventions) (Tuple (Ident i) n) =
+uncurryMore1 custom backendModule (SemigroupMap conventions) (Tuple (Ident i) n) =
   -- Dredge up some partially applied definitions
   case toBase unit n of
     Just (CWB qi args) | Just arities <- Map.lookup qi conventions ->
@@ -236,7 +246,7 @@ uncurryMore1 backendModule (SemigroupMap conventions) (Tuple (Ident i) n) =
               Array.singleton $
                 \codegenEnv -> FunctionDefinition i abstractedFlat $ codegenExpr codegenEnv $
                   -- catch some optimizations, like `+` inlining and MagicDo
-                  reOptimize backendModule thisBinding (Array.fromFoldable abstracted) $
+                  reOptimize custom backendModule thisBinding (Array.fromFoldable abstracted) $
                     -- stitch together the new call with the extra variables,
                     -- which will trigger specialization in `codegenExpr` if
                     -- it isn't already optimized by the backend-optimizer
@@ -303,7 +313,7 @@ setCallsHandled callsHandled codegenEnv = codegenEnv { callsHandled = callsHandl
 
 codegenExpr :: CodegenEnv -> NeutralExpr -> ErlExpr
 codegenExpr codegenEnv0@{ currentModule } s | codegenEnv <- setCallsHandled false codegenEnv0 = case unwrap s of
-  _ | not codegenEnv.callsHandled, Just result <- codegenForeign (codegenExpr codegenEnv) s ->
+  _ | not codegenEnv.callsHandled, Just result <- codegenForeign codegenEnv.custom.customCodegen (codegenExpr codegenEnv) s ->
     result
 
   _ | not codegenEnv.callsHandled, Just result <- converts' codegenEnv.callingConventions (codegenExpr codegenEnv) s ->

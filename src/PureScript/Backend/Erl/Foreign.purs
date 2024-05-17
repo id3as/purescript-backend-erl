@@ -1,4 +1,4 @@
-module PureScript.Backend.Erl.Foreign ( fullForeignSemantics, erlForeignSemantics ) where
+module PureScript.Backend.Erl.Foreign where
 
 import Prelude
 
@@ -22,16 +22,16 @@ import PureScript.Backend.Optimizer.Syntax (BackendOperator(..), BackendOperator
 stop :: String -> Tuple (Qualified Ident) ForeignEval
 stop name = evaluator $ func name $ noArgs $> NeutStop (qualPS name)
 
-fullForeignSemantics :: Map.Map (Qualified Ident) ForeignEval
-fullForeignSemantics = Map.union erlForeignSemantics $
+fullForeignSemantics :: Array ForeignSemantics -> Map.Map (Qualified Ident) ForeignEval
+fullForeignSemantics custom = Map.union (erlForeignSemantics custom) $
   coreForeignSemantics # Map.filterKeys
     \(Qualified mod _) -> mod `notElem`
       [ Just (ModuleName "Effect.Ref")
       , Just (ModuleName "Control.Monad.ST.Internal")
       ]
 
-erlForeignSemantics :: Map (Qualified Ident) ForeignEval
-erlForeignSemantics = Map.fromFoldable $
+erlForeignSemantics :: Array ForeignSemantics -> Map (Qualified Ident) ForeignEval
+erlForeignSemantics custom = Map.fromFoldable $
   [ data_array_indexImpl
   , erl_data_list_types_appendImpl
   , erl_data_list_types_uncons
@@ -44,7 +44,9 @@ erlForeignSemantics = Map.fromFoldable $
   , recognizeCoercions
   , stop <$>
     [ "Erl.Data.Map.fromFoldable"
+    , "Avp.Common.toSuperset"
     ]
+  , custom
   ]
 
 helper :: String -> String -> Int -> BackendSemantics -> Maybe (Array BackendSemantics)
@@ -230,8 +232,9 @@ erl_atom =
 erl_data_variant_internal_matchImpl :: ForeignSemantics
 erl_data_variant_internal_matchImpl = evaluator $ func "Erl.Data.Variant.Internal.matchImpl" $ compact $ partial ado
   fns <- arg' \(NeutLit (LitRecord fns)) -> fns
-  Tuple (NeutLit (LitString variantType)) variantValue <- arg'' \(NeutLit (LitRecord props)) ->
-    Tuple <$> findProp "type" props <*> findProp "value" props
+  Tuple variantType variantValue <- arg'' \(NeutLit (LitRecord props)) ->
+    let Just (NeutLit (LitString variantType)) = findProp "type" props
+    in Tuple variantType <$> findProp "value" props
   env <- getEnv
   in evalApp env <$> findProp variantType fns <@> [variantValue]
 

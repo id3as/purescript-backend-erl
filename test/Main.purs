@@ -18,6 +18,7 @@ import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Either (Either(..), either)
 import Data.Foldable (elem, for_)
 import Data.Foldable as Foldable
+import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, isJust)
 import Data.Monoid (power)
 import Data.Newtype (unwrap)
@@ -45,6 +46,7 @@ import Parsing (parseErrorMessage)
 import PureScript.Backend.Erl.Constants (erlExt)
 import PureScript.Backend.Erl.Convert (Mode(..), codegenModule, initAcrossModules)
 import PureScript.Backend.Erl.Convert.Common (erlModuleNamePs, erlModuleNameForeign)
+import PureScript.Backend.Erl.Convert.Foreign (mkConverters)
 import PureScript.Backend.Erl.Foreign (fullForeignSemantics)
 import PureScript.Backend.Erl.Foreign.Analyze (analyzeCustom)
 import PureScript.Backend.Erl.Parser (parseFile)
@@ -100,7 +102,12 @@ main = do
 
 runSnapshotTests :: TestArgs -> Aff Unit
 runSnapshotTests { accept, compile, run, filter } = do
-  Console.log "Hi"
+  let
+    custom =
+      { customEval: fullForeignSemantics []
+      , customCodegen: mkConverters []
+      , customAnalysis: []
+      }
   liftEffect $ Process.chdir $ Path.concat [ "test-snapshots" ]
   spawnFromParent "spago" [ "build" ]
   Console.log "Did spago"
@@ -128,8 +135,8 @@ runSnapshotTests { accept, compile, run, filter } = do
       let { directives } = parseDirectiveFile defaultDirectives
       coreFnModules # buildModules
         { directives
-        , analyzeCustom
-        , foreignSemantics: fullForeignSemantics
+        , analyzeCustom: analyzeCustom []
+        , foreignSemantics: fullForeignSemantics []
         , traceIdents: mempty
         , onCodegenModule: \_ (Module { name: ModuleName name, path: reportedPath, exports }) (backend) _ -> do
             -- Sorry, working around a weird language server bug
@@ -148,7 +155,8 @@ runSnapshotTests { accept, compile, run, filter } = do
             foreigns <- either (throwError <<< Aff.error <<< parseErrorMessage) pure foreignsE
             prevConventions <- liftEffect $ Ref.read conventionsRef
             let
-              Tuple codegened nextConventions = codegenModule Debug backend foreigns prevConventions
+              Tuple codegened nextConventions =
+                codegenModule custom Debug backend foreigns prevConventions
               formatted =
                 Dodo.print plainText Dodo.twoSpaces
                   $ P.printModule codegened

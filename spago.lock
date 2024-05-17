@@ -29,6 +29,7 @@ workspace:
         - node-buffer
         - node-execa
         - node-fs
+        - node-glob-basic
         - node-path
         - node-process
         - ordered-collections
@@ -61,7 +62,6 @@ workspace:
         - node-event-emitter
         - node-execa
         - node-fs
-        - node-glob-basic
         - node-path
         - node-process
         - node-streams

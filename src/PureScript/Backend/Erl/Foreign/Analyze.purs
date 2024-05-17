@@ -6,14 +6,18 @@ import Data.Array as Array
 import Data.Array.NonEmpty as NEA
 import Data.Foldable (foldMap)
 import Data.Maybe (Maybe(..))
-import PureScript.Backend.Optimizer.Analysis (BackendAnalysis(..), Complexity(..), ResultTerm(..), analysisOf, bump, complex, externs, usedDep, withResult)
+import Partial.Unsafe (unsafePartial)
+import PureScript.Backend.Erl.Calling (qualPS)
+import PureScript.Backend.Optimizer.Analysis (BackendAnalysis(..), Complexity(..), ResultTerm(..), analysisOf, analyzeDefault, bump, withResult)
 import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal(..), ModuleName(..), Qualified(..))
 import PureScript.Backend.Optimizer.Semantics (BackendExpr(..), Ctx)
 import PureScript.Backend.Optimizer.Syntax (BackendSyntax(..))
 
-analyzeCustom :: Ctx -> BackendSyntax BackendExpr -> Maybe BackendAnalysis
-analyzeCustom ctx = case _ of
-  expr | Just analysis <- Array.findMap (\f -> f ctx expr) analyses ->
+type Analyzer = Ctx -> BackendSyntax BackendExpr -> Maybe BackendAnalysis
+
+analyzeCustom :: Array Analyzer -> Ctx -> BackendSyntax BackendExpr -> Maybe BackendAnalysis
+analyzeCustom custom ctx = case _ of
+  expr | Just analysis <- Array.findMap (\f -> f ctx expr) (custom <> analyses) ->
     Just analysis
   expr
     | Just [ExprSyntax _ inst, v@(ExprSyntax _ (Lit (LitArray _)))] <- helper "Erl.Data.List" "fromFoldable" 2 expr
@@ -59,3 +63,22 @@ helper moduleName ident = case _, _ of
         then Just (NEA.toArray args)
         else Nothing
   _, _ -> Nothing
+
+neverInlineConstant :: String -> Analyzer
+neverInlineConstant s = unsafePartial
+  let Qualified (Just (ModuleName mod)) (Ident i) = qualPS s in
+  \_ctx expr -> helper mod i 0 expr >>= \_ -> neverInlineAnalysis expr
+
+neverInlineAnalysis :: BackendSyntax BackendExpr -> Maybe BackendAnalysis
+neverInlineAnalysis expr =
+  let BackendAnalysis { usages, args, deps, externs } = analyzeDefault expr
+  in Just $ BackendAnalysis
+    { usages
+    , size: top
+    , complexity: NonTrivial
+    , args
+    , rewrite: false
+    , deps
+    , result: Unknown
+    , externs
+    }

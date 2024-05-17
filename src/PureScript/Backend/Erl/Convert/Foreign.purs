@@ -1,21 +1,19 @@
-module PureScript.Backend.Erl.Convert.Foreign ( codegenForeign ) where
+module PureScript.Backend.Erl.Convert.Foreign where
 
 import Prelude
 
 import Control.Alt ((<|>))
 import Control.Apply (lift2)
-import Control.Monad.Writer (Writer)
 import Data.Array as A
 import Data.Array as Array
 import Data.Array.NonEmpty as NEA
 import Data.Bifunctor (bimap, lmap)
 import Data.Maybe (Maybe(..), fromMaybe', maybe)
-import Data.Monoid.Endo (Endo(..))
-import Data.Newtype (over, unwrap)
+import Data.Newtype (unwrap)
 import Data.Traversable (sequence)
-import Data.Tuple (Tuple(..), uncurry)
+import Data.Tuple (Tuple(..))
 import Data.Tuple.Nested ((/\))
-import PureScript.Backend.Erl.Calling (CallPS(..), Conventions, Converter, Converters, applyConventions, arg, arg', arg'', argMatch, callConverters, callErl, callPS, codegenArg, converts', func, getEnv, indexPatterns, noArgs, partial, qualErl, qualPS, thunkErl, withEnv)
+import PureScript.Backend.Erl.Calling (CallPS(..), Conventions, Converter, Converters, applyConventions, arg, arg', argMatch, callConverters, callErl, callPS, codegenArg, converts', func, getEnv, indexPatterns, noArgs, partial, qualErl, qualPS, thunkErl, withEnv)
 import PureScript.Backend.Erl.Convert.Common (toErlVar, toErlVarPat)
 import PureScript.Backend.Erl.Syntax (ErlExpr, FunHead(..))
 import PureScript.Backend.Erl.Syntax as S
@@ -29,8 +27,8 @@ couldBeInteresting s = case unwrap s of
   App (NeutralExpr (Var _)) _ -> true
   _ -> false
 
-codegenForeign :: (NeutralExpr -> ErlExpr) -> NeutralExpr -> Maybe ErlExpr
-codegenForeign codegenExpr s
+codegenForeign :: Converters -> (NeutralExpr -> ErlExpr) -> NeutralExpr -> Maybe ErlExpr
+codegenForeign converters codegenExpr s
   | not couldBeInteresting s = Nothing
   | Just result <- converts' converters codegenExpr s =
     Just result
@@ -39,8 +37,11 @@ codegenForeign codegenExpr s
   | otherwise =
     Nothing
 
-converters :: Converters
-converters = indexPatterns (tupleCalls <> specificCalls) <> applyConventions ffiSpecs
+mkConverters :: Array Converter -> Converters
+mkConverters custom =
+  indexPatterns (tupleCalls <> specificCalls)
+    <> applyConventions ffiSpecs
+    <> indexPatterns custom
 
 tupleCalls :: Array Converter
 tupleCalls = [1,2,3,4,5,6,7,8,9,10] >>= \arity ->
