@@ -213,6 +213,11 @@ data BinaryOperator
 
 derive instance eqBinaryOperator :: Eq BinaryOperator
 
+shortCircuits :: BinaryOperator -> Boolean
+shortCircuits AndAlso = true
+shortCircuits OrElse = true
+shortCircuits _ = false
+
 -- |
 -- Built-in unary operators
 --

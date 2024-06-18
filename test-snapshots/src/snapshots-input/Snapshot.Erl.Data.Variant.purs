@@ -12,7 +12,7 @@
 
 -- @inline Snapshot.Erl.Data.Variant.noInline never
 
--- @expected {{6, 7, 8}, {<<"1">>, <<"2">>}, {<<"5">>, <<"\"hi\"">>, <<"[unit,unit,unit]">>}}
+-- @expected {{6, 7, 8}, {<<"1">>, <<"2">>}, {<<"5">>, <<"\"hi\"">>, <<"[unit,unit,unit]">>}, {true, false, false}}
 module Snapshot.Erl.Data.Variant where
 
 import Erl.Data.Variant
@@ -55,9 +55,23 @@ test3 = case_
 noInline :: forall a. a -> a
 noInline a = a
 
-result :: Tuple3 (Tuple3 Int Int Int) _ (Tuple3 String String String)
+demandAnalysisBug :: forall r1 r2.
+  Variant
+    ( a :: { nested :: Int
+           | r1
+           }
+    | r2
+    )
+  -> Boolean
+demandAnalysisBug =
+  ( default false
+  # on (Proxy :: Proxy "a") (\{ nested } -> nested == 2)
+  )
+
+
+result :: Tuple4 (Tuple3 Int Int Int) _ (Tuple3 String String String) (Tuple3 Boolean Boolean Boolean)
 result = unsafePartial do
-  tuple3
+  tuple4
     do
       tuple3
         do noInline test1 (inj (Proxy :: Proxy "a") 5)
@@ -70,3 +84,8 @@ result = unsafePartial do
         do noInline test3 (inj (Proxy :: Proxy "a") 5)
         do noInline test3 (inj (Proxy :: Proxy "b") "hi")
         do noInline test3 (inj (Proxy :: Proxy "c") [unit, unit, unit])
+    do
+      tuple3
+        do noInline demandAnalysisBug (inj (Proxy :: Proxy "a") { nested: 2 })
+        do noInline demandAnalysisBug (inj (Proxy :: Proxy "a") { nested: 3 })
+        do noInline demandAnalysisBug (inj (Proxy :: Proxy "b") unit)

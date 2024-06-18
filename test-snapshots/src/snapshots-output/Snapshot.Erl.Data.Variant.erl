@@ -9,6 +9,8 @@
         , test1/1
         , noInline/0
         , noInline/1
+        , demandAnalysisBug/0
+        , demandAnalysisBug/1
         , result/0
         ]).
 -compile(no_auto_import).
@@ -159,9 +161,19 @@ noInline() ->
 noInline(A) ->
   A.
 
+demandAnalysisBug() ->
+  fun
+    (R) ->
+      demandAnalysisBug(R)
+  end.
+
+demandAnalysisBug(R = #{ type := R@1 }) ->
+  (R@1 =:= a) andalso ((erlang:map_get(nested, erlang:map_get(value, R))) =:= 2).
+
 result() ->
   begin
     V = test3(),
+    V@1 = demandAnalysisBug(),
     { { (noInline(test1(undefined)))(#{ type => a, value => 5 })
       , (noInline(test1(undefined)))(#{ type => b, value => <<"5">> })
       , (noInline(test1(undefined)))
@@ -175,6 +187,10 @@ result() ->
       , (noInline(V))(#{ type => b, value => <<"hi">> })
       , (noInline(V))
         (#{ type => c, value => array:from_list([unit, unit, unit]) })
+      }
+    , { (noInline(V@1))(#{ type => a, value => #{ nested => 2 } })
+      , (noInline(V@1))(#{ type => a, value => #{ nested => 3 } })
+      , (noInline(V@1))(#{ type => b, value => unit })
       }
     }
   end.

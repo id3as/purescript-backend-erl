@@ -43,7 +43,7 @@ import Partial.Unsafe (unsafeCrashWith)
 import Prim.Coerce (class Coercible)
 import PureScript.Backend.Erl.Calling (GlobalErl(..), applyCall, callErl)
 import PureScript.Backend.Erl.Convert.Scoping (renameRoot)
-import PureScript.Backend.Erl.Syntax (Accessor(..), Accessors, CaseClause(..), ErlDefinition(..), ErlExpr(..), ErlPattern, FunHead(..), Guard(..), IfClause(..), access, self)
+import PureScript.Backend.Erl.Syntax (Accessor(..), Accessors, CaseClause(..), ErlDefinition(..), ErlExpr(..), ErlPattern, FunHead(..), Guard(..), IfClause(..), access, self, shortCircuits)
 import PureScript.Backend.Erl.Syntax as S
 import Safe.Coerce (coerce)
 import Unsafe.Coerce (unsafeCoerce)
@@ -367,6 +367,9 @@ scoped = censor $ over Multiplicative case _ of
   NullAndVoid -> Demands Map.empty Map.empty
   Demands _ d -> Demands Map.empty d
 
+mightNotRun :: forall a. W a -> W a
+mightNotRun = censor $ over Multiplicative $ add one
+
 -- | This is almost `StateT`. We pass demand information downwards mostly
 -- | because of `knownFrom`, which is annoying, but maybe is the right choice
 -- | anyways. (Can this be made one pass then?) Then the completed demand
@@ -415,7 +418,7 @@ optimizePatternDemand = case _ of
       e' <- withKnown k (opd e)
       pure $ Tuple [] \_d ds -> IfClause cond' (optimizeDemands ds e')
     -- The first conditional always runs, so we want to include it in the analysis
-    -- void $ censor justDemands $ opd $ (\(IfClause cond _) -> cond) (NEA.head cases)
+    -- void $ censor justDemands $ opd $ (\(IfClause (Guard cond) _) -> cond) (NEA.head cases)
     pure $ S.If cases'
   e@(S.Var name acsrs) -> WriterT \r -> do
     let
@@ -448,6 +451,8 @@ optimizePatternDemand = case _ of
   S.RecordUpdate e kvs -> S.RecordUpdate <$> opd e <*> opdss kvs
   S.FunCall me e es -> S.FunCall <$> opds me <*> opd e <*> opds es
   S.Macro name margs -> S.Macro name <$> opdss margs
+  S.BinOp op e1 e2 | shortCircuits op ->
+    S.BinOp op <$> opd e1 <*> mightNotRun (opd e2)
   S.BinOp op e1 e2 -> S.BinOp op <$> opd e1 <*> opd e2
   S.UnaryOp op e -> S.UnaryOp op <$> opd e
   S.BinaryAppend e1 e2 -> S.BinaryAppend <$> opd e1 <*> opd e2
