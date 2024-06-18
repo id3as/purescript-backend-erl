@@ -1,6 +1,6 @@
 workspace:
   packages:
-    purerl:
+    backend-erl:
       path: ./
       dependencies:
         - aff

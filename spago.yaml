@@ -1,5 +1,5 @@
 package:
-  name: purerl
+  name: backend-erl
   dependencies:
     - aff
     - ansi
