@@ -220,13 +220,17 @@ renameTree = case _ of
       -- although it may result in code duplication if the arguments are large)
       -- TODO: handle variables properly
       Tuple floated (S.Case expr cases) | Array.all noFreeVars args ->
-          renameTree $ floated $ S.Case expr $ cases <#>
-            \(CaseClause pat guard result) ->
-              CaseClause pat guard (S.FunCall Nothing result args)
+        renameTree $ floated $ S.Case expr $ cases <#>
+          \(CaseClause pat guard result) ->
+            CaseClause pat guard (S.FunCall Nothing result args)
       Tuple floated (S.If cases) | Array.all noFreeVars args ->
-          renameTree $ floated $ S.If $ cases <#>
-            \(IfClause guard result) ->
-              IfClause guard (S.FunCall Nothing result args)
+        renameTree $ floated $ S.If $ cases <#>
+          \(IfClause guard result) ->
+            IfClause guard (S.FunCall Nothing result args)
+      -- Float variables out of the function
+      Tuple floated inner | e@(S.Assignments _ _) <- floated (S.FunCall Nothing inner args) ->
+        renameTree e
+      -- Base case
       _ ->
         S.FunCall Nothing <$> opr fn <*> oprs args
   -- Otherwise do the usual thing
