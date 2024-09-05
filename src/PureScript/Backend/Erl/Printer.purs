@@ -260,6 +260,11 @@ printExpr' prec = case _ of
       <> M.guard (not tiny function) D.softBreak
       <> printParens (D.softBreak <> intercalate trailingComma (D.indent <<< printAtomic <$> args) <> D.softBreak)
 
+  S.FunName qualifier function arity ->
+    parenPrec prec $ D.text "fun " <> D.alignCurrentColumn do
+      maybeSep printExpr qualifier (D.text ":")
+      <> printExpr function <> D.text "/" <> D.text (show arity)
+
   S.If clauses ->
     D.text "if" <> D.break <>
       D.indent (D.foldWithSeparator trailingSemi (printIfClause <$> clauses))

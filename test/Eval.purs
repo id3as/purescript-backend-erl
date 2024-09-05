@@ -129,6 +129,8 @@ enableTrace = local $ prop (Proxy :: Proxy "tracing") $ const true
 applyFunCalls :: ErlExpr -> Maybe ErlExpr
 applyFunCalls (FunCall Nothing fun args) =
   case floating fun of
+    Tuple floated (FunName qual val arity) | arity == Array.length args ->
+      Just $ floated $ FunCall qual val args
     Tuple floated (Fun Nothing [Tuple (FunHead pats Nothing) body])
       | Array.length pats == Array.length args ->
         Just $ floated <<< Assignments (Array.zip pats args) $ body
@@ -211,6 +213,8 @@ eval = case _ of
           , guard: coerce mg
           , branch
           }
+
+  FunName me e arity -> FunName <$> traverse eval me <*> eval e <@> arity
 
   -- We cheat and use the same `optimizeIf` here to make sure that control flow
   -- matches

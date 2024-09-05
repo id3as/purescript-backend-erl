@@ -95,6 +95,8 @@ moreDirectives :: String
 moreDirectives = """
 Stetson.HandlerProxy.provide arity=1
 Stetson.HandlerProxy.accept arity=1
+-- Allows us to optimize it specifically
+Control.Applicative.when arity=3
 """
 
 

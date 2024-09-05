@@ -450,6 +450,7 @@ optimizePatternDemand = case _ of
   S.Record kvs -> S.Record <$> coerce (opds (Compose kvs))
   S.RecordUpdate e kvs -> S.RecordUpdate <$> opd e <*> opdss kvs
   S.FunCall me e es -> S.FunCall <$> opds me <*> opd e <*> opds es
+  S.FunName me e arity -> S.FunName <$> opds me <*> opd e <@> arity
   S.Macro name margs -> S.Macro name <$> opdss margs
   S.BinOp op e1 e2 | shortCircuits op ->
     S.BinOp op <$> opd e1 <*> mightNotRun (opd e2)
@@ -598,6 +599,7 @@ optimizePatternRewrite = case _ of
   S.Record kvs -> S.Record <$> coerce (oprs (Compose kvs))
   S.RecordUpdate e kvs -> S.RecordUpdate <$> opr e <*> oprss kvs
   S.FunCall me e es -> S.FunCall <$> oprs me <*> opr e <*> oprs es
+  S.FunName me e arity -> S.FunName <$> oprs me <*> opr e <@> arity
   S.Macro name margs -> S.Macro name <$> oprss margs
   S.BinOp op e1 e2 -> S.BinOp op <$> opr e1 <*> opr e2
   S.UnaryOp op e -> S.UnaryOp op <$> opr e

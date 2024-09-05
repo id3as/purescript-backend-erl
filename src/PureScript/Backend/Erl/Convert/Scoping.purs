@@ -13,7 +13,8 @@ import Data.Identity (Identity(..))
 import Data.Map (Map, SemigroupMap(..))
 import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
-import Data.Newtype (unwrap, un)
+import Data.Monoid.Conj (Conj(..))
+import Data.Newtype (un, unwrap)
 import Data.Profunctor (dimap)
 import Data.Semigroup.Last (Last(..))
 import Data.String.CodeUnits as CU
@@ -204,13 +205,34 @@ renameTree = case _ of
   S.Record kvs -> coerce S.Record <$> (oprs (Compose kvs))
   S.RecordUpdate e kvs -> S.RecordUpdate <$> opr e <*> oprss kvs
 
-  -- Beta-reduce, since erlc sometimes struggles with it
-  S.FunCall Nothing fn args
-    | Tuple floated (S.Fun Nothing [Tuple (FunHead pats Nothing) body]) <- floating fn
-    , Array.length pats == Array.length args -> do
-      renameTree $ floated <<< S.Assignments (Array.zip pats args) $ body
+  S.FunCall Nothing fn args ->
+    case floating fn of
+      -- Beta-reduce, since erlc sometimes struggles with it
+      Tuple floated (S.Fun Nothing [Tuple (FunHead pats Nothing) body])
+        | Array.length pats == Array.length args ->
+          renameTree $ floated <<< S.Assignments (Array.zip pats args) $ body
+      -- If we see a function name like (fun x/2)(u, v)
+      Tuple floated (S.FunName me e arity)
+        | Array.length args == arity ->
+          renameTree $ floated $ S.FunCall me e args
+      -- Push function calls into cases
+      -- (Should eliminate some unnecessary functions and have no runtime cost,
+      -- although it may result in code duplication if the arguments are large)
+      -- TODO: handle variables properly
+      Tuple floated (S.Case expr cases) | Array.all noFreeVars args ->
+          renameTree $ floated $ S.Case expr $ cases <#>
+            \(CaseClause pat guard result) ->
+              CaseClause pat guard (S.FunCall Nothing result args)
+      Tuple floated (S.If cases) | Array.all noFreeVars args ->
+          renameTree $ floated $ S.If $ cases <#>
+            \(IfClause guard result) ->
+              IfClause guard (S.FunCall Nothing result args)
+      _ ->
+        S.FunCall Nothing <$> opr fn <*> oprs args
   -- Otherwise do the usual thing
   S.FunCall me e es -> S.FunCall <$> oprs me <*> opr e <*> oprs es
+
+  S.FunName me e arity -> S.FunName <$> oprs me <*> opr e <@> arity
 
   -- S.Macro name margs -> S.Macro name <$> traverse (traverse renameTree) margs
   S.Macro name Nothing -> pure (S.Macro name Nothing)
@@ -237,6 +259,11 @@ trivialExpr (S.ListCons items tail) = all trivialExpr items && trivialExpr tail
 trivialExpr (S.Map items) = all (trivialExpr <<< snd) items
 trivialExpr (S.Tupled items) = all trivialExpr items
 trivialExpr _ = false
+
+noFreeVars :: ErlExpr -> Boolean
+noFreeVars = coerce <<< S.visit case _ of
+  S.Var _ _ -> Conj false
+  _ -> mempty
 
 renameRoot :: ErlExpr -> ErlExpr
 renameRoot e = evalState (runReaderT (renameTree e) Map.empty)

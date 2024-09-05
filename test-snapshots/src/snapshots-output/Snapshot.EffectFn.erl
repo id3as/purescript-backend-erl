@@ -1,5 +1,16 @@
 -module(snapshot_effectFn@ps).
--export([x/0, x/1, y/0, y/2, main/0]).
+-export([ x/0
+        , x/1
+        , y/0
+        , y/2
+        , z/0
+        , z/2
+        , main1/0
+        , callY/0
+        , callY/1
+        , main/0
+        , main2/0
+        ]).
 -compile(no_auto_import).
 x() ->
   fun
@@ -22,9 +33,54 @@ y() ->
 y(A, B) ->
   (x(<<"Hi">>))(A, B).
 
+z() ->
+  fun
+    (A, B) ->
+      z(A, B)
+  end.
+
+z(A, B) ->
+  (x(<<"Hi">>))(A, B).
+
+main1() ->
+  fun
+    () ->
+      begin
+        y(unit, unit),
+        unit
+      end
+  end.
+
+callY() ->
+  fun
+    (F) ->
+      callY(F)
+  end.
+
+callY(F) ->
+  fun
+    () ->
+      begin
+        F(<<"0">>, <<"1">>),
+        F(<<"2">>, <<"3">>)
+      end
+  end.
+
 main() ->
   fun
     () ->
-      y(unit, unit)
+      begin
+        y(unit, unit),
+        (callY(fun y/2))()
+      end
+  end.
+
+main2() ->
+  fun
+    () ->
+      begin
+        y(unit, unit),
+        (callY(fun z/2))()
+      end
   end.
 

@@ -49,6 +49,7 @@ import PureScript.Backend.Erl.Convert.Common (erlModuleNamePs, erlModuleNameFore
 import PureScript.Backend.Erl.Convert.Foreign (mkConverters)
 import PureScript.Backend.Erl.Foreign (fullForeignSemantics)
 import PureScript.Backend.Erl.Foreign.Analyze (analyzeCustom)
+import PureScript.Backend.Erl.Main (moreDirectives)
 import PureScript.Backend.Erl.Parser (parseFile)
 import PureScript.Backend.Erl.Printer as P
 import PureScript.Backend.Optimizer.Builder (buildModules)
@@ -132,7 +133,7 @@ runSnapshotTests { accept, compile, run, filter } = do
       liftEffect $ Process.exit' 1
     Right (Tuple coreFnModules timestamp) -> do
       Console.log "Got modules"
-      let { directives } = parseDirectiveFile defaultDirectives
+      let { directives } = parseDirectiveFile $ defaultDirectives <> moreDirectives
       coreFnModules # buildModules
         { directives
         , analyzeCustom: analyzeCustom []

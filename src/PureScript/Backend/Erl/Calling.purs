@@ -173,7 +173,7 @@ thunkErl = CallingErl $ pure $ Thunk
 type Conventions =
   SemigroupMap (Qualified Ident)
   ( SemigroupMap ArityPS
-    (First (CWB CallingErl GlobalErl Unit))
+    (First (Either (Tuple GlobalErl Int) (CWB CallingErl GlobalErl Unit)))
   )
 
 callAs :: Qualified Ident -> ArityPS -> ArityErl -> Conventions
@@ -182,10 +182,25 @@ callAs qi arity = callAs' qi arity (toGlobalErl qi)
 callAs' :: Qualified Ident -> ArityPS -> GlobalErl -> ArityErl -> Conventions
 callAs' qi arity erl call
   | CWB erl call == conventionWithBase identity (CWB qi arity)
-  = mempty
-callAs' qi arity erl call =
+  = callShort qi arity erl call
+callAs' qi arity erl call = append (callShort qi arity erl call) $
   SemigroupMap $ Map.singleton qi $ SemigroupMap $ Map.singleton arity $ First $
-    CWB erl call
+    Right $ CWB erl call
+
+callShort :: Qualified Ident -> ArityPS -> GlobalErl -> ArityErl -> Conventions
+callShort qi arity erl call =
+  case arity, call of
+    CallingPS BasePS (Uncurried args), CallingErl calls
+      | [Call args'] <- NEA.toArray calls
+      , Array.length args == Array.length args' ->
+        SemigroupMap $ Map.singleton qi $ SemigroupMap $ Map.singleton BasePS $ First $
+          Left $ Tuple erl (Array.length args')
+    CallingPS BasePS (UncurriedEffect args), CallingErl calls
+      | [Call args', Thunk] <- NEA.toArray calls
+      , Array.length args == Array.length args' ->
+        SemigroupMap $ Map.singleton qi $ SemigroupMap $ Map.singleton BasePS $ First $
+          Left $ Tuple erl (Array.length args')
+    _, _ -> mempty
 
 toGlobalErl :: Qualified Ident -> GlobalErl
 toGlobalErl (Qualified mmn (Ident ident)) = GlobalErl
@@ -896,10 +911,15 @@ callConverters options = options # Array.foldMap \option ->
       callAs' option.ps reduced option.erl (option.call <|> map absurd r)
 
 applyConventions :: Conventions -> Converters
-applyConventions = mapWithIndex \qi -> mapWithIndex \arity (First (CWB erlBase convention)) ->
-  NEA.singleton $ Pattern (CWB qi arity) \codegenExpr (CWB _old matched) -> do
-    calls <- customConvention (codegenExpr >>> const) matched convention
-    pure $ applyCall unit erlBase calls
+applyConventions = mapWithIndex \qi -> mapWithIndex \arity (First funNameOrCall) ->
+  case funNameOrCall of
+    Left (Tuple (GlobalErl name) numArgs) ->
+      NEA.singleton $ Pattern (CWB qi arity) \_ _ -> do
+        pure $ S.FunName (S.atomLiteral <$> name.module) (S.atomLiteral name.name) numArgs
+    Right (CWB erlBase convention) ->
+      NEA.singleton $ Pattern (CWB qi arity) \codegenExpr (CWB _old matched) -> do
+        calls <- customConvention (codegenExpr >>> const) matched convention
+        pure $ applyCall unit erlBase calls
 
 type Converters =
   SemigroupMap (Qualified Ident)

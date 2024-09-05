@@ -50,13 +50,13 @@ data ErlExpr
   | RecordUpdate ErlExpr (Array (Tuple String ErlExpr))
 
   | Assignments (Array (Tuple ErlPattern ErlExpr)) ErlExpr
-  -- |
-  -- A fun definition
-  --
+  -- | A fun definition
   | Fun (Maybe String) (Array (Tuple FunHead ErlExpr))
-  -- |
-  -- A (possibly qualified) function call
+  -- | A (possibly qualified) function call
   | FunCall (Maybe ErlExpr) ErlExpr (Array ErlExpr)
+  -- | The name of a function, possibly qualified
+  -- | fun mod:fn/2
+  | FunName (Maybe ErlExpr) ErlExpr Int
   | Macro String (Maybe (NonEmptyArray ErlExpr))
   | If (NonEmptyArray IfClause)
   | Case ErlExpr (NonEmptyArray CaseClause)
@@ -263,6 +263,7 @@ visit f = go
     Assignments es e -> foldMap (go <<< snd) es <> go e
     Fun _ heads -> foldMap (bifoldMap goFunHead go) heads
     FunCall me e es -> foldMap go me <> go e <> goes es
+    FunName me e _ -> foldMap go me <> go e
     Macro _ mes -> foldMap (foldMap go) mes
     If cs -> foldMap goIfClause cs
     Case e cs -> go e <> foldMap goCaseClause cs

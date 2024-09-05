@@ -6,7 +6,7 @@ import Control.Alternative (guard, (<|>))
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NEA
-import Data.Bifunctor (lmap)
+import Data.Bifunctor (bimap, lmap)
 import Data.Foldable (class Foldable, foldMap, foldr)
 import Data.FoldableWithIndex (foldMapWithIndex)
 import Data.FunctorWithIndex (class FunctorWithIndex, mapWithIndex)
@@ -76,7 +76,11 @@ codegenModule custom mode backendModule@{ name: currentModule, bindings, imports
     -- Calling conventions to export
     callingConventions = withForeignConventions <> moreModuleConventions
     -- Locally we do not qualify same-module bindings
-    localConventions = moreModuleConventions <#> (map <<< map <<< lmap) (over GlobalErl _ { module = Nothing })
+    localConventions = moreModuleConventions <#>
+      (map <<< map) do
+        bimap
+          (lmap (over GlobalErl _ { module = Nothing }))
+          (lmap (over GlobalErl _ { module = Nothing }))
     localCallingConventions = localConventions <> withForeignConventions
 
     -- Constructors to export

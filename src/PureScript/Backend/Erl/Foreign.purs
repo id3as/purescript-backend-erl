@@ -17,7 +17,7 @@ import PureScript.Backend.Erl.Calling (arg, arg', arg'', argMatch, curried, eval
 import PureScript.Backend.Optimizer.CoreFn (ConstructorType(..), Ident(..), Literal(..), ModuleName(..), Prop(..), ProperName(..), Qualified(..), findProp)
 import PureScript.Backend.Optimizer.Semantics (BackendSemantics(..), EvalRef(..), ExternSpine(..), SemConditional(..), evalApp, evalPrimOp, liftInt, makeLet)
 import PureScript.Backend.Optimizer.Semantics.Foreign (ForeignEval, ForeignSemantics, coreForeignSemantics, qualified)
-import PureScript.Backend.Optimizer.Syntax (BackendOperator(..), BackendOperator1(..), BackendOperator2(..), BackendOperatorOrd(..))
+import PureScript.Backend.Optimizer.Syntax (BackendAccessor(..), BackendOperator(..), BackendOperator1(..), BackendOperator2(..), BackendOperatorOrd(..))
 
 stop :: String -> Tuple (Qualified Ident) ForeignEval
 stop name = evaluator $ func name $ noArgs $> NeutStop (qualPS name)
@@ -38,6 +38,7 @@ erlForeignSemantics custom = Map.fromFoldable $
   , erl_data_tuple_fst
   , erl_data_tuple_snd
   , erl_data_variant_internal_matchImpl
+  , control_applicative_when
   ] <> join
   [ erl_data_tuple_uncurryN
   , erl_atom
@@ -237,6 +238,19 @@ erl_data_variant_internal_matchImpl = evaluator $ func "Erl.Data.Variant.Interna
     in Tuple variantType <$> findProp "value" props
   env <- getEnv
   in evalApp env <$> findProp variantType fns <@> [variantValue]
+
+-- Make sure the action is only evaluated when the condition is true
+control_applicative_when :: ForeignSemantics
+control_applicative_when = evaluators "Control.Applicative.when"
+  [ ado
+      dict <- arg
+      cond <- arg
+      act <- arg
+      _unit <- pure $ NeutVar (qualPS "Data.Unit.unit")
+      in
+        SemBranch (pure (SemConditional (pure cond) (pure act)))
+          (pure (NeutApp (NeutAccessor dict (GetProp "pure")) [_unit]))
+  ]
 
 recognizeCoercions :: Array ForeignSemantics
 recognizeCoercions = evaluator <$>

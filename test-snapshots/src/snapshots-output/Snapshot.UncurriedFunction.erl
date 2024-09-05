@@ -79,7 +79,7 @@ main() ->
         (V((test3b()) =:= 2))(),
         V@1 = (test4b())(),
         (V(V@1 =:= <<"test4b">>))(),
-        W = (test4a())(<<"test4b">>),
+        W = test4a(<<"test4b">>),
         (V(W =:= <<"test4b">>))()
       end
   end.
