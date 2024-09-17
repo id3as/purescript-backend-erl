@@ -1,3 +1,4 @@
+% Snapshot.Constructor
 -module(snapshot_constructor@ps).
 -export([ 'Nil'/0
         , 'Node'/0

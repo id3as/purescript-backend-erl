@@ -177,19 +177,24 @@ type Conventions =
   )
 
 callAs :: Qualified Ident -> ArityPS -> ArityErl -> Conventions
-callAs qi arity = callAs' qi arity (toGlobalErl qi)
+callAs qi arity = (callShort <> callAs') qi arity (toGlobalErl qi)
 
 callAs' :: Qualified Ident -> ArityPS -> GlobalErl -> ArityErl -> Conventions
 callAs' qi arity erl call
   | CWB erl call == conventionWithBase identity (CWB qi arity)
-  = callShort qi arity erl call
-callAs' qi arity erl call = append (callShort qi arity erl call) $
+  = mempty
+callAs' qi arity erl call =
   SemigroupMap $ Map.singleton qi $ SemigroupMap $ Map.singleton arity $ First $
     Right $ CWB erl call
 
 callShort :: Qualified Ident -> ArityPS -> GlobalErl -> ArityErl -> Conventions
 callShort qi arity erl call =
   case arity, call of
+    CallingPS BasePS (Curried args), CallingErl calls
+      | [Call [_]] <- NEA.toArray calls
+      , [_] <- NEA.toArray args ->
+        SemigroupMap $ Map.singleton qi $ SemigroupMap $ Map.singleton BasePS $ First $
+          Left $ Tuple erl 1
     CallingPS BasePS (Uncurried args), CallingErl calls
       | [Call args'] <- NEA.toArray calls
       , Array.length args == Array.length args' ->

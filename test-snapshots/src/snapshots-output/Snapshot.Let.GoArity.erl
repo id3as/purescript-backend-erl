@@ -1,3 +1,4 @@
+% Snapshot.Let.GoArity
 -module(snapshot_let_goArity@ps).
 -export([foldr/0, foldr/2, result/0]).
 -compile(no_auto_import).

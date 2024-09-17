@@ -25,7 +25,7 @@ import PureScript.Backend.Erl.Convert.Common (erlModuleNameForeign, erlModuleNam
 import PureScript.Backend.Erl.Convert.Foreign (codegenForeign)
 import PureScript.Backend.Erl.Foreign.Analyze (Analyzer, analyzeCustom)
 import PureScript.Backend.Erl.Parser (ForeignDecls)
-import PureScript.Backend.Erl.Syntax (Accessor(..), ErlDefinition(..), ErlExport(..), ErlExpr, ErlModule, ErlPattern, access, atomLiteral, mIS_KNOWN_TAG, self)
+import PureScript.Backend.Erl.Syntax (Accessor(..), ErlDefinition(..), ErlExport(..), ErlExpr, ErlModule, ErlPattern, access, atomLiteral, mIS_KNOWN_TAG, mMEMOIZE_AS, self)
 import PureScript.Backend.Erl.Syntax as S
 import PureScript.Backend.Optimizer.Convert (BackendModule, ConvertEnv, getCtx, makeExternEvalRef, makeExternEvalSpine)
 import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal(..), ModuleName(..), Prop(..), Qualified(..))
@@ -152,7 +152,7 @@ codegenModule custom mode backendModule@{ name: currentModule, bindings, imports
       , definitions
       , rawDefinitions
       , exports
-      , comments: []
+      , comments: [ unwrap currentModule ]
       }
       { callingConventions
       , constructors
@@ -283,8 +283,10 @@ codegenTopLevelBinding currentModule (Tuple (Ident i) n) =
     Abs vars e ->
       callThisAs (callPS (Curried (void vars))) (callErl (void (NEA.toArray vars)))
       let Tuple epats evars = locals vars in
-      [ const $ FunctionDefinition i [] $ S.curriedFun epats $
-          S.FunCall Nothing (S.Literal (S.Atom i)) evars
+      [ const $ FunctionDefinition i [] $ case NEA.length vars of
+          1 -> S.FunName Nothing (S.Literal (S.Atom i)) 1
+          _ -> S.curriedFun epats $
+            S.FunCall Nothing (S.Literal (S.Atom i)) evars
       , \codegenEnv -> FunctionDefinition i (toErlVarPat <$> NEA.toArray vars) $ codegenExpr codegenEnv e
       ]
     UncurriedAbs vars e | Array.length vars > 0 ->
@@ -302,9 +304,17 @@ codegenTopLevelBinding currentModule (Tuple (Ident i) n) =
       , \codegenEnv -> FunctionDefinition i (toErlVarPat <$> vars) $ codegenChain effectChainMode codegenEnv e
       ]
     _ -> pure
-      [ \codegenEnv -> FunctionDefinition i [] $ codegenExpr codegenEnv n ]
+      [ \codegenEnv -> FunctionDefinition i [] $ tryMemoize $ codegenExpr codegenEnv n ]
   where
   callThisAs x y = Tuple (callAs (Qualified (Just currentModule) (Ident i)) x y)
+  tryMemoize expr
+    -- Do not memoize lambdas
+    | S.Fun _ _ <- expr = expr
+    -- Do not memoize small terms
+    | S.termSize expr < 20 = expr
+    -- Do not memoize what are essentially literals
+    | S.guardExpr expr = expr
+    | otherwise = mMEMOIZE_AS [ erlModuleNamePs currentModule, i ] expr
 
 -- When we recurse in the function side of applications, we don't need to
 -- consider calling conventions: they were already handled

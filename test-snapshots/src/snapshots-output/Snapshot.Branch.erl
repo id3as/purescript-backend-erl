@@ -1,3 +1,4 @@
+% Snapshot.Branch
 -module(snapshot_branch@ps).
 -export([ i/0
         , i/2
@@ -34,10 +35,7 @@ i(V, V1) ->
   end.
 
 h() ->
-  fun
-    (V) ->
-      h(V)
-  end.
+  fun h/1.
 
 h(V) ->
   if
@@ -48,10 +46,7 @@ h(V) ->
   end.
 
 g() ->
-  fun
-    (V) ->
-      g(V)
-  end.
+  fun g/1.
 
 g(V) ->
   if
@@ -112,10 +107,7 @@ result() ->
    }.
 
 dontInlineMe() ->
-  fun
-    (A) ->
-      dontInlineMe(A)
-  end.
+  fun dontInlineMe/1.
 
 dontInlineMe(A) ->
   A.

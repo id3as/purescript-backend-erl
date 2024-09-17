@@ -1,3 +1,4 @@
+% Snapshot.Literals.String
 -module(snapshot_literals_string@ps).
 -export([ unicode7/0
         , unicode6/0

@@ -1,3 +1,4 @@
+% Snapshot.Erl.Data.List
 -module(snapshot_erl_data_list@ps).
 -export([ unconsA1/0
         , unconsA0/0
@@ -33,10 +34,7 @@ uncons1() ->
   {just, #{ head => 1, tail => [2, 3] }}.
 
 uncons0() ->
-  fun
-    (L) ->
-      uncons0(L)
-  end.
+  fun uncons0/1.
 
 uncons0(L) ->
   erl_data_list_types@ps:uncons(L ++ L).
@@ -81,10 +79,7 @@ result() ->
    }.
 
 concatL() ->
-  fun
-    (L) ->
-      concatL(L)
-  end.
+  fun concatL/1.
 
 concatL(L) ->
   [ 1, 2, 3 | L ].

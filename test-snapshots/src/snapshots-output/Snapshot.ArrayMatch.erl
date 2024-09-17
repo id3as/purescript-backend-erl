@@ -1,3 +1,4 @@
+% Snapshot.ArrayMatch
 -module(snapshot_arrayMatch@ps).
 -export([ onlyArray/0
         , onlyArray/1
@@ -22,14 +23,24 @@
 -compile(no_auto_import).
 -define( IS_KNOWN_TAG(Tag, Arity, V)
        , ((erlang:is_tuple(V))
-         andalso (((Arity + 1) =:= (erlang:tuple_size(V)))
-           andalso (Tag =:= (erlang:element(1, V)))))
+           andalso (((Arity + 1) =:= (erlang:tuple_size(V)))
+             andalso (Tag =:= (erlang:element(1, V)))))
        ).
+-define( MEMOIZE_AS(Key, Expr)
+       , case persistent_term:get(Key, undefined) of
+           undefined ->
+             begin
+               MemoizeAsResult = Expr,
+               persistent_term:put(Key, MemoizeAsResult),
+               MemoizeAsResult
+             end;
+           MemoizeAsResult ->
+             MemoizeAsResult
+         end
+       ).
+
 onlyArray() ->
-  fun
-    (A) ->
-      onlyArray(A)
-  end.
+  fun onlyArray/1.
 
 onlyArray(A) ->
   case (array:size(A)) =:= 2 of
@@ -40,10 +51,7 @@ onlyArray(A) ->
   end.
 
 nestedArrayViaRecord() ->
-  fun
-    (V) ->
-      nestedArrayViaRecord(V)
-  end.
+  fun nestedArrayViaRecord/1.
 
 nestedArrayViaRecord(V = #{ q := V@1 }) ->
   case (array:size(V@1)) =:= 1 of
@@ -114,10 +122,7 @@ nestedArrayRefutable(Arg1, Arg2) ->
   end.
 
 nestedArray() ->
-  fun
-    (V) ->
-      nestedArray(V)
-  end.
+  fun nestedArray/1.
 
 nestedArray(V) ->
   case ((array:size(V)) =:= 2) andalso ((array:size(array:get(0, V))) =:= 2) of
@@ -128,10 +133,7 @@ nestedArray(V) ->
   end.
 
 namedArray() ->
-  fun
-    (V) ->
-      namedArray(V)
-  end.
+  fun namedArray/1.
 
 namedArray(V) ->
   case (array:size(V)) =:= 2 of
@@ -142,10 +144,7 @@ namedArray(V) ->
   end.
 
 maybeArray() ->
-  fun
-    (A) ->
-      maybeArray(A)
-  end.
+  fun maybeArray/1.
 
 maybeArray(A) ->
   case ?IS_KNOWN_TAG(just, 1, A)
@@ -160,19 +159,13 @@ maybeArray(A) ->
   end.
 
 bug28_2() ->
-  fun
-    (A) ->
-      bug28_2(A)
-  end.
+  fun bug28_2/1.
 
 bug28_2(_) ->
   3.
 
 bug28() ->
-  fun
-    (A) ->
-      bug28(A)
-  end.
+  fun bug28/1.
 
 bug28(A = #{ q := A@1 }) ->
   case (array:size(A@1)) =:= 2 of
@@ -186,24 +179,27 @@ bug28(A = #{ q := A@1 }) ->
   end.
 
 result() ->
-  array:from_list([ bug28(#{ q => array:from_list([1, 2]) })
-                  , bug28_2(#{ q => array:from_list([1, 2]) })
-                  , nestedArray(array:from_list([ array:from_list([1, 2])
-                                                , array:from_list([3])
-                                                ]))
-                  , nestedArrayViaRecord(#{ q =>
-                                            array:from_list([ #{ r =>
-                                                                 array:from_list([ 1
-                                                                                 , 2
-                                                                                 ])
-                                                               }
-                                                            , #{ r =>
-                                                                 array:from_list([3])
-                                                               }
-                                                            ])
-                                          })
-                  , onlyArray(array:from_list([1]))
-                  , maybeArray({just, array:from_list([1, 2])})
-                  , namedArray(array:from_list([1, 2]))
-                  ]).
+  ?MEMOIZE_AS(
+    {snapshot_arrayMatch@ps, result, '(memoized)'},
+    array:from_list([ bug28(#{ q => array:from_list([1, 2]) })
+                    , bug28_2(#{ q => array:from_list([1, 2]) })
+                    , nestedArray(array:from_list([ array:from_list([1, 2])
+                                                  , array:from_list([3])
+                                                  ]))
+                    , nestedArrayViaRecord(#{ q =>
+                                              array:from_list([ #{ r =>
+                                                                   array:from_list([ 1
+                                                                                   , 2
+                                                                                   ])
+                                                                 }
+                                                              , #{ r =>
+                                                                   array:from_list([3])
+                                                                 }
+                                                              ])
+                                            })
+                    , onlyArray(array:from_list([1]))
+                    , maybeArray({just, array:from_list([1, 2])})
+                    , namedArray(array:from_list([1, 2]))
+                    ])
+  ).
 

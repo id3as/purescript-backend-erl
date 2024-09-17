@@ -1,3 +1,4 @@
+% Snapshot.EffectRef
 -module(snapshot_effectRef@ps).
 -export([ positionZero/0
         , onLet/0
@@ -13,10 +14,7 @@ positionZero() ->
   effect_ref@foreign:new(0).
 
 onLet() ->
-  fun
-    (X) ->
-      onLet(X)
-  end.
+  fun onLet/1.
 
 onLet(X) ->
   begin

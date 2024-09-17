@@ -392,10 +392,27 @@ predefMacros =
           FunCall (Just $ atomLiteral C.erlang) (atomLiteral C.element)
             [ numberLiteral 1, Var "V" self ]
       ]
+  , Tuple (Tuple "MEMOIZE_AS" (NEA.fromArray [ "Key", "Expr" ])) $
+      Case (FunCall (Just $ atomLiteral "persistent_term") (atomLiteral "get") [ Var "Key" self, atomLiteral "undefined" ])
+        let
+          ifNotFound = CaseClause (MatchLiteral (Atom "undefined")) Nothing $
+            Assignments
+              [ Tuple (BindVar "MemoizeAsResult") (Var "Expr" self)
+              , Tuple Discard (FunCall (Just $ atomLiteral "persistent_term") (atomLiteral "put") [ Var "Key" self, Var "MemoizeAsResult" self ])
+              ]
+              (Var "MemoizeAsResult" self)
+          ifFound = CaseClause (BindVar "MemoizeAsResult") Nothing
+            (Var "MemoizeAsResult" self)
+        in NEA.cons' ifNotFound [ ifFound ]
   ]
 
 mIS_KNOWN_TAG :: ErlExpr -> Int -> ErlExpr -> ErlExpr
 mIS_KNOWN_TAG tag arity v = Macro "IS_KNOWN_TAG" $ NEA.fromArray [ tag, Literal (Integer arity), v ]
+
+mMEMOIZE_AS :: Array String -> ErlExpr -> ErlExpr
+mMEMOIZE_AS keys expr = Macro "MEMOIZE_AS" $ NEA.fromArray [ key, expr ]
+  where
+  key = Tupled $ atomLiteral <$> (keys <> [ "(memoized)" ])
 
 guardExpr :: ErlExpr -> Boolean
 guardExpr = case _ of

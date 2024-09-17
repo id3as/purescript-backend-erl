@@ -1,3 +1,4 @@
+% Snapshot.Function
 -module(snapshot_function@ps).
 -export([f/0, f/2, g/0, g/2]).
 -compile(no_auto_import).

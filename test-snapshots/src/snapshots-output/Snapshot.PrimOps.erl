@@ -1,3 +1,4 @@
+% Snapshot.PrimOps
 -module(snapshot_primOps@ps).
 -export([ stringOps/0
         , stringOps/2

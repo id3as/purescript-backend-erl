@@ -42,7 +42,7 @@ import Node.FS.Aff as FS
 import Node.Library.Execa (execa)
 import Partial.Unsafe (unsafeCrashWith)
 import PureScript.Backend.Erl.Convert.After (globalThunk, optimizeIf)
-import PureScript.Backend.Erl.Convert.Scoping (floating)
+import PureScript.Backend.Erl.Convert.Scoping (floating, noFreeVars)
 import PureScript.Backend.Erl.Printer as P
 import PureScript.Backend.Erl.Syntax (Accessor(..), CaseClause(..), ErlDefinition(..), ErlExpr(..), ErlLiteral(..), ErlModule, ErlPattern(..), FunHead(..), Guard(..), IfClause(..), access, applyAccessors')
 import Safe.Coerce (coerce)
@@ -134,6 +134,14 @@ applyFunCalls (FunCall Nothing fun args) =
     Tuple floated (Fun Nothing [Tuple (FunHead pats Nothing) body])
       | Array.length pats == Array.length args ->
         Just $ floated <<< Assignments (Array.zip pats args) $ body
+    Tuple floated (Case expr cases) | Array.all noFreeVars args ->
+      Just $ floated $ Case expr $ cases <#>
+        \(CaseClause pat guard result) ->
+          CaseClause pat guard (FunCall Nothing result args)
+    Tuple floated (If cases) | Array.all noFreeVars args ->
+      Just $ floated $ If $ cases <#>
+        \(IfClause guard result) ->
+          IfClause guard (FunCall Nothing result args)
     Tuple floated1 s'@(FunCall Nothing _ _)
       | Just s'' <- applyFunCalls s'
       , Tuple floated2 (Fun Nothing [Tuple (FunHead pats Nothing) body]) <- floating s''

@@ -1,3 +1,4 @@
+% Snapshot.Let
 -module(snapshot_let@ps).
 -export([ letRecursive/0
         , letRecursive/1
@@ -10,10 +11,7 @@
         ]).
 -compile(no_auto_import).
 letRecursive() ->
-  fun
-    (X) ->
-      letRecursive(X)
-  end.
+  fun letRecursive/1.
 
 letRecursive(X) ->
   if
@@ -24,10 +22,7 @@ letRecursive(X) ->
   end.
 
 letChain() ->
-  fun
-    (X) ->
-      letChain(X)
-  end.
+  fun letChain/1.
 
 letChain(X) ->
   begin
@@ -38,10 +33,7 @@ letChain(X) ->
   end.
 
 isOdd() ->
-  fun
-    (X) ->
-      isOdd(X)
-  end.
+  fun isOdd/1.
 
 isOdd(X) ->
   if
@@ -52,10 +44,7 @@ isOdd(X) ->
   end.
 
 isEven() ->
-  fun
-    (X) ->
-      isEven(X)
-  end.
+  fun isEven/1.
 
 isEven(X) ->
   if

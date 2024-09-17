@@ -1,20 +1,15 @@
+% Snapshot.Scoping
 -module(snapshot_scoping@ps).
 -export([noInline/0, noInline/1, inline/0, inline/1, ex/0, ex/1]).
 -compile(no_auto_import).
 noInline() ->
-  fun
-    (A) ->
-      noInline(A)
-  end.
+  fun noInline/1.
 
 noInline(A) ->
   A.
 
 inline() ->
-  fun
-    (N) ->
-      inline(N)
-  end.
+  fun inline/1.
 
 inline(N) ->
   begin
@@ -23,10 +18,7 @@ inline(N) ->
   end.
 
 ex() ->
-  fun
-    (N) ->
-      ex(N)
-  end.
+  fun ex/1.
 
 ex(N) ->
   begin

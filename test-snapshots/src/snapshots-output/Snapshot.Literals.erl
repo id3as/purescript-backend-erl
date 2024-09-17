@@ -1,3 +1,4 @@
+% Snapshot.Literals
 -module(snapshot_literals@ps).
 -export([ string/0
         , record2/0

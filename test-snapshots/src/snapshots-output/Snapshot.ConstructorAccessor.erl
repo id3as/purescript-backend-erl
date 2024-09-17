@@ -1,3 +1,4 @@
+% Snapshot.ConstructorAccessor
 -module(snapshot_constructorAccessor@ps).
 -export([ 'First'/0
         , 'Last'/0
@@ -24,6 +25,19 @@
         , result/0
         ]).
 -compile(no_auto_import).
+-define( MEMOIZE_AS(Key, Expr)
+       , case persistent_term:get(Key, undefined) of
+           undefined ->
+             begin
+               MemoizeAsResult = Expr,
+               persistent_term:put(Key, MemoizeAsResult),
+               MemoizeAsResult
+             end;
+           MemoizeAsResult ->
+             MemoizeAsResult
+         end
+       ).
+
 'First'() ->
   fun
     (Value0) ->
@@ -90,10 +104,7 @@ test5(_, V = {first, V@1}) ->
   end.
 
 test51() ->
-  fun
-    (V) ->
-      test51(V)
-  end.
+  fun test51/1.
 
 test51(V = {first, V@1}) ->
   case V of
@@ -104,10 +115,7 @@ test51(V = {first, V@1}) ->
   end.
 
 test4() ->
-  fun
-    (V) ->
-      test4(V)
-  end.
+  fun test4/1.
 
 test4(V) ->
   case V of
@@ -120,10 +128,7 @@ test4(V) ->
   end.
 
 test3() ->
-  fun
-    (V) ->
-      test3(V)
-  end.
+  fun test3/1.
 
 test3(V) ->
   if
@@ -134,37 +139,31 @@ test3(V) ->
   end.
 
 test2() ->
-  fun
-    (V) ->
-      test2(V)
-  end.
+  fun test2/1.
 
 test2(V) ->
   erlang:element(2, V).
 
 test1() ->
-  fun
-    (V) ->
-      test1(V)
-  end.
+  fun test1/1.
 
 test1(_) ->
   true.
 
 'don\'tInlineMeMe'() ->
-  fun
-    (A) ->
-      'don\'tInlineMeMe'(A)
-  end.
+  fun 'don\'tInlineMeMe'/1.
 
 'don\'tInlineMeMe'(A) ->
   A.
 
 result() ->
-  #{ test1 => ('don\'tInlineMeMe'(test1()))({noArgs})
-   , test2 => ('don\'tInlineMeMe'(test2()))({hasArgs, 2, 1, 0})
-   , test3 => ('don\'tInlineMeMe'(test3()))({hasArgs, 5, 3, 1})
-   , test4 => ('don\'tInlineMeMe'(test4()))({last, 4})
-   , test5 => ('don\'tInlineMeMe'(test51()))({first, 5})
-   }.
+  ?MEMOIZE_AS(
+    {snapshot_constructorAccessor@ps, result, '(memoized)'},
+    #{ test1 => ('don\'tInlineMeMe'(test1()))({noArgs})
+     , test2 => ('don\'tInlineMeMe'(test2()))({hasArgs, 2, 1, 0})
+     , test3 => ('don\'tInlineMeMe'(test3()))({hasArgs, 5, 3, 1})
+     , test4 => ('don\'tInlineMeMe'(test4()))({last, 4})
+     , test5 => ('don\'tInlineMeMe'(test51()))({first, 5})
+     }
+  ).
 

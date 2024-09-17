@@ -103,7 +103,8 @@ printModule :: ErlModule -> Doc Void
 printModule lib =
   flip append D.break
     $ D.lines $
-      [ printAttribute "module" [ D.text (escapeAtom lib.moduleName) ]
+      [ D.lines $ lib.comments <#> \c -> D.text "% " <> D.text c
+      , printAttribute "module" [ D.text (escapeAtom lib.moduleName) ]
       , printAttribute "export" $ pure $ printBrackets' $
           lib.exports <#> \(Export name arity) ->
             D.text (escapeAtom name) <> D.text "/" <> D.text (show arity)
@@ -120,8 +121,8 @@ printMacrosFor { definitions } =
     if not Set.member name used then mempty else
     printAttribute "define"
       [ D.text name <> foldMap (printParens' <<< NEA.toArray <<< map D.text) args
-      , printExpr def
-      ]
+      , D.alignCurrentColumn (printExpr def)
+      ] <> D.break
 
 printAttribute :: String -> Array (Doc Void) -> Doc Void
 printAttribute name a = D.text "-" <> D.text name <> printParens' a <> D.text "."
@@ -290,8 +291,10 @@ printExpr' prec = case _ of
     parenPrec prec $
       printUnaryOp op <> D.space <> printExpr e1
 
-  S.Macro name args ->
-    D.text ("?" <> name) <> foldMap (printParens <<< commaSepMap printAtomic) args
+  S.Macro name Nothing -> D.text ("?" <> name)
+  S.Macro name (Just args) -> D.flexGroup $
+    D.text ("?" <> name) <> printParens
+      (D.softBreak <> intercalate trailingComma (D.indent <<< printAtomic <$> NEA.toArray args) <> D.softBreak)
 
 tiny :: ErlExpr -> Boolean
 tiny (S.Var _ []) = true

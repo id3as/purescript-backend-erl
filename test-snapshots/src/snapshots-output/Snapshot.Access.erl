@@ -1,20 +1,15 @@
+% Snapshot.Access
 -module(snapshot_access@ps).
 -export([foo/0, foo/1, f/0, f/1, bar/0, bar/1, g/0, g/1, h/0, h/1]).
 -compile(no_auto_import).
 foo() ->
-  fun
-    (I) ->
-      foo(I)
-  end.
+  fun foo/1.
 
 foo(I) ->
   #{ x => I + 9, y => I - 5 }.
 
 f() ->
-  fun
-    (I) ->
-      f(I)
-  end.
+  fun f/1.
 
 f(I) ->
   begin
@@ -23,19 +18,13 @@ f(I) ->
   end.
 
 bar() ->
-  fun
-    (V) ->
-      bar(V)
-  end.
+  fun bar/1.
 
 bar(#{ x := V, y := V@1 }) ->
   (V - V@1) * V@1.
 
 g() ->
-  fun
-    (I) ->
-      g(I)
-  end.
+  fun g/1.
 
 g(I) ->
   begin
@@ -44,10 +33,7 @@ g(I) ->
   end.
 
 h() ->
-  fun
-    (Mi) ->
-      h(Mi)
-  end.
+  fun h/1.
 
 h(Mi) ->
   case Mi of

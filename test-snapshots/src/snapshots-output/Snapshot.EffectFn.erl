@@ -1,3 +1,4 @@
+% Snapshot.EffectFn
 -module(snapshot_effectFn@ps).
 -export([ x/0
         , x/1
@@ -13,10 +14,7 @@
         ]).
 -compile(no_auto_import).
 x() ->
-  fun
-    (A) ->
-      x(A)
-  end.
+  fun x/1.
 
 x(A) ->
   fun
@@ -52,10 +50,7 @@ main1() ->
   end.
 
 callY() ->
-  fun
-    (F) ->
-      callY(F)
-  end.
+  fun callY/1.
 
 callY(F) ->
   fun

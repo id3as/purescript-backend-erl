@@ -1,3 +1,4 @@
+% Snapshot.Literals.Char
 -module(snapshot_literals_char@ps).
 -export([ vtab/0
         , tab/0

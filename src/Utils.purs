@@ -109,7 +109,7 @@ loadModuleMain
      }
   -> Aff (Either ExecaResult ExecaResult)
 loadModuleMain { modulePath, ebin, runMain } = do
-  -- Console.log $ "compile " <> modulePath
+  -- Console.log $ "erlc " <> modulePath
   spawned1 <- execa "erlc" [ "+no_ssa_opt", "-o", ebin, modulePath ] identity
   spawned1.getResult >>= case _, runMain of
     e, _ | errored e -> pure (Left e)
@@ -132,6 +132,7 @@ loadModuleMain { modulePath, ebin, runMain } = do
               assertEq(X, Y) -> erlang:error({{actual, X}, {expected, Y}}).
               """
         ]
+      -- Console.log $ "escript " <> scriptFile
       spawned2 <- execa "escript" [ scriptFile ] _ { env = Just ((FO.singleton "ERL_FLAGS" $ "-pa " <> ebin)), extendEnv = Just true }
       spawned2.getResult >>= case _ of
         e | errored e -> pure (Left e)

@@ -1,3 +1,4 @@
+% Snapshot.NestedDo
 -module(snapshot_nestedDo@ps).
 -export([ pure_/0
         , 'renamed.0'/0

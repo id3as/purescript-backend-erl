@@ -1,3 +1,4 @@
+% Snapshot.Erl.Data.Variant
 -module(snapshot_erl_data_variant@ps).
 -export([ showArray/0
         , show2/0
@@ -14,6 +15,19 @@
         , result/0
         ]).
 -compile(no_auto_import).
+-define( MEMOIZE_AS(Key, Expr)
+       , case persistent_term:get(Key, undefined) of
+           undefined ->
+             begin
+               MemoizeAsResult = Expr,
+               persistent_term:put(Key, MemoizeAsResult),
+               MemoizeAsResult
+             end;
+           MemoizeAsResult ->
+             MemoizeAsResult
+         end
+       ).
+
 showArray() ->
   #{ show =>
      (data_show@ps:showArrayImpl())
@@ -21,36 +35,36 @@ showArray() ->
    }.
 
 show2() ->
-  erlang:map_get(
-    show,
-    erl_data_variant@ps:showVariant(
-      undefined,
-      #{ variantTags =>
-         fun
-           (_) ->
-             {cons, a, {cons, b, {cons, c, {nil}}}}
-         end
-       },
-      #{ variantShows =>
-         fun
-           (_) ->
-             { cons
-             , data_show@ps:showIntImpl()
-             , { cons
-               , data_show@ps:showStringImpl()
-               , {cons, erlang:map_get(show, showArray()), {nil}}
+  ?MEMOIZE_AS(
+    {snapshot_erl_data_variant@ps, show2, '(memoized)'},
+    erlang:map_get(
+      show,
+      erl_data_variant@ps:showVariant(
+        undefined,
+        #{ variantTags =>
+           fun
+             (_) ->
+               {cons, a, {cons, b, {cons, c, {nil}}}}
+           end
+         },
+        #{ variantShows =>
+           fun
+             (_) ->
+               { cons
+               , data_show@ps:showIntImpl()
+               , { cons
+                 , data_show@ps:showStringImpl()
+                 , {cons, erlang:map_get(show, showArray()), {nil}}
+                 }
                }
-             }
-         end
-       }
+           end
+         }
+      )
     )
   ).
 
 test3() ->
-  fun
-    (R) ->
-      test3(R)
-  end.
+  fun test3/1.
 
 test3(R = #{ type := R@1 }) ->
   if
@@ -69,10 +83,7 @@ test3(R = #{ type := R@1 }) ->
   end.
 
 test2() ->
-  fun
-    (V) ->
-      test2(V)
-  end.
+  fun test2/1.
 
 test2(_) ->
   fun
@@ -122,10 +133,7 @@ test2(_) ->
   end.
 
 test1() ->
-  fun
-    (V) ->
-      test1(V)
-  end.
+  fun test1/1.
 
 test1(_) ->
   fun
@@ -153,27 +161,20 @@ test1(_) ->
   end.
 
 noInline() ->
-  fun
-    (A) ->
-      noInline(A)
-  end.
+  fun noInline/1.
 
 noInline(A) ->
   A.
 
 demandAnalysisBug() ->
-  fun
-    (R) ->
-      demandAnalysisBug(R)
-  end.
+  fun demandAnalysisBug/1.
 
 demandAnalysisBug(R = #{ type := R@1 }) ->
   (R@1 =:= a) andalso ((erlang:map_get(nested, erlang:map_get(value, R))) =:= 2).
 
 result() ->
-  begin
-    V = test3(),
-    V@1 = demandAnalysisBug(),
+  ?MEMOIZE_AS(
+    {snapshot_erl_data_variant@ps, result, '(memoized)'},
     { { (noInline(test1(undefined)))(#{ type => a, value => 5 })
       , (noInline(test1(undefined)))(#{ type => b, value => <<"5">> })
       , (noInline(test1(undefined)))
@@ -183,15 +184,17 @@ result() ->
       }
     , ((noInline(test2(undefined)))(#{ type => a, value => 1 }))
       (#{ type => a, value => 2 })
-    , { (noInline(V))(#{ type => a, value => 5 })
-      , (noInline(V))(#{ type => b, value => <<"hi">> })
-      , (noInline(V))
+    , { (noInline(fun test3/1))(#{ type => a, value => 5 })
+      , (noInline(fun test3/1))(#{ type => b, value => <<"hi">> })
+      , (noInline(fun test3/1))
         (#{ type => c, value => array:from_list([unit, unit, unit]) })
       }
-    , { (noInline(V@1))(#{ type => a, value => #{ nested => 2 } })
-      , (noInline(V@1))(#{ type => a, value => #{ nested => 3 } })
-      , (noInline(V@1))(#{ type => b, value => unit })
+    , { (noInline(fun demandAnalysisBug/1))
+        (#{ type => a, value => #{ nested => 2 } })
+      , (noInline(fun demandAnalysisBug/1))
+        (#{ type => a, value => #{ nested => 3 } })
+      , (noInline(fun demandAnalysisBug/1))(#{ type => b, value => unit })
       }
     }
-  end.
+  ).
 

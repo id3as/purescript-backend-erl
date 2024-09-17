@@ -29,6 +29,7 @@ import Data.Bitraversable (bitraverse)
 import Data.FoldableWithIndex (foldMapWithIndex)
 import Data.Functor.Compose (Compose(..))
 import Data.FunctorWithIndex (mapWithIndex)
+import Data.Identity (Identity(..))
 import Data.Map (Map, SemigroupMap(..))
 import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, isJust)
@@ -149,6 +150,11 @@ instance semiringDemands :: Semiring Demands where
 
 -- | Run optimizations on `ErlDefinition`.
 optimizePatternsDecl :: ErlDefinition -> ErlDefinition
+-- TODO this is really ugly
+optimizePatternsDecl (FunctionDefinition name args (S.Macro "MEMOIZE_AS" (Just keyExpr))) | [ key, expr ] <- NEA.toArray keyExpr =
+  case optimizePatternsDecl (FunctionDefinition name args expr) of
+    FunctionDefinition _ args' expr' ->
+      FunctionDefinition name args' (S.Macro "MEMOIZE_AS" (Just (NEA.cons' key [ expr' ])))
 optimizePatternsDecl (FunctionDefinition name args expr) =
   -- Run it as a function definition.
   case optimizePatterns (S.Fun Nothing [ Tuple (FunHead args Nothing) expr ]) of
@@ -451,6 +457,8 @@ optimizePatternDemand = case _ of
   S.RecordUpdate e kvs -> S.RecordUpdate <$> opd e <*> opdss kvs
   S.FunCall me e es -> S.FunCall <$> opds me <*> opd e <*> opds es
   S.FunName me e arity -> S.FunName <$> opds me <*> opd e <@> arity
+  S.Macro name (Just args) | "MEMOIZE_AS" <- name ->
+    pure $ S.Macro name $ Just $ (fst <<< flip runWriterT mempty <<< opd) <$> args
   S.Macro name margs -> S.Macro name <$> opdss margs
   S.BinOp op e1 e2 | shortCircuits op ->
     S.BinOp op <$> opd e1 <*> mightNotRun (opd e2)

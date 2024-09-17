@@ -238,7 +238,7 @@ renameTree = case _ of
 
   S.FunName me e arity -> S.FunName <$> oprs me <*> opr e <@> arity
 
-  -- S.Macro name margs -> S.Macro name <$> traverse (traverse renameTree) margs
+  S.Macro name margs | "MEMOIZE_AS" <- name -> S.Macro name <$> traverse (traverse renameTree) margs
   S.Macro name Nothing -> pure (S.Macro name Nothing)
   -- Macros that use their arguments multiple times are allergic to case
   -- statements that bind any variables, so we hoist arguments if needed

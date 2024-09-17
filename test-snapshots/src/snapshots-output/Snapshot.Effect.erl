@@ -1,3 +1,4 @@
+% Snapshot.Effect
 -module(snapshot_effect@ps).
 -export([ 'don\'tInlineMeMe'/0
         , 'don\'tInlineMeMe'/1
@@ -14,10 +15,7 @@
         ]).
 -compile(no_auto_import).
 'don\'tInlineMeMe'() ->
-  fun
-    (V) ->
-      'don\'tInlineMeMe'(V)
-  end.
+  fun 'don\'tInlineMeMe'/1.
 
 'don\'tInlineMeMe'(_) ->
   fun
@@ -52,10 +50,7 @@ lastPureIsUnwrapped() ->
   end.
 
 doWhen() ->
-  fun
-    (B) ->
-      doWhen(B)
-  end.
+  fun doWhen/1.
 
 doWhen(B) ->
   begin
@@ -84,10 +79,7 @@ doWhen(B) ->
   end.
 
 caseInChain() ->
-  fun
-    (I) ->
-      caseInChain(I)
-  end.
+  fun caseInChain/1.
 
 caseInChain(I) ->
   fun

@@ -1,3 +1,4 @@
+% Snapshot.Let.EvenOdd
 -module(snapshot_let_evenOdd@ps).
 -export([ 'result.isOdd'/0
         , 'result.isOdd'/1
@@ -7,10 +8,7 @@
         ]).
 -compile(no_auto_import).
 'result.isOdd'() ->
-  fun
-    (V) ->
-      'result.isOdd'(V)
-  end.
+  fun 'result.isOdd'/1.
 
 'result.isOdd'(V) ->
   if
@@ -21,10 +19,7 @@
   end.
 
 'result.isEven'() ->
-  fun
-    (V) ->
-      'result.isEven'(V)
-  end.
+  fun 'result.isEven'/1.
 
 'result.isEven'(V) ->
   if

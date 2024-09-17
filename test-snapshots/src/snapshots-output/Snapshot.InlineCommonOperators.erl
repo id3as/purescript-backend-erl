@@ -1,3 +1,4 @@
+% Snapshot.InlineCommonOperators
 -module(snapshot_inlineCommonOperators@ps).
 -export([ min/0
         , min/2
@@ -77,10 +78,7 @@ max(X, Y) ->
   end.
 
 'N'() ->
-  fun
-    (X) ->
-      'N'(X)
-  end.
+  fun 'N'/1.
 
 'N'(X) ->
   X.
@@ -94,10 +92,7 @@ newtypeN_() ->
    }.
 
 stringAppend() ->
-  fun
-    (World) ->
-      stringAppend(World)
-  end.
+  fun stringAppend/1.
 
 stringAppend(World) ->
   <<"Hello ", World/binary>>.
@@ -136,10 +131,7 @@ inlineOver2() ->
   data_semiring@ps:intAdd().
 
 inlineOver() ->
-  fun
-    (V) ->
-      inlineOver(V)
-  end.
+  fun inlineOver/1.
 
 inlineOver(V) ->
   V + 1.

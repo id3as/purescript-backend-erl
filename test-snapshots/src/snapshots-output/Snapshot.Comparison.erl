@@ -1,3 +1,4 @@
+% Snapshot.Comparison
 -module(snapshot_comparison@ps).
 -export([ stringComparison/0
         , stringComparison/2

@@ -1,3 +1,4 @@
+% Snapshot.Dodgy
 -module(snapshot_dodgy@ps).
 -export([ 'PrivateProcessTTimeoutMsg__'/0
         , 'ThereToGetRidOfUnreachableWarning'/0
@@ -10,9 +11,10 @@
 -compile(no_auto_import).
 -define( IS_KNOWN_TAG(Tag, Arity, V)
        , ((erlang:is_tuple(V))
-         andalso (((Arity + 1) =:= (erlang:tuple_size(V)))
-           andalso (Tag =:= (erlang:element(1, V)))))
+           andalso (((Arity + 1) =:= (erlang:tuple_size(V)))
+             andalso (Tag =:= (erlang:element(1, V)))))
        ).
+
 'PrivateProcessTTimeoutMsg__'() ->
   {privateProcessTTimeoutMsg__}.
 
@@ -20,19 +22,13 @@
   {thereToGetRidOfUnreachableWarning}.
 
 noInline() ->
-  fun
-    (A) ->
-      noInline(A)
-  end.
+  fun noInline/1.
 
 noInline(A) ->
   A.
 
 isSecretMsg() ->
-  fun
-    (V) ->
-      isSecretMsg(V)
-  end.
+  fun isSecretMsg/1.
 
 isSecretMsg(V) ->
   ?IS_KNOWN_TAG(privateProcessTTimeoutMsg__, 0, V).

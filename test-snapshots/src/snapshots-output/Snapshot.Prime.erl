@@ -1,3 +1,4 @@
+% Snapshot.Prime
 -module(snapshot_prime@ps).
 -export([ 'NCtor'/0
         , 'NCtor'/1
@@ -40,20 +41,27 @@
         , useMember/1
         ]).
 -compile(no_auto_import).
+-define( MEMOIZE_AS(Key, Expr)
+       , case persistent_term:get(Key, undefined) of
+           undefined ->
+             begin
+               MemoizeAsResult = Expr,
+               persistent_term:put(Key, MemoizeAsResult),
+               MemoizeAsResult
+             end;
+           MemoizeAsResult ->
+             MemoizeAsResult
+         end
+       ).
+
 'NCtor'() ->
-  fun
-    (X) ->
-      'NCtor'(X)
-  end.
+  fun 'NCtor'/1.
 
 'NCtor'(X) ->
   X.
 
 'NewtypeCtor\''() ->
-  fun
-    (X) ->
-      'NewtypeCtor\''(X)
-  end.
+  fun 'NewtypeCtor\''/1.
 
 'NewtypeCtor\''(X) ->
   X.
@@ -77,55 +85,37 @@
   end.
 
 useNewtypeType() ->
-  fun
-    (I) ->
-      useNewtypeType(I)
-  end.
+  fun useNewtypeType/1.
 
 useNewtypeType(I) ->
   I.
 
 useNewtypeCtor() ->
-  fun
-    (I) ->
-      useNewtypeCtor(I)
-  end.
+  fun useNewtypeCtor/1.
 
 useNewtypeCtor(I) ->
   I.
 
 useDataType() ->
-  fun
-    (V) ->
-      useDataType(V)
-  end.
+  fun useDataType/1.
 
 useDataType(_) ->
   {dCtor}.
 
 useDataCtor() ->
-  fun
-    (S) ->
-      useDataCtor(S)
-  end.
+  fun useDataCtor/1.
 
 useDataCtor(S) ->
   {'ctor\'', S, 4}.
 
 normal() ->
-  fun
-    (Dict) ->
-      normal(Dict)
-  end.
+  fun normal/1.
 
 normal(#{ normal := Dict }) ->
   Dict.
 
 useNormal() ->
-  fun
-    (DictNormal) ->
-      useNormal(DictNormal)
-  end.
+  fun useNormal/1.
 
 useNormal(DictNormal) ->
   begin
@@ -146,19 +136,22 @@ useNormal(DictNormal) ->
   end.
 
 'instanceName\''() ->
-  #{ normal =>
-     fun
-       (V) ->
-         case V of
-           {f1} ->
-             <<"F1">>;
-           {f2} ->
-             <<"F2">>;
-           _ ->
-             erlang:error({fail, <<"Failed pattern match">>})
-         end
-     end
-   }.
+  ?MEMOIZE_AS(
+    {snapshot_prime@ps, 'instanceName\'', '(memoized)'},
+    #{ normal =>
+       fun
+         (V) ->
+           case V of
+             {f1} ->
+               <<"F1">>;
+             {f2} ->
+               <<"F2">>;
+             _ ->
+               erlang:error({fail, <<"Failed pattern match">>})
+           end
+       end
+     }
+  ).
 
 useNormal1() ->
   begin
@@ -170,19 +163,13 @@ useInstance() ->
   ((useNormal1())({f1}))({f2}).
 
 ignore() ->
-  fun
-    (Dict) ->
-      ignore(Dict)
-  end.
+  fun ignore/1.
 
 ignore(#{ ignore := Dict }) ->
   Dict.
 
 useClass() ->
-  fun
-    (DictClassName_) ->
-      useClass(DictClassName_)
-  end.
+  fun useClass/1.
 
 useClass(DictClassName_) ->
   ignore(DictClassName_).
@@ -206,34 +193,26 @@ useFooPrime1() ->
   'foo\''().
 
 result() ->
-  begin
-    V = 'foo\'oo'(),
-    V@1 = 'foo\'\''(),
-    V@2 = 'foo\''(),
-    #{ test1 => V@2 =:= V@2
-     , test2 => V@1 =:= V@1
-     , test3 => V =:= V
+  ?MEMOIZE_AS(
+    {snapshot_prime@ps, result, '(memoized)'},
+    #{ test1 => ('foo\''()) =:= ('foo\''())
+     , test2 => ('foo\'\''()) =:= ('foo\'\''())
+     , test3 => ('foo\'oo'()) =:= ('foo\'oo'())
      , useInstance => ((useNormal1())({f1}))({f2})
      }
-  end.
+  ).
 
 foo() ->
   <<"foo">>.
 
 'classMember\''() ->
-  fun
-    (Dict) ->
-      'classMember\''(Dict)
-  end.
+  fun 'classMember\''/1.
 
 'classMember\''(#{ 'classMember\'' := Dict }) ->
   Dict.
 
 useMember() ->
-  fun
-    (DictClassMember) ->
-      useMember(DictClassMember)
-  end.
+  fun useMember/1.
 
 useMember(DictClassMember) ->
   'classMember\''(DictClassMember).

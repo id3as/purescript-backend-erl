@@ -1,11 +1,9 @@
+% Snapshot.State.Log
 -module(snapshot_state_log@ps).
 -export([freshE/0, freshE/1, 'exE\''/0, 'exE\''/1, exE/0, exE/1]).
 -compile(no_auto_import).
 freshE() ->
-  fun
-    (DictMonadState) ->
-      freshE(DictMonadState)
-  end.
+  fun freshE/1.
 
 freshE(#{ state := DictMonadState }) ->
   DictMonadState(fun
@@ -14,10 +12,7 @@ freshE(#{ state := DictMonadState }) ->
   end).
 
 'exE\''() ->
-  fun
-    (S) ->
-      'exE\''(S)
-  end.
+  fun 'exE\''/1.
 
 'exE\''(S) ->
   begin
@@ -33,10 +28,7 @@ freshE(#{ state := DictMonadState }) ->
   end.
 
 exE() ->
-  fun
-    (S) ->
-      exE(S)
-  end.
+  fun exE/1.
 
 exE(S) ->
   begin

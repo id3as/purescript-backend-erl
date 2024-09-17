@@ -1,11 +1,9 @@
+% Snapshot.Let.Fib
 -module(snapshot_let_fib@ps).
 -export(['result.fib'/0, 'result.fib'/1, result/0]).
 -compile(no_auto_import).
 'result.fib'() ->
-  fun
-    (V) ->
-      'result.fib'(V)
-  end.
+  fun 'result.fib'/1.
 
 'result.fib'(V) ->
   if

@@ -1,3 +1,4 @@
+% Snapshot.State
 -module(snapshot_state@ps).
 -export([ 'State'/0
         , 'State'/1
@@ -22,11 +23,21 @@
         , ex/1
         ]).
 -compile(no_auto_import).
+-define( MEMOIZE_AS(Key, Expr)
+       , case persistent_term:get(Key, undefined) of
+           undefined ->
+             begin
+               MemoizeAsResult = Expr,
+               persistent_term:put(Key, MemoizeAsResult),
+               MemoizeAsResult
+             end;
+           MemoizeAsResult ->
+             MemoizeAsResult
+         end
+       ).
+
 'State'() ->
-  fun
-    (X) ->
-      'State'(X)
-  end.
+  fun 'State'/1.
 
 'State'(X) ->
   X.
@@ -49,19 +60,13 @@ functorState() ->
    }.
 
 freshMTL() ->
-  fun
-    (X) ->
-      freshMTL(X)
-  end.
+  fun freshMTL/1.
 
 freshMTL(X) ->
   {tuple, X, X + 1}.
 
 freshE() ->
-  fun
-    (DictMonadState) ->
-      freshE(DictMonadState)
-  end.
+  fun freshE/1.
 
 freshE(#{ state := DictMonadState }) ->
   DictMonadState(fun
@@ -70,19 +75,13 @@ freshE(#{ state := DictMonadState }) ->
   end).
 
 fresh() ->
-  fun
-    (S) ->
-      fresh(S)
-  end.
+  fun fresh/1.
 
 fresh(S) ->
   {tuple, S, S + 1}.
 
 exMTL() ->
-  fun
-    (S) ->
-      exMTL(S)
-  end.
+  fun exMTL/1.
 
 exMTL(S) ->
   begin
@@ -91,10 +90,7 @@ exMTL(S) ->
   end.
 
 'exE\''() ->
-  fun
-    (S) ->
-      'exE\''(S)
-  end.
+  fun 'exE\''/1.
 
 'exE\''(S) ->
   begin
@@ -106,10 +102,7 @@ exMTL(S) ->
   end.
 
 exE() ->
-  fun
-    (S) ->
-      exE(S)
-  end.
+  fun exE/1.
 
 exE(S) ->
   begin
@@ -156,29 +149,32 @@ bindState() ->
    }.
 
 applyState() ->
-  #{ apply =>
-     fun
-       (F) ->
-         fun
-           (A) ->
-             fun
-               (S) ->
-                 begin
-                   V1 = F(S),
-                   V1@1 = A(erlang:element(3, V1)),
-                   ((erlang:map_get(pure, applicativeState()))
-                    ((erlang:element(2, V1))(erlang:element(2, V1@1))))
-                   (erlang:element(3, V1@1))
-                 end
-             end
-         end
-     end
-   , 'Functor0' =>
-     fun
-       (_) ->
-         functorState()
-     end
-   }.
+  ?MEMOIZE_AS(
+    {snapshot_state@ps, applyState, '(memoized)'},
+    #{ apply =>
+       fun
+         (F) ->
+           fun
+             (A) ->
+               fun
+                 (S) ->
+                   begin
+                     V1 = F(S),
+                     V1@1 = A(erlang:element(3, V1)),
+                     ((erlang:map_get(pure, applicativeState()))
+                      ((erlang:element(2, V1))(erlang:element(2, V1@1))))
+                     (erlang:element(3, V1@1))
+                   end
+               end
+           end
+       end
+     , 'Functor0' =>
+       fun
+         (_) ->
+           functorState()
+       end
+     }
+  ).
 
 applicativeState() ->
   #{ pure =>
@@ -197,10 +193,7 @@ applicativeState() ->
    }.
 
 ex() ->
-  fun
-    (S) ->
-      ex(S)
-  end.
+  fun ex/1.
 
 ex(S) ->
   begin

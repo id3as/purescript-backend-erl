@@ -1,3 +1,4 @@
+% Snapshot.UncurriedFunction
 -module(snapshot_uncurriedFunction@ps).
 -export([ test4a/0
         , test4a/1

@@ -1,11 +1,25 @@
+% Snapshot.FnXLazyBug
 -module(snapshot_fnXLazyBug@ps).
 -export([zipWith4/0, zipWith4/5, result/0]).
 -compile(no_auto_import).
 -define( IS_KNOWN_TAG(Tag, Arity, V)
        , ((erlang:is_tuple(V))
-         andalso (((Arity + 1) =:= (erlang:tuple_size(V)))
-           andalso (Tag =:= (erlang:element(1, V)))))
+           andalso (((Arity + 1) =:= (erlang:tuple_size(V)))
+             andalso (Tag =:= (erlang:element(1, V)))))
        ).
+-define( MEMOIZE_AS(Key, Expr)
+       , case persistent_term:get(Key, undefined) of
+           undefined ->
+             begin
+               MemoizeAsResult = Expr,
+               persistent_term:put(Key, MemoizeAsResult),
+               MemoizeAsResult
+             end;
+           MemoizeAsResult ->
+             MemoizeAsResult
+         end
+       ).
+
 zipWith4() ->
   fun
     (F) ->
@@ -65,23 +79,26 @@ zipWith4(F, As, Bs, Cs, Ds) ->
   end.
 
 result() ->
-  zipWith4(
-    fun
-      (A) ->
-        fun
-          (B) ->
-            fun
-              (C) ->
-                fun
-                  (D) ->
-                    (A * B) + (C * D)
-                end
-            end
-        end
-    end,
-    [1, 2, 9],
-    [0, 1],
-    [3, 4],
-    [5, 6, 7, 8]
+  ?MEMOIZE_AS(
+    {snapshot_fnXLazyBug@ps, result, '(memoized)'},
+    zipWith4(
+      fun
+        (A) ->
+          fun
+            (B) ->
+              fun
+                (C) ->
+                  fun
+                    (D) ->
+                      (A * B) + (C * D)
+                  end
+              end
+          end
+      end,
+      [1, 2, 9],
+      [0, 1],
+      [3, 4],
+      [5, 6, 7, 8]
+    )
   ).
 
