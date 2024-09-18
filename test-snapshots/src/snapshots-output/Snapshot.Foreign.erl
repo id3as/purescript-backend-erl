@@ -10,47 +10,31 @@
         , atomId/1
         ]).
 -compile(no_auto_import).
--define( MEMOIZE_AS(Key, Expr)
-       , case persistent_term:get(Key, undefined) of
-           undefined ->
-             begin
-               MemoizeAsResult = Expr,
-               persistent_term:put(Key, MemoizeAsResult),
-               MemoizeAsResult
-             end;
-           MemoizeAsResult ->
-             MemoizeAsResult
-         end
-       ).
-
 memptys() ->
   #{ string => <<"">>, binary => <<"">>, iolist => [], iodata => [] }.
 
 exceptions() ->
-  ?MEMOIZE_AS(
-    {snapshot_foreign@ps, exceptions, '(memoized)'},
-    #{ throw =>
-       fun
-         () ->
-           erlang:throw(<<"throw">>)
-       end
-     , error =>
-       fun
-         () ->
-           erlang:error(<<"error">>)
-       end
-     , exit =>
-       fun
-         () ->
-           erlang:exit(<<"exit">>)
-       end
-     , throwException =>
-       fun
-         () ->
-           erlang:error(effect_exception@foreign:error(<<"throwException">>))
-       end
-     }
-  ).
+  #{ throw =>
+     fun
+       () ->
+         erlang:throw(<<"throw">>)
+     end
+   , error =>
+     fun
+       () ->
+         erlang:error(<<"error">>)
+     end
+   , exit =>
+     fun
+       () ->
+         erlang:exit(<<"exit">>)
+     end
+   , throwException =>
+     fun
+       () ->
+         erlang:error(effect_exception@foreign:error(<<"throwException">>))
+     end
+   }.
 
 coercions() ->
   #{ binary2bitstring =>
@@ -66,30 +50,27 @@ coercions() ->
    }.
 
 byteSizes() ->
-  ?MEMOIZE_AS(
-    {snapshot_foreign@ps, byteSizes, '(memoized)'},
-    #{ binary =>
-       fun
-         (B) ->
-           erlang:byte_size(B)
-       end
-     , bitstring =>
-       fun
-         (B) ->
-           erlang:byte_size(B)
-       end
-     , iodata =>
-       fun
-         (D) ->
-           erlang:iolist_size(D)
-       end
-     , iolist =>
-       fun
-         (L) ->
-           erlang:iolist_size(L)
-       end
-     }
-  ).
+  #{ binary =>
+     fun
+       (B) ->
+         erlang:byte_size(B)
+     end
+   , bitstring =>
+     fun
+       (B) ->
+         erlang:byte_size(B)
+     end
+   , iodata =>
+     fun
+       (D) ->
+         erlang:iolist_size(D)
+     end
+   , iolist =>
+     fun
+       (L) ->
+         erlang:iolist_size(L)
+     end
+   }.
 
 atomId() ->
   fun
@@ -101,42 +82,39 @@ atomEq() ->
   #{ true => true, false => false }.
 
 appends() ->
-  ?MEMOIZE_AS(
-    {snapshot_foreign@ps, appends, '(memoized)'},
-    #{ string =>
-       fun
-         (A) ->
-           fun
-             (B) ->
-               <<A/binary, B/binary>>
-           end
-       end
-     , binary =>
-       fun
-         (A) ->
-           fun
-             (B) ->
-               <<A/binary, B/binary>>
-           end
-       end
-     , iolist =>
-       fun
-         (A) ->
-           fun
-             (B) ->
-               [A, B]
-           end
-       end
-     , iodata =>
-       fun
-         (A) ->
-           fun
-             (B) ->
-               [A, B]
-           end
-       end
-     }
-  ).
+  #{ string =>
+     fun
+       (A) ->
+         fun
+           (B) ->
+             <<A/binary, B/binary>>
+         end
+     end
+   , binary =>
+     fun
+       (A) ->
+         fun
+           (B) ->
+             <<A/binary, B/binary>>
+         end
+     end
+   , iolist =>
+     fun
+       (A) ->
+         fun
+           (B) ->
+             [A, B]
+         end
+     end
+   , iodata =>
+     fun
+       (A) ->
+         fun
+           (B) ->
+             [A, B]
+         end
+     end
+   }.
 
 atomId(V) ->
   begin

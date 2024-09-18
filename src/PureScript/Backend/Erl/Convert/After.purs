@@ -151,10 +151,10 @@ instance semiringDemands :: Semiring Demands where
 -- | Run optimizations on `ErlDefinition`.
 optimizePatternsDecl :: ErlDefinition -> ErlDefinition
 -- TODO this is really ugly
-optimizePatternsDecl (FunctionDefinition name args (S.Macro "MEMOIZE_AS" (Just keyExpr))) | [ key, expr ] <- NEA.toArray keyExpr =
+optimizePatternsDecl (FunctionDefinition name args (S.Macro "MEMOIZE_AS" (Just keyExpr))) | [ key, metadata, expr ] <- NEA.toArray keyExpr =
   case optimizePatternsDecl (FunctionDefinition name args expr) of
     FunctionDefinition _ args' expr' ->
-      FunctionDefinition name args' (S.Macro "MEMOIZE_AS" (Just (NEA.cons' key [ expr' ])))
+      FunctionDefinition name args' (S.Macro "MEMOIZE_AS" (Just (NEA.cons' key [ metadata, expr' ])))
 optimizePatternsDecl (FunctionDefinition name args expr) =
   -- Run it as a function definition.
   case optimizePatterns (S.Fun Nothing [ Tuple (FunHead args Nothing) expr ]) of

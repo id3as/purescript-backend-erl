@@ -241,8 +241,24 @@ data UnaryOperator
 
 derive instance eqUnaryOperator :: Eq UnaryOperator
 
+--------------------------------------------------------------------------------
+-- AST traversals                                                             --
+--------------------------------------------------------------------------------
+
+-- | Simple traversal: append the values of all nodes together (not just leaf
+-- | nodes)
 visit :: forall m. Monoid m => (ErlExpr -> m) -> ErlExpr -> m
-visit f = go
+visit f = visit' \expr -> Append (f expr)
+
+data Visit m
+  = ShortCircuit m
+  | Append m
+  | Continue (m -> m)
+
+-- | Traverse with the ability to short circuit and alter results of child
+-- | traversals
+visit' :: forall m. Monoid m => (ErlExpr -> Visit m) -> ErlExpr -> m
+visit' f = go
   where
   goes :: Array ErlExpr -> m
   goes es = foldMap go es
@@ -250,38 +266,155 @@ visit f = go
   goFunHead (FunHead _ps mg) = foldMap (coerce go) mg
   goIfClause (IfClause e1 e2) = coerce go e1 <> go e2
   goCaseClause (CaseClause _p1 me2 e3) = foldMap (coerce go) me2 <> go e3
-  go e0 = f e0 <> case e0 of
-    Literal _ -> mempty
-    Var _ _ -> mempty
-    List es -> goes es
-    ListCons es e -> goes es <> go e
-    Tupled es -> goes es
-    Map kvs -> foldMap (go <<< snd) kvs
-    MapUpdate e kvs -> go e <> foldMap (go <<< snd) kvs
-    Record kvs -> foldMap (go <<< snd) kvs
-    RecordUpdate e kvs -> go e <> foldMap (go <<< snd) kvs
-    Assignments es e -> foldMap (go <<< snd) es <> go e
-    Fun _ heads -> foldMap (bifoldMap goFunHead go) heads
-    FunCall me e es -> foldMap go me <> go e <> goes es
-    FunName me e _ -> foldMap go me <> go e
-    Macro _ mes -> foldMap (foldMap go) mes
-    If cs -> foldMap goIfClause cs
-    Case e cs -> go e <> foldMap goCaseClause cs
-    BinOp _ e1 e2 -> go e1 <> go e2
-    UnaryOp _ e1 -> go e1
-    BinaryAppend e1 e2 -> go e1 <> go e2
+  go e0 = case f e0 of
+    ShortCircuit m -> m
+    Append m -> m <> children e0
+    Continue mm -> mm (children e0)
+  children = case _ of
+      Literal _ -> mempty
+      Var _ _ -> mempty
+      List es -> goes es
+      ListCons es e -> goes es <> go e
+      Tupled es -> goes es
+      Map kvs -> foldMap (go <<< snd) kvs
+      MapUpdate e kvs -> go e <> foldMap (go <<< snd) kvs
+      Record kvs -> foldMap (go <<< snd) kvs
+      RecordUpdate e kvs -> go e <> foldMap (go <<< snd) kvs
+      Assignments es e -> foldMap (go <<< snd) es <> go e
+      Fun _ heads -> foldMap (bifoldMap goFunHead go) heads
+      FunCall me e es -> foldMap go me <> go e <> goes es
+      FunName me e _ -> foldMap go me <> go e
+      Macro _ mes -> foldMap (foldMap go) mes
+      If cs -> foldMap goIfClause cs
+      Case e cs -> go e <> foldMap goCaseClause cs
+      BinOp _ e1 e2 -> go e1 <> go e2
+      UnaryOp _ e1 -> go e1
+      BinaryAppend e1 e2 -> go e1 <> go e2
 
+-- | AST size
 termSize :: ErlExpr -> Int
 termSize = unwrap <<< visit (const (Additive 1))
 
+-- | The AST size of declarations in the module
 moduleSize :: ErlModule -> Int
 moduleSize { definitions } = sum $ definitions <#>
   \(FunctionDefinition _ _ expr) -> termSize expr
 
+-- | Get the set of macros used in the expression
 macros :: ErlExpr -> Set.Set String
 macros = visit case _ of
   Macro name _ -> Set.singleton name
   _ -> mempty
+
+
+data Complexity
+  = Lit Int
+  | Complex Int
+instance semigroupComplexity :: Semigroup Complexity where
+  append (Complex i) (Complex j) = Complex (i + j)
+  append (Lit i) (Complex j) = Complex (i + j)
+  append (Complex i) (Lit j) = Complex (i + j)
+  append (Lit i) (Lit j) = Lit (i + j)
+instance monoidComplexity :: Monoid Complexity where
+  mempty = Lit 0
+
+unComplexity :: Complexity -> Int
+unComplexity (Lit _) = 1
+unComplexity (Complex i) = i
+
+-- | Estimate the runtime complexity of an expression. Used for determining when
+-- | to memoize a function.
+estimatedComplexity :: ErlExpr -> Int
+estimatedComplexity = unComplexity <<< visit' case _ of
+  -- Do not recurse into closures
+  Fun _ _ -> ShortCircuit (Complex 1)
+  -- Yeah, `fun f/1` is an allocation ...
+  FunName _ _ _ -> ShortCircuit (Complex 1)
+  -- A curried call costs one
+  FunCall Nothing (FunCall _ _ _) _ -> Append (Complex 1)
+  -- Base calls cost more since they might do more work
+  -- (Note: atoms count during recursion, so unqualitifed >= 3,
+  -- and qualified calls >= 4, plus arguments of course)
+  FunCall _ _ _ -> Append (Complex 2)
+  -- Literals are cheap
+  Literal _ -> ShortCircuit (Lit 1)
+  -- Literal constructors are cheap if their children are literals
+  List _ -> groupOfLiterals
+  Tupled _ -> groupOfLiterals
+  Map _ -> groupOfLiterals
+  Record _ -> groupOfLiterals
+  -- Everything else costs 1 plus its children
+  _ -> Append (Complex 1)
+  where
+  groupOfLiterals :: Visit Complexity
+  groupOfLiterals = Continue case _ of
+    Lit _ -> Lit 1
+    Complex i -> Complex (i + 1)
+
+-- | Check whether an expression is a guard expression, able to be used in if
+-- | expressions and case guards
+guardExpr :: ErlExpr -> Boolean
+guardExpr = case _ of
+  Literal _ -> true
+  Var _ _ -> true
+  List items -> all guardExpr items
+  ListCons items tail -> all guardExpr items && guardExpr tail
+  Tupled items -> all guardExpr items
+  Map items -> all (guardExpr <<< snd) items
+  MapUpdate e items -> guardExpr e && all (guardExpr <<< snd) items
+  FunCall (Just (Literal (Atom mod))) (Literal (Atom fn)) args ->
+    Array.elem (Tuple mod fn) guardFns && all guardExpr args
+  BinOp _ e1 e2 -> guardExpr e1 && guardExpr e2
+  UnaryOp _ e -> guardExpr e
+  BinaryAppend e1 e2 -> guardExpr e1 && guardExpr e2
+  Macro "IS_KNOWN_TAG" margs -> maybe false (all guardExpr <<< NEA.toArray) margs
+  _ -> false
+
+guardFns :: Array (Tuple String String)
+guardFns = map (Tuple C.erlang)
+  [ "abs"
+  , "binary_part"
+  , "bit_size"
+  , "byte_size"
+  , "ceil"
+  , "element"
+  , "float"
+  , "floor"
+  , "hd"
+  , "is_atom"
+  , "is_binary"
+  , "is_bitstring"
+  , "is_boolean"
+  , "is_float"
+  , "is_function"
+  , "is_integer"
+  , "is_list"
+  , "is_map"
+  , "is_map_key"
+  , "is_number"
+  , "is_pid"
+  , "is_port"
+  -- , "is_record" -- has some side-conditions
+  , "is_reference"
+  , "is_tuple"
+  , "length"
+  , "map_get"
+  , "map_size"
+  , "max"
+  , "min"
+  , "node"
+  , "round"
+  , "self"
+  , "size"
+  , "tl"
+  , "trunc"
+  , "tuple_size"
+  ]
+
+--------------------------------------------------------------------------------
+-- AST construction helpers                                                   --
+--------------------------------------------------------------------------------
+
 
 curriedApp :: forall f. Foldable f => ErlExpr -> f ErlExpr -> ErlExpr
 curriedApp f es = foldl (\e e' -> FunCall Nothing e [ e' ]) f es
@@ -392,7 +525,7 @@ predefMacros =
           FunCall (Just $ atomLiteral C.erlang) (atomLiteral C.element)
             [ numberLiteral 1, Var "V" self ]
       ]
-  , Tuple (Tuple "MEMOIZE_AS" (NEA.fromArray [ "Key", "Expr" ])) $
+  , Tuple (Tuple "MEMOIZE_AS" (NEA.fromArray [ "Key", "_Metadata", "Expr" ])) $
       Case (FunCall (Just $ atomLiteral "persistent_term") (atomLiteral "get") [ Var "Key" self, atomLiteral "undefined" ])
         let
           ifNotFound = CaseClause (MatchLiteral (Atom "undefined")) Nothing $
@@ -409,65 +542,7 @@ predefMacros =
 mIS_KNOWN_TAG :: ErlExpr -> Int -> ErlExpr -> ErlExpr
 mIS_KNOWN_TAG tag arity v = Macro "IS_KNOWN_TAG" $ NEA.fromArray [ tag, Literal (Integer arity), v ]
 
-mMEMOIZE_AS :: Array String -> ErlExpr -> ErlExpr
-mMEMOIZE_AS keys expr = Macro "MEMOIZE_AS" $ NEA.fromArray [ key, expr ]
+mMEMOIZE_AS :: Array String -> ErlExpr -> ErlExpr -> ErlExpr
+mMEMOIZE_AS keys metadata expr = Macro "MEMOIZE_AS" $ NEA.fromArray [ key, metadata, expr ]
   where
   key = Tupled $ atomLiteral <$> (keys <> [ "(memoized)" ])
-
-guardExpr :: ErlExpr -> Boolean
-guardExpr = case _ of
-  Literal _ -> true
-  Var _ _ -> true
-  List items -> all guardExpr items
-  ListCons items tail -> all guardExpr items && guardExpr tail
-  Tupled items -> all guardExpr items
-  Map items -> all (guardExpr <<< snd) items
-  MapUpdate e items -> guardExpr e && all (guardExpr <<< snd) items
-  FunCall (Just (Literal (Atom mod))) (Literal (Atom fn)) args ->
-    Array.elem (Tuple mod fn) guardFns && all guardExpr args
-  BinOp _ e1 e2 -> guardExpr e1 && guardExpr e2
-  UnaryOp _ e -> guardExpr e
-  BinaryAppend e1 e2 -> guardExpr e1 && guardExpr e2
-  Macro "IS_KNOWN_TAG" margs -> maybe false (all guardExpr <<< NEA.toArray) margs
-  _ -> false
-
-guardFns :: Array (Tuple String String)
-guardFns = map (Tuple C.erlang)
-  [ "abs"
-  , "binary_part"
-  , "bit_size"
-  , "byte_size"
-  , "ceil"
-  , "element"
-  , "float"
-  , "floor"
-  , "hd"
-  , "is_atom"
-  , "is_binary"
-  , "is_bitstring"
-  , "is_boolean"
-  , "is_float"
-  , "is_function"
-  , "is_integer"
-  , "is_list"
-  , "is_map"
-  , "is_map_key"
-  , "is_number"
-  , "is_pid"
-  , "is_port"
-  -- , "is_record" -- has some side-conditions
-  , "is_reference"
-  , "is_tuple"
-  , "length"
-  , "map_get"
-  , "map_size"
-  , "max"
-  , "min"
-  , "node"
-  , "round"
-  , "self"
-  , "size"
-  , "tl"
-  , "trunc"
-  , "tuple_size"
-  ]

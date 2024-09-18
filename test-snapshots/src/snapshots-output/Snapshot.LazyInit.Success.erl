@@ -40,9 +40,10 @@ complicatedIdentity(_) ->
               #{ tick =>
                  if
                    N =< 0 ->
-                     identity();
+                     fun identity/1;
                    true ->
-                     (erlang:map_get(tock, (F(H@1, G@1, F))(N - 1)))(identity())
+                     (erlang:map_get(tock, (F(H@1, G@1, F))(N - 1)))
+                     (fun identity/1)
                  end
                , tock =>
                  fun

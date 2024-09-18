@@ -25,7 +25,7 @@ import PureScript.Backend.Erl.Convert.Common (erlModuleNameForeign, erlModuleNam
 import PureScript.Backend.Erl.Convert.Foreign (codegenForeign)
 import PureScript.Backend.Erl.Foreign.Analyze (Analyzer, analyzeCustom)
 import PureScript.Backend.Erl.Parser (ForeignDecls)
-import PureScript.Backend.Erl.Syntax (Accessor(..), ErlDefinition(..), ErlExport(..), ErlExpr, ErlModule, ErlPattern, access, atomLiteral, mIS_KNOWN_TAG, mMEMOIZE_AS, self)
+import PureScript.Backend.Erl.Syntax (Accessor(..), ErlDefinition(..), ErlExport(..), ErlExpr, ErlModule, ErlPattern, access, atomLiteral, intLiteral, mIS_KNOWN_TAG, mMEMOIZE_AS, self)
 import PureScript.Backend.Erl.Syntax as S
 import PureScript.Backend.Optimizer.Convert (BackendModule, ConvertEnv, getCtx, makeExternEvalRef, makeExternEvalSpine)
 import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal(..), ModuleName(..), Prop(..), Qualified(..))
@@ -310,11 +310,13 @@ codegenTopLevelBinding currentModule (Tuple (Ident i) n) =
   tryMemoize expr
     -- Do not memoize lambdas
     | S.Fun _ _ <- expr = expr
-    -- Do not memoize small terms
-    | S.termSize expr < 20 = expr
-    -- Do not memoize what are essentially literals
+    -- Preserve guard expressions
     | S.guardExpr expr = expr
-    | otherwise = mMEMOIZE_AS [ erlModuleNamePs currentModule, i ] expr
+    -- Do not memoize small terms
+    | otherwise =
+      case S.estimatedComplexity expr of
+        c | c < 16 -> expr
+        c -> mMEMOIZE_AS [ erlModuleNamePs currentModule, i ] (intLiteral c) expr
 
 -- When we recurse in the function side of applications, we don't need to
 -- consider calling conventions: they were already handled

@@ -15,7 +15,7 @@
         , result/0
         ]).
 -compile(no_auto_import).
--define( MEMOIZE_AS(Key, Expr)
+-define( MEMOIZE_AS(Key, _Metadata, Expr)
        , case persistent_term:get(Key, undefined) of
            undefined ->
              begin
@@ -35,31 +35,28 @@ showArray() ->
    }.
 
 show2() ->
-  ?MEMOIZE_AS(
-    {snapshot_erl_data_variant@ps, show2, '(memoized)'},
-    erlang:map_get(
-      show,
-      erl_data_variant@ps:showVariant(
-        undefined,
-        #{ variantTags =>
-           fun
-             (_) ->
-               {cons, a, {cons, b, {cons, c, {nil}}}}
-           end
-         },
-        #{ variantShows =>
-           fun
-             (_) ->
-               { cons
-               , data_show@ps:showIntImpl()
-               , { cons
-                 , data_show@ps:showStringImpl()
-                 , {cons, erlang:map_get(show, showArray()), {nil}}
-                 }
+  erlang:map_get(
+    show,
+    erl_data_variant@ps:showVariant(
+      undefined,
+      #{ variantTags =>
+         fun
+           (_) ->
+             {cons, a, {cons, b, {cons, c, {nil}}}}
+         end
+       },
+      #{ variantShows =>
+         fun
+           (_) ->
+             { cons
+             , data_show@ps:showIntImpl()
+             , { cons
+               , data_show@ps:showStringImpl()
+               , {cons, erlang:map_get(show, showArray()), {nil}}
                }
-           end
-         }
-      )
+             }
+         end
+       }
     )
   ).
 
@@ -175,6 +172,7 @@ demandAnalysisBug(R = #{ type := R@1 }) ->
 result() ->
   ?MEMOIZE_AS(
     {snapshot_erl_data_variant@ps, result, '(memoized)'},
+    90,
     { { (noInline(test1(undefined)))(#{ type => a, value => 5 })
       , (noInline(test1(undefined)))(#{ type => b, value => <<"5">> })
       , (noInline(test1(undefined)))

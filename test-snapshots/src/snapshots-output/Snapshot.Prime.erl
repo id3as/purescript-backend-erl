@@ -41,7 +41,7 @@
         , useMember/1
         ]).
 -compile(no_auto_import).
--define( MEMOIZE_AS(Key, Expr)
+-define( MEMOIZE_AS(Key, _Metadata, Expr)
        , case persistent_term:get(Key, undefined) of
            undefined ->
              begin
@@ -136,22 +136,19 @@ useNormal(DictNormal) ->
   end.
 
 'instanceName\''() ->
-  ?MEMOIZE_AS(
-    {snapshot_prime@ps, 'instanceName\'', '(memoized)'},
-    #{ normal =>
-       fun
-         (V) ->
-           case V of
-             {f1} ->
-               <<"F1">>;
-             {f2} ->
-               <<"F2">>;
-             _ ->
-               erlang:error({fail, <<"Failed pattern match">>})
-           end
-       end
-     }
-  ).
+  #{ normal =>
+     fun
+       (V) ->
+         case V of
+           {f1} ->
+             <<"F1">>;
+           {f2} ->
+             <<"F2">>;
+           _ ->
+             erlang:error({fail, <<"Failed pattern match">>})
+         end
+     end
+   }.
 
 useNormal1() ->
   begin
@@ -195,11 +192,17 @@ useFooPrime1() ->
 result() ->
   ?MEMOIZE_AS(
     {snapshot_prime@ps, result, '(memoized)'},
-    #{ test1 => ('foo\''()) =:= ('foo\''())
-     , test2 => ('foo\'\''()) =:= ('foo\'\''())
-     , test3 => ('foo\'oo'()) =:= ('foo\'oo'())
-     , useInstance => ((useNormal1())({f1}))({f2})
-     }
+    29,
+    begin
+      V = 'foo\'oo'(),
+      V@1 = 'foo\'\''(),
+      V@2 = 'foo\''(),
+      #{ test1 => V@2 =:= V@2
+       , test2 => V@1 =:= V@1
+       , test3 => V =:= V
+       , useInstance => ((useNormal1())({f1}))({f2})
+       }
+    end
   ).
 
 foo() ->

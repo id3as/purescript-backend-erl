@@ -23,19 +23,6 @@
         , ex/1
         ]).
 -compile(no_auto_import).
--define( MEMOIZE_AS(Key, Expr)
-       , case persistent_term:get(Key, undefined) of
-           undefined ->
-             begin
-               MemoizeAsResult = Expr,
-               persistent_term:put(Key, MemoizeAsResult),
-               MemoizeAsResult
-             end;
-           MemoizeAsResult ->
-             MemoizeAsResult
-         end
-       ).
-
 'State'() ->
   fun 'State'/1.
 
@@ -149,32 +136,29 @@ bindState() ->
    }.
 
 applyState() ->
-  ?MEMOIZE_AS(
-    {snapshot_state@ps, applyState, '(memoized)'},
-    #{ apply =>
-       fun
-         (F) ->
-           fun
-             (A) ->
-               fun
-                 (S) ->
-                   begin
-                     V1 = F(S),
-                     V1@1 = A(erlang:element(3, V1)),
-                     ((erlang:map_get(pure, applicativeState()))
-                      ((erlang:element(2, V1))(erlang:element(2, V1@1))))
-                     (erlang:element(3, V1@1))
-                   end
-               end
-           end
-       end
-     , 'Functor0' =>
-       fun
-         (_) ->
-           functorState()
-       end
-     }
-  ).
+  #{ apply =>
+     fun
+       (F) ->
+         fun
+           (A) ->
+             fun
+               (S) ->
+                 begin
+                   V1 = F(S),
+                   V1@1 = A(erlang:element(3, V1)),
+                   ((erlang:map_get(pure, applicativeState()))
+                    ((erlang:element(2, V1))(erlang:element(2, V1@1))))
+                   (erlang:element(3, V1@1))
+                 end
+             end
+         end
+     end
+   , 'Functor0' =>
+     fun
+       (_) ->
+         functorState()
+     end
+   }.
 
 applicativeState() ->
   #{ pure =>

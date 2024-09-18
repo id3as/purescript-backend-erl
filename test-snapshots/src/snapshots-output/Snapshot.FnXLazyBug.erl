@@ -7,18 +7,6 @@
            andalso (((Arity + 1) =:= (erlang:tuple_size(V)))
              andalso (Tag =:= (erlang:element(1, V)))))
        ).
--define( MEMOIZE_AS(Key, Expr)
-       , case persistent_term:get(Key, undefined) of
-           undefined ->
-             begin
-               MemoizeAsResult = Expr,
-               persistent_term:put(Key, MemoizeAsResult),
-               MemoizeAsResult
-             end;
-           MemoizeAsResult ->
-             MemoizeAsResult
-         end
-       ).
 
 zipWith4() ->
   fun
@@ -79,26 +67,23 @@ zipWith4(F, As, Bs, Cs, Ds) ->
   end.
 
 result() ->
-  ?MEMOIZE_AS(
-    {snapshot_fnXLazyBug@ps, result, '(memoized)'},
-    zipWith4(
-      fun
-        (A) ->
-          fun
-            (B) ->
-              fun
-                (C) ->
-                  fun
-                    (D) ->
-                      (A * B) + (C * D)
-                  end
-              end
-          end
-      end,
-      [1, 2, 9],
-      [0, 1],
-      [3, 4],
-      [5, 6, 7, 8]
-    )
+  zipWith4(
+    fun
+      (A) ->
+        fun
+          (B) ->
+            fun
+              (C) ->
+                fun
+                  (D) ->
+                    (A * B) + (C * D)
+                end
+            end
+        end
+    end,
+    [1, 2, 9],
+    [0, 1],
+    [3, 4],
+    [5, 6, 7, 8]
   ).
 

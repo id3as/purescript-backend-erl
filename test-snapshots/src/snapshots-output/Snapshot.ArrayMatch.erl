@@ -26,7 +26,7 @@
            andalso (((Arity + 1) =:= (erlang:tuple_size(V)))
              andalso (Tag =:= (erlang:element(1, V)))))
        ).
--define( MEMOIZE_AS(Key, Expr)
+-define( MEMOIZE_AS(Key, _Metadata, Expr)
        , case persistent_term:get(Key, undefined) of
            undefined ->
              begin
@@ -181,6 +181,7 @@ bug28(A = #{ q := A@1 }) ->
 result() ->
   ?MEMOIZE_AS(
     {snapshot_arrayMatch@ps, result, '(memoized)'},
+    88,
     array:from_list([ bug28(#{ q => array:from_list([1, 2]) })
                     , bug28_2(#{ q => array:from_list([1, 2]) })
                     , nestedArray(array:from_list([ array:from_list([1, 2])

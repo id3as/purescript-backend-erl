@@ -25,7 +25,7 @@
         , result/0
         ]).
 -compile(no_auto_import).
--define( MEMOIZE_AS(Key, Expr)
+-define( MEMOIZE_AS(Key, _Metadata, Expr)
        , case persistent_term:get(Key, undefined) of
            undefined ->
              begin
@@ -159,11 +159,12 @@ test1(_) ->
 result() ->
   ?MEMOIZE_AS(
     {snapshot_constructorAccessor@ps, result, '(memoized)'},
-    #{ test1 => ('don\'tInlineMeMe'(test1()))({noArgs})
-     , test2 => ('don\'tInlineMeMe'(test2()))({hasArgs, 2, 1, 0})
-     , test3 => ('don\'tInlineMeMe'(test3()))({hasArgs, 5, 3, 1})
-     , test4 => ('don\'tInlineMeMe'(test4()))({last, 4})
-     , test5 => ('don\'tInlineMeMe'(test51()))({first, 5})
+    31,
+    #{ test1 => ('don\'tInlineMeMe'(fun test1/1))({noArgs})
+     , test2 => ('don\'tInlineMeMe'(fun test2/1))({hasArgs, 2, 1, 0})
+     , test3 => ('don\'tInlineMeMe'(fun test3/1))({hasArgs, 5, 3, 1})
+     , test4 => ('don\'tInlineMeMe'(fun test4/1))({last, 4})
+     , test5 => ('don\'tInlineMeMe'(fun test51/1))({first, 5})
      }
   ).
 
