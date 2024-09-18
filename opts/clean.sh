@@ -5,7 +5,7 @@ for d in *; do
     for f in "$d"/*.erl; do
       b="$(basename $f .erl)"
       rm -rf "$d/opt"
-      rm -rf "$d/no_opt"
+      rm -rf "$d/unopt"
       rm -rf "$d/$b".*.diff
     done
   fi

@@ -27,5 +27,5 @@
 
 # /opts/
 /opts/*/opt
-/opts/*/no_opt
+/opts/*/unopt
 /opts/*/*.*.diff

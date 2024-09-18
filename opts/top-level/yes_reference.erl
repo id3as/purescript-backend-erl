@@ -12,6 +12,7 @@ rule1() ->
 
 spacechars() ->
   begin
+    % not inlined, despite being a local call :/
     V = rule1(),
     array:from_list([ #{ start => 32, length => 1, convRule => V }
                     , #{ start => 160, length => 1, convRule => V }
