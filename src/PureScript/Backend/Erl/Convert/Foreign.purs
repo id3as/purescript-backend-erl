@@ -82,6 +82,21 @@ codegenList codegenExpr = gather [] <@> finish where
   finishCons' acc s' =
     S.ListCons (codegenExpr <$> acc) (codegenExpr s')
 
+  listConcat (S.List []) r = r
+  listConcat l (S.List []) = l
+  listConcat l r = S.BinOp S.ListConcat l r
+
+  -- This accumulates known items from the head of the list and then calls
+  -- `lit` or `cons` depending on if there is an unknown tail at the end.
+  --
+  -- `cons` is only allowed to (semantically speaking) append elements
+  -- to its result, since each nested `appendImpl` may clear `acc` before
+  -- calling `end.cons` of its parent
+  gather ::
+    Array NeutralExpr -> NeutralExpr ->
+    { lit :: Array NeutralExpr -> Maybe ErlExpr
+    , cons :: Array NeutralExpr -> NeutralExpr -> Maybe ErlExpr
+    } -> Maybe ErlExpr
   gather acc s end = case unit of
     _ | Just [head, tail] <- listPrim "cons" 2 s ->
       gather (acc <> [head]) tail end
@@ -89,7 +104,11 @@ codegenList codegenExpr = gather [] <@> finish where
       gather acc l
         { lit: \acc' -> gather acc' r end
         , cons: \acc' l' ->
-            Just (S.BinOp S.ListConcat (finishCons' acc' l') $ fromMaybe' (\_ -> codegenExpr r) (gather [] r finish))
+            Just $ listConcat (finishCons' acc' l') $
+              -- iff `end = finish` then we have to call (normal) `codegenExpr`
+              -- otherwise it may be appending elements, in the case of nested
+              -- `appendImpl` calls
+              fromMaybe' (\_ -> codegenExpr r) (gather [] r end)
         }
     -- TODO: use NeutStop to choose a different normal form for this Array ~> List?
     _ | Just [cons, nil, ls] <- helper "Data.Foldable" "foldrArray" 3 s

@@ -12,10 +12,11 @@ thing(Opts) ->
     true ->
       [<<"prefix">>]
   end
-    ++ if
+    ++ (if
       erlang:map_get(secondBit, Opts) ->
         [<<"secondbit">>];
       true ->
         [<<"nosecondbit">>]
-    end.
+    end
+      ++ [<<"this">>, <<"goes">>, <<"missing">>]).
 
