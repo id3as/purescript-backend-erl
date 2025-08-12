@@ -1,5 +1,7 @@
 module Snapshot.Literals where
 
+import Prelude (negate)
+
 boolean1 :: Boolean
 boolean1 = true
 
@@ -11,6 +13,13 @@ int = 1
 
 number :: Number
 number = 2.0
+
+
+numberE :: Number
+numberE = 1e308
+
+numberN :: Number
+numberN = -1e308
 
 char :: Char
 char = 'a'

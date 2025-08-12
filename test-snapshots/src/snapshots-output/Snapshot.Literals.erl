@@ -3,6 +3,8 @@
 -export([ string/0
         , record2/0
         , record/0
+        , numberN/0
+        , numberE/0
         , number/0
         , int/0
         , char/0
@@ -20,6 +22,12 @@ record2() ->
 
 record() ->
   #{}.
+
+numberN() ->
+  -1.0e+308.
+
+numberE() ->
+  1.0e+308.
 
 number() ->
   2.0.

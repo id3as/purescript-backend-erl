@@ -156,7 +156,7 @@ printPattern = case _ of
   S.MatchLiteral (S.Integer n) -> D.text $ show n
   S.MatchLiteral (S.Float f) -> D.text $
     -- Erlang does not like scientific notation without a decimal point
-    show f # Regex.replace' (Regex.Unsafe.unsafeRegex "^(\\d+)(e[+-]?\\d+)$" mempty) \original ->
+    show f # Regex.replace' (Regex.Unsafe.unsafeRegex "^(-?\\d+)(e[+-]?\\d+)$" mempty) \original ->
       case _ of
         [Just integer, Just exponent] -> integer <> ".0" <> exponent
         _ -> original
@@ -186,7 +186,7 @@ printExpr' prec = case _ of
   S.Literal (S.Integer n) -> D.text $ show n
   S.Literal (S.Float f) -> D.text $
     -- Erlang does not like scientific notation without a decimal point
-    show f # Regex.replace' (Regex.Unsafe.unsafeRegex "^(\\d+)(e[+-]?\\d+)$" mempty) \original ->
+    show f # Regex.replace' (Regex.Unsafe.unsafeRegex "^(-?\\d+)(e[+-]?\\d+)$" mempty) \original ->
       case _ of
         [Just integer, Just exponent] -> integer <> ".0" <> exponent
         _ -> original
