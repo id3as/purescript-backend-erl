@@ -134,11 +134,12 @@ runSnapshotTests { accept, compile, run, filter } = do
     Right (Tuple coreFnModules timestamp) -> do
       Console.log "Got modules"
       let { directives } = parseDirectiveFile $ defaultDirectives <> moreDirectives
-      coreFnModules # buildModules
+      void $ coreFnModules # buildModules
         { directives
         , analyzeCustom: analyzeCustom []
         , foreignSemantics: fullForeignSemantics []
         , traceIdents: mempty
+        , incremental: Nothing
         , onCodegenModule: \_ (Module { name: ModuleName name, path: reportedPath, exports }) (backend) _ -> do
             -- Sorry, working around a weird language server bug
             let path = fromMaybe <*> String.stripPrefix (String.Pattern snapshotDir) $ reportedPath

@@ -22,12 +22,16 @@ import Data.Either (Either(..))
 import Data.Foldable (foldMap, foldl)
 import Data.Lazy as Lazy
 import Data.List (List)
-import Data.Maybe (Maybe(..), maybe)
-import Data.Ord.Max (Max(..))
+import Data.Map (SemigroupMap(..))
+import Data.Map as Map
+import Data.Maybe (Maybe(..))
+import Data.Ord.Max (Max)
+import Data.Semigroup.Last (Last(..))
 import Data.Set as Set
 import Data.Set.NonEmpty as NonEmptySet
 import Data.String as String
 import Data.Tuple (Tuple(..), fst, snd)
+import Effect (Effect)
 import Effect.Aff (Aff, Milliseconds, effectCanceler, error, makeAff, throwError)
 import Effect.Aff.Class (liftAff)
 import Effect.Class (liftEffect)
@@ -44,7 +48,6 @@ import Node.EventEmitter as EE
 import Node.FS.Aff as FS
 import Node.FS.Perms (mkPerms)
 import Node.FS.Perms as Perms
-import Node.FS.Stats (modifiedTimeMs)
 import Node.FS.Stats as Stats
 import Node.FS.Stream (createReadStream, createWriteStream)
 import Node.Glob.Basic (expandGlobs)
@@ -53,9 +56,10 @@ import Node.Path (FilePath)
 import Node.Process as Process
 import Node.Stream as Stream
 import PureScript.Backend.Erl.Convert.Common (erlModuleNamePs)
-import PureScript.Backend.Optimizer.CoreFn (Ann, Module, ModuleName(..))
+import PureScript.Backend.Optimizer.CoreFn (Ann, Module(..), ModuleName(..))
 import PureScript.Backend.Optimizer.CoreFn.Json (decodeModule)
 import PureScript.Backend.Optimizer.CoreFn.Sort (emptyPull, pullResult, resumePull, sortModules)
+import Safe.Coerce (coerce)
 
 spawnFromParent :: String -> Array String -> Aff Unit
 spawnFromParent command args = makeAff \k -> do
@@ -162,10 +166,10 @@ type LastTimestamp = Maybe (Max Milliseconds)
 -- | the timestamps of `corefn.json` files since they are managed by the
 -- | compiler (`purs compile` and `purs ide`).
 coreFnModulesFromOutput
-  :: String
+  :: FilePath
   -> NonEmptyArray String
-  -> Aff (Either (NonEmptyArray (Tuple FilePath String)) (Tuple (List (Module Ann)) LastTimestamp))
-coreFnModulesFromOutput path globs = runExceptT $ runWriterT do
+  -> Aff (Either (NonEmptyArray (Tuple FilePath Hash)) (Tuple (List (Module Ann)) (SemigroupMap ModuleName (Last Hash))))
+coreFnModulesFromOutput path globs = runExceptT $ coerce $ runWriterT do
   paths <- Set.toUnfoldable <$> liftAff
     (expandGlobs path ((_ <> "/corefn.json") <$> NonEmptyArray.toArray globs))
   case NonEmptyArray.toArray globs of
@@ -174,7 +178,7 @@ coreFnModulesFromOutput path globs = runExceptT $ runWriterT do
     _ ->
       go <<< foldl resumePull emptyPull =<< modulesFromPaths paths
   where
-  modulesFromPaths :: _ -> WriterT LastTimestamp (ExceptT (NonEmptyArray (Tuple FilePath String)) Aff) _
+  modulesFromPaths :: _ -> WriterT (SemigroupMap ModuleName (Last Hash)) (ExceptT (NonEmptyArray (Tuple FilePath String)) Aff) _
   modulesFromPaths paths = WriterT $ ExceptT do
     { left, right } <- separate <$> parTraverse readCoreFnModule paths
     case NonEmptyArray.fromArray left of
@@ -191,12 +195,20 @@ coreFnModulesFromOutput path globs = runExceptT $ runWriterT do
     Right modules ->
       pure $ Lazy.force modules
 
-readCoreFnModule :: String -> Aff (Either (Tuple FilePath String) (Tuple (Module Ann) LastTimestamp))
+readCoreFnModule :: FilePath -> Aff (Either (Tuple FilePath String) (Tuple (Module Ann) (SemigroupMap ModuleName (Last Hash))))
 readCoreFnModule filePath = do
   contents <- FS.readTextFile UTF8 filePath
-  time <- modifiedTimeMs <$> FS.stat filePath
+  -- time <- modifiedTimeMs <$> FS.stat filePath
   case lmap Json.printJsonDecodeError <<< decodeModule =<< Json.jsonParser contents of
     Left err -> do
       pure $ Left $ Tuple filePath err
-    Right mod ->
-      pure $ Right $ Tuple mod (Just (Max time))
+    Right mod@(Module { name }) ->
+      pure $ Right $ Tuple mod $ SemigroupMap $ Map.singleton name $ Last $ hashSHA512 contents
+
+
+
+
+foreign import saveDataToFile :: forall datum. FilePath -> datum -> Effect Unit
+foreign import loadDataFromFile :: forall datum. FilePath -> Effect datum
+foreign import hashSHA512 :: String -> Hash
+type Hash = String
