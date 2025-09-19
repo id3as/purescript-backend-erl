@@ -38,11 +38,12 @@ import Data.String.Regex as Re
 import Data.String.Regex.Unsafe (unsafeRegex)
 import Data.Tuple (Tuple(..), fst, snd)
 import Effect (Effect)
-import Effect.Aff (Aff, Milliseconds, effectCanceler, error, makeAff, throwError)
+import Effect.Aff (Aff, Error, Milliseconds, effectCanceler, error, makeAff, throwError)
 import Effect.Aff.Class (liftAff)
 import Effect.Class (liftEffect)
 import Effect.Class.Console (log)
 import Effect.Class.Console as Console
+import Effect.Uncurried (EffectFn1, EffectFn3, EffectFn4, mkEffectFn1, runEffectFn3, runEffectFn4)
 import Foreign.Object as FO
 import Node.Buffer (Buffer, freeze)
 import Node.Buffer.Immutable as ImmutableBuffer
@@ -212,8 +213,9 @@ readCoreFnModule filePath = do
   case lmap Json.printJsonDecodeError $ decodeModulePeek contents of
     Left err -> do
       pure $ Left $ Tuple filePath err
-    Right mod@{ name } ->
-      pure $ Right $ Tuple mod $ SemigroupMap $ Map.singleton name $ Last $ hashSHA512 contents
+    Right mod@{ name } -> do
+      hash <- hashSHA512 contents
+      pure $ Right $ Tuple mod $ SemigroupMap $ Map.singleton name $ Last hash
 
 type ModulePeek =
   { name :: ModuleName
@@ -266,7 +268,7 @@ decideModules { scanned, unchanged } = { needsRebuild, toBeBuilt, pleaseLoadCach
   where
   depMap = Map.fromFoldable $ scanned <#> \{ name, importNames } ->
     Tuple name $ Set.filter (not isPrimModule) $ importNames
-  alreadyBuilt = trim unchanged
+  alreadyBuilt = trimming unchanged
   needsRebuild = Set.difference (Map.keys depMap) alreadyBuilt
   toBeBuilt = map (force <<< _.full) $ scanned #
     List.filter \{ name } -> Set.member name needsRebuild
@@ -308,7 +310,7 @@ fastScanRegexSource =
     , key "modulePath" str
     , key "reExports" $ map $ array str
     , sourceSpan
-    ] <> "(?=\\}\\s*$)"
+    ] <> "(?=\\}\\s*$)" -- make sure it is at the end of the object and file
   where
   gr re = "(?:" <> re <> ")"
   star re = gr re <> "*"
@@ -329,7 +331,22 @@ fastScanRegexSource =
     ]
 
 
-foreign import saveDataToFile :: forall datum. FilePath -> datum -> Effect Unit
-foreign import loadDataFromFile :: forall datum. FilePath -> Effect datum
-foreign import hashSHA512 :: String -> Hash
+foreign import _saveDataToFile :: forall datum. EffectFn4 FilePath datum (Effect Unit) (EffectFn1 Error Unit) Unit
+foreign import _loadDataFromFile :: forall datum. EffectFn3 FilePath (EffectFn1 datum Unit) (EffectFn1 Error Unit) Unit
+foreign import _hashSHA512 :: EffectFn3 String (EffectFn1 Hash Unit) (EffectFn1 Error Unit) Unit
 type Hash = String
+
+
+saveDataToFile :: forall datum. FilePath -> datum -> Aff Unit
+saveDataToFile path datum = makeAff \cb -> mempty <$
+  runEffectFn4 _saveDataToFile path datum (cb (Right unit)) (mkEffectFn1 (cb <<< Left))
+
+loadDataFromFile :: forall datum. FilePath -> Aff datum
+loadDataFromFile path = makeAff \cb -> mempty <$
+  runEffectFn3 _loadDataFromFile path (mkEffectFn1 (cb <<< Right)) (mkEffectFn1 (cb <<< Left))
+
+hashSHA512 :: String -> Aff Hash
+hashSHA512 input = makeAff \cb -> mempty <$
+  runEffectFn3 _hashSHA512 input
+    (mkEffectFn1 (cb <<< Right))
+    (mkEffectFn1 (cb <<< Left))

@@ -7,36 +7,34 @@ import Ansi.Output (foreground, withGraphics)
 import ArgParse.Basic (ArgParser)
 import ArgParse.Basic as ArgParser
 import Control.Alternative (guard)
+import Control.Parallel (parTraverse)
 import Data.Argonaut as Json
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Bifunctor (lmap)
 import Data.Either (Either(..), either, hush)
 import Data.Foldable (fold, foldMap, for_, traverse_)
-import Data.FoldableWithIndex (forWithIndex_)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.List as List
 import Data.Map (Map, SemigroupMap(..))
 import Data.Map as Map
-import Data.Maybe (Maybe(..), fromMaybe, maybe)
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Monoid (power)
 import Data.Newtype (unwrap, wrap)
 import Data.Semigroup.Last (Last(..))
-import Data.Set (Set)
 import Data.Set as Set
 import Data.String as String
 import Data.String.CodeUnits as SCU
-import Data.Traversable (class Traversable, for)
+import Data.Traversable (class Traversable)
 import Data.TraversableWithIndex (forWithIndex)
 import Data.Tuple (Tuple(..))
 import Dodo (plainText)
 import Dodo as Dodo
 import Effect (Effect)
-import Effect.Aff (Aff, launchAff_, throwError, try)
+import Effect.Aff (Aff, launchAff, launchAff_, throwError, try)
 import Effect.Aff as Aff
 import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
-import Effect.Exception (throw)
 import Effect.Ref as Ref
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff as FS
@@ -133,27 +131,28 @@ type TotalBuildState =
   { optimizerState :: BuildState
   , erlState :: AcrossModules
   }
-splitBuildState :: Set ModuleName -> TotalBuildState -> Map ModuleName TotalBuildState
-splitBuildState names { optimizerState, erlState } =
-  Set.toMap names # mapWithIndex \target _ ->
-    { optimizerState:
-      { built: Set.singleton target
-      , directives: optimizerState.directives # Map.filterKeys case _ of
-          EvalExtern (Qualified (Just name) _) -> name == target
-          _ -> false
-      , implementations: optimizerState.implementations # Map.filterKeys case _ of
-          Qualified (Just name) _ -> name == target
-          _ -> false
-      }
-    , erlState:
-      { callingConventions: wrap $ unwrap erlState.callingConventions # Map.filterKeys case _ of
-          Qualified (Just name) _ -> name == target
-          _ -> false
-      , constructors: erlState.constructors # Map.filterKeys case _ of
-          Qualified (Just name) _ -> name == target
-          _ -> false
-      }
+-- Filter the build state relevant to one module
+moduleBuildState :: ModuleName -> TotalBuildState -> TotalBuildState
+moduleBuildState target { optimizerState, erlState } =
+  { optimizerState:
+    { built: Set.singleton target
+    , directives: optimizerState.directives # Map.filterKeys case _ of
+        EvalExtern (Qualified (Just name) _) -> name == target
+        _ -> false
+    , implementations: optimizerState.implementations # Map.filterKeys case _ of
+        Qualified (Just name) _ -> name == target
+        _ -> false
     }
+  , erlState:
+    { callingConventions: wrap $ unwrap erlState.callingConventions # Map.filterKeys case _ of
+        Qualified (Just name) _ -> name == target
+        _ -> false
+    , constructors: erlState.constructors # Map.filterKeys case _ of
+        Qualified (Just name) _ -> name == target
+        _ -> false
+    }
+  }
+-- Merge build states from several modules
 mergeBuildState :: forall f. Traversable f => f TotalBuildState -> TotalBuildState
 mergeBuildState thingies =
   { optimizerState:
@@ -166,8 +165,8 @@ mergeBuildState thingies =
     , constructors: Map.unions $ _.erlState.constructors <$> thingies
     }
   }
-saveCacheToFile = saveDataToFile :: FilePath -> TotalBuildState -> Effect Unit
-loadCacheFromFile = loadDataFromFile :: FilePath -> Effect TotalBuildState
+saveCacheToFile = saveDataToFile :: FilePath -> TotalBuildState -> Aff Unit
+loadCacheFromFile = loadDataFromFile :: FilePath -> Aff TotalBuildState
 
 runCompile :: MainArgs -> Aff Unit
 runCompile = runCompileCustom mempty
@@ -294,7 +293,7 @@ runCompileCustom custom { compile, filter, cwd } = do
               -- We need to check foreign files since their timestamps are
               -- not tracked: we can just copy them if their interface
               -- has not changed, otherwise we need to rebuild
-              fold <$> for coreFnModules \{ name: ModuleName name, path: reportedPath } -> do
+              fold <$> flip parTraverse coreFnModules \{ name: ModuleName name, path: reportedPath } -> do
                 let
                   -- Sorry, working around a weird language server bug/inconsistency
                   path = fromMaybe <*> String.stripPrefix (String.Pattern currentDir) $ reportedPath
@@ -328,28 +327,29 @@ runCompileCustom custom { compile, filter, cwd } = do
   -- - In need of rebuild: hashes don't match, or downstream of a rebuild
   -- - An immediate or transitive dependency of a rebuild: load from cache
   -- - Inert, not directly related to rebuildable modules
-  let { needsRebuild, toBeBuilt, pleaseLoadCache, alreadyBuilt } = decideModules { scanned: coreFnModules, unchanged }
+  let { toBeBuilt, pleaseLoadCache } = decideModules { scanned: coreFnModules, unchanged }
 
-  -- Restore the incremental state for `pleaseLoadCache` modules
+  -- Restore the incremental state for modules in `pleaseLoadCache`
   incremental <- if Set.isEmpty pleaseLoadCache then pure Nothing else do
-    let loadCache (ModuleName name) _ = loadCacheFromFile (Path.concat [ outputDir, name, "buildcache.gz" ]) -- <* Console.log ("  - " <> name)
-    Console.log "Reading incremental state ..."
-    map hush $ try $ liftEffect $ forWithIndex (Set.toMap pleaseLoadCache) loadCache <#> mergeBuildState
-
-  when (maybe false (\i -> i.optimizerState.built /= pleaseLoadCache) incremental) do
-    liftEffect $ throw "MISMATCH"
-
-  -- Console.log $ String.joinWith "\n" $ unwrap <$> Set.toUnfoldable do
-  --   Set.difference (Map.keys currentModuleHashes) (foldMap _.alreadyBuilt incremental)
+    Console.log $ "Reading incremental state (" <> show (Set.size pleaseLoadCache) <> " files) ..."
+    map hush $ try $ Aff.sequential do
+      mergeBuildState <$> forWithIndex (Set.toMap pleaseLoadCache)
+        \(ModuleName name) _ -> Aff.parallel do
+          loadCacheFromFile (Path.concat [ outputDir, name, "buildcache.gz" ])
 
   -- Now we can get on with the actual build!
-  { optimizerState, erlState, compiledFiles } <- do
+  { optimizerState: _optimizerState, erlState: _erlState, compiledFiles } <- do
     -- List of all output Erlang modules (PureScript and FFI)
     erls <- liftEffect $ Ref.new []
     -- Ref of *our* build state for backend-erl
     erlStateRef <- liftEffect $ Ref.new $ case incremental of
       Nothing -> initAcrossModules
       Just { erlState } -> erlState
+    asyncActions <- liftEffect $ Ref.new []
+    let
+      monitor :: Aff Unit -> Aff Unit
+      monitor = liftEffect <<< do
+        launchAff >=> \fiber -> Ref.modify_ (_ <> [fiber]) asyncActions
     -- Call the optimizer and let it do its thing
     optimizerState <- toBeBuilt # buildModules
       { directives
@@ -357,7 +357,7 @@ runCompileCustom custom { compile, filter, cwd } = do
       , foreignSemantics: customEval
       , traceIdents: traceIdents
       , incremental: incremental <#> _.optimizerState
-      , onCodegenModule: \_ (Module { name: ModuleName name, path: reportedPath }) backend allSteps -> do
+      , onCodegenModule: \buildEnv (Module { name: ModuleName name, path: reportedPath }) backend allSteps -> do
           -- Sorry, working around a weird language server bug/inconsistency
           let path = fromMaybe <*> String.stripPrefix (String.Pattern currentDir) $ reportedPath
           let moduleOutputDir = Path.concat [ outputDir, name ]
@@ -385,18 +385,24 @@ runCompileCustom custom { compile, filter, cwd } = do
                 $ P.printModule codegened
           liftEffect $ Ref.write nextConventions erlStateRef
           mkdirp moduleOutputDir
-          FS.writeTextFile UTF8 moduleOutputPath formatted
-          case foreignFile of
-            Right contents -> do
-              FS.writeTextFile UTF8 moduleOutputForeignPath contents
-              liftEffect $ Ref.modify_ (_ <> [moduleOutputForeignPath]) erls
-            Left _ -> do
-              void $ try $ FS.rm' moduleOutputForeignPath
-                { force: false, maxRetries: 0, recursive: false, retryDelay: 10 }
-          liftEffect $ Ref.modify_ (_ <> [moduleOutputPath]) erls
           unless (Array.null allSteps) do
             let allDoc = printModuleSteps (ModuleName name) allSteps <> Dodo.break <> Dodo.break
             FS.appendTextFile UTF8 "optimization-traces.txt" $ Dodo.print Dodo.plainText Dodo.twoSpaces allDoc
+          -- Actions that can happen async
+          monitor do
+            FS.writeTextFile UTF8 moduleOutputPath formatted
+            case foreignFile of
+              Right contents -> do
+                FS.writeTextFile UTF8 moduleOutputForeignPath contents
+                liftEffect $ Ref.modify_ (_ <> [moduleOutputForeignPath]) erls
+              Left _ -> do
+                void $ try $ FS.rm' moduleOutputForeignPath
+                  { force: false, maxRetries: 0, recursive: false, retryDelay: 10 }
+            liftEffect $ Ref.modify_ (_ <> [moduleOutputPath]) erls
+            let optimizerState = { built: buildEnv.built, implementations: buildEnv.implementations, directives: buildEnv.directives }
+            let erlState = nextConventions
+            saveCacheToFile (Path.concat [ outputDir, name, "buildcache.gz" ]) $
+              moduleBuildState (ModuleName name) { optimizerState, erlState }
       , onPrepareModule: \build coreFnMod@(Module { name }) -> do
           let total = show build.moduleCount
           let index = show (build.moduleIndex + 1)
@@ -404,18 +410,18 @@ runCompileCustom custom { compile, filter, cwd } = do
           Console.log $ "[" <> padding <> index <> " of " <> total <> "] Building " <> unwrap name
           pure coreFnMod
       }
+    -- Wait for all of the async actions
+    liftEffect (Ref.read asyncActions) >>= traverse_ Aff.joinFiber
     compiledFiles <- liftEffect $ Ref.read erls
     erlState <- liftEffect $ Ref.read erlStateRef
     pure { optimizerState, erlState, compiledFiles }
 
   -- Final tasks:
   do
-    -- Write out build file, the build products file, and the build cache files
+    -- Write out the build information file and the build products file
     finish
     FS.writeTextFile UTF8 (Path.concat [ outputDir, "build_products.txt" ]) $
       String.joinWith "\n" compiledFiles <> "\n"
-    forWithIndex_ (splitBuildState needsRebuild { optimizerState, erlState }) \(ModuleName name) datum ->
-      liftEffect $ saveCacheToFile (Path.concat [ outputDir, name, "buildcache.gz" ]) datum
   do
     -- And optionally compile them all with `erlc` immediately
     when compile do

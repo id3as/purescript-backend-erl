@@ -18,7 +18,7 @@ import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Either (Either(..), either)
 import Data.Foldable (elem, for_)
 import Data.Foldable as Foldable
-import Data.Map as Map
+import Data.Lazy (force)
 import Data.Maybe (Maybe(..), fromMaybe, isJust)
 import Data.Monoid (power)
 import Data.Newtype (unwrap)
@@ -131,9 +131,10 @@ runSnapshotTests { accept, compile, run, filter } = do
       for_ errors \(Tuple filePath err) -> do
         Console.error $ filePath <> " " <> err
       liftEffect $ Process.exit' 1
-    Right (Tuple coreFnModules timestamp) -> do
+    Right (Tuple coreFnModulePeek _) -> do
       Console.log "Got modules"
       let { directives } = parseDirectiveFile $ defaultDirectives <> moreDirectives
+      let coreFnModules = coreFnModulePeek <#> _.full >>> force
       void $ coreFnModules # buildModules
         { directives
         , analyzeCustom: analyzeCustom []
