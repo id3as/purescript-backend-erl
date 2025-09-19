@@ -10,12 +10,10 @@ module Test.Utils where
 import Prelude
 
 import Control.Monad.Except (ExceptT(..), runExceptT)
-import Control.Monad.Writer (WriterT(..), runWriterT)
 import Control.Parallel (parTraverse)
 import Data.Argonaut (Json, JsonDecodeError)
 import Data.Argonaut as Json
 import Data.Argonaut.Decode.Decoders (decodeArray, decodeJObject, decodeString, getField)
-import Data.Array (intercalate)
 import Data.Array.NonEmpty as NEA
 import Data.Array.NonEmpty as NonEmptyArray
 import Data.Array.NonEmpty.Internal (NonEmptyArray)
@@ -26,24 +24,20 @@ import Data.Foldable (fold, foldMap)
 import Data.Lazy (Lazy, defer, force)
 import Data.List (List)
 import Data.List as List
-import Data.Map (SemigroupMap(..))
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Ord.Max (Max)
-import Data.Semigroup.Last (Last(..))
 import Data.Set (Set)
 import Data.Set as Set
 import Data.String as String
 import Data.String.Regex as Re
 import Data.String.Regex.Unsafe (unsafeRegex)
-import Data.Tuple (Tuple(..), fst, snd)
-import Effect (Effect)
-import Effect.Aff (Aff, Error, Milliseconds, effectCanceler, error, makeAff, throwError)
+import Data.Tuple (Tuple(..))
+import Effect.Aff (Aff, Milliseconds, effectCanceler, error, makeAff, throwError)
 import Effect.Aff.Class (liftAff)
 import Effect.Class (liftEffect)
 import Effect.Class.Console (log)
 import Effect.Class.Console as Console
-import Effect.Uncurried (EffectFn1, EffectFn3, EffectFn4, mkEffectFn1, runEffectFn3, runEffectFn4)
 import Foreign.Object as FO
 import Node.Buffer (Buffer, freeze)
 import Node.Buffer.Immutable as ImmutableBuffer
@@ -133,7 +127,7 @@ loadModuleMain { modulePath, ebin, runMain } = do
       let mod = ModuleName moduleName
       let init x = "(" <> erlModuleNamePs mod <> ":" <> x <> "())"
       -- Console.log $ "run " <> modulePath
-      FS.writeTextFile UTF8 scriptFile $ intercalate "\n"
+      FS.writeTextFile UTF8 scriptFile $ String.joinWith "\n"
         [ "#!/usr/bin/env escript"
         , case expected of
             Nothing -> "main(_) -> (" <> init "main" <> ")()."
@@ -176,24 +170,24 @@ type LastTimestamp = Maybe (Max Milliseconds)
 coreFnModulesFromOutput
   :: FilePath
   -> NonEmptyArray String
-  -> Aff (Either (NonEmptyArray (Tuple FilePath Hash)) (Tuple (List ModulePeek) (SemigroupMap ModuleName (Last Hash))))
-coreFnModulesFromOutput path globs = runExceptT $ runWriterT do
+  -> Aff (Either (NonEmptyArray (Tuple FilePath String)) (List ModulePeek))
+coreFnModulesFromOutput path globs = runExceptT do
   paths <- Set.toUnfoldable <$> liftAff
     (expandGlobs path ((_ <> "/corefn.json") <$> NonEmptyArray.toArray globs))
   case NonEmptyArray.toArray globs of
     [ "*" ] ->
-      uhh sortModules <$> modulesFromPaths paths
+      adaptSorter sortModules <$> modulesFromPaths paths
     _ ->
       unsafeCrashWith "TODO: reimplement --filter"
       -- go <<< foldl resumePull emptyPull =<< modulesFromPaths paths
   where
-  uhh = unsafeCoerce :: forall i. (i (Module Ann) -> List (Module Ann)) -> i ModulePeek -> List ModulePeek
+  adaptSorter = unsafeCoerce :: forall i. (i (Module Ann) -> List (Module Ann)) -> i ModulePeek -> List ModulePeek
 
-  modulesFromPaths :: _ -> WriterT (SemigroupMap ModuleName (Last Hash)) (ExceptT (NonEmptyArray (Tuple FilePath String)) Aff) _
-  modulesFromPaths paths = WriterT $ ExceptT do
+  modulesFromPaths :: _ -> ExceptT (NonEmptyArray (Tuple FilePath String)) Aff _
+  modulesFromPaths paths = ExceptT do
     { left, right } <- separate <$> parTraverse readCoreFnModule paths
     case NonEmptyArray.fromArray left of
-      Nothing -> pure $ Right $ Tuple (map fst right) (foldMap snd right)
+      Nothing -> pure $ Right right
       Just errors -> pure $ Left errors
 
   -- pathFromModuleName (ModuleName mn) =
@@ -206,22 +200,22 @@ coreFnModulesFromOutput path globs = runExceptT $ runWriterT do
   --   Right modules ->
   --     pure $ Lazy.force modules
 
-readCoreFnModule :: FilePath -> Aff (Either (Tuple FilePath String) (Tuple ModulePeek (SemigroupMap ModuleName (Last Hash))))
+readCoreFnModule :: FilePath -> Aff (Either (Tuple FilePath String) ModulePeek)
 readCoreFnModule filePath = do
   contents <- FS.readTextFile UTF8 filePath
   -- time <- modifiedTimeMs <$> FS.stat filePath
   case lmap Json.printJsonDecodeError $ decodeModulePeek contents of
     Left err -> do
       pure $ Left $ Tuple filePath err
-    Right mod@{ name } -> do
-      hash <- hashSHA512 contents
-      pure $ Right $ Tuple mod $ SemigroupMap $ Map.singleton name $ Last hash
+    Right mod -> do
+      pure $ Right mod
 
 type ModulePeek =
   { name :: ModuleName
   , path :: FilePath
   , imports :: Array (Import Ann)
   , importNames :: Set ModuleName
+  , corefn :: String
   , full :: Lazy (Module Ann)
   }
 
@@ -237,12 +231,12 @@ decodeModulePeek s = do
     full = defer \_ -> case decodeModule =<< if hit then Json.parseJson s else pure j of
       Right mod -> mod
       Left err -> unsafeCrashWith $ Json.printJsonDecodeError err
-  pure { name, path, imports, importNames, full }
+  pure { name, path, imports, importNames, corefn: s, full }
 
 type JsonDecode = Either JsonDecodeError
 
 decodeModuleName :: Json -> JsonDecode ModuleName
-decodeModuleName = map (ModuleName <<< intercalate ".") <<< decodeArray decodeString
+decodeModuleName = map (ModuleName <<< String.joinWith ".") <<< decodeArray decodeString
 
 decodeImport :: Json -> JsonDecode (Import Ann)
 decodeImport json = do
@@ -304,7 +298,7 @@ fastScanRegex = unsafeRegex fastScanRegexSource mempty
 
 fastScanRegexSource :: String
 fastScanRegexSource =
-  intercalate ","
+  String.joinWith ","
     [ key "imports" $ array importFragment
     , key "moduleName" $ array str
     , key "modulePath" str
@@ -319,7 +313,7 @@ fastScanRegexSource =
   key k v = show k <> ":" <> v
   array v = "\\[" <> star (v <> ",?") <> "\\]"
   map v = "\\{" <> star (str <> ":" <> v <> ",?") <> "\\}"
-  rec kvs = "\\{" <> intercalate "," kvs <> "\\}"
+  rec kvs = "\\{" <> String.joinWith "," kvs <> "\\}"
 
   sourceSpan = key "sourceSpan" $ map $ array int
   importFragment = rec
@@ -330,23 +324,3 @@ fastScanRegexSource =
     , key "moduleName" $ array str
     ]
 
-
-foreign import _saveDataToFile :: forall datum. EffectFn4 FilePath datum (Effect Unit) (EffectFn1 Error Unit) Unit
-foreign import _loadDataFromFile :: forall datum. EffectFn3 FilePath (EffectFn1 datum Unit) (EffectFn1 Error Unit) Unit
-foreign import _hashSHA512 :: EffectFn3 String (EffectFn1 Hash Unit) (EffectFn1 Error Unit) Unit
-type Hash = String
-
-
-saveDataToFile :: forall datum. FilePath -> datum -> Aff Unit
-saveDataToFile path datum = makeAff \cb -> mempty <$
-  runEffectFn4 _saveDataToFile path datum (cb (Right unit)) (mkEffectFn1 (cb <<< Left))
-
-loadDataFromFile :: forall datum. FilePath -> Aff datum
-loadDataFromFile path = makeAff \cb -> mempty <$
-  runEffectFn3 _loadDataFromFile path (mkEffectFn1 (cb <<< Right)) (mkEffectFn1 (cb <<< Left))
-
-hashSHA512 :: String -> Aff Hash
-hashSHA512 input = makeAff \cb -> mempty <$
-  runEffectFn3 _hashSHA512 input
-    (mkEffectFn1 (cb <<< Right))
-    (mkEffectFn1 (cb <<< Left))

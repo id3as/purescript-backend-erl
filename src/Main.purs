@@ -13,21 +13,20 @@ import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Bifunctor (lmap)
 import Data.Either (Either(..), either, hush)
-import Data.Foldable (fold, foldMap, for_, traverse_)
+import Data.Foldable (fold, foldMap, foldl, for_, traverse_)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.List as List
-import Data.Map (Map, SemigroupMap(..))
+import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Monoid (power)
-import Data.Newtype (unwrap, wrap)
-import Data.Semigroup.Last (Last(..))
+import Data.Newtype (unwrap)
 import Data.Set as Set
 import Data.String as String
 import Data.String.CodeUnits as SCU
 import Data.Traversable (class Traversable)
 import Data.TraversableWithIndex (forWithIndex)
-import Data.Tuple (Tuple(..))
+import Data.Tuple (Tuple(..), fst)
 import Dodo (plainText)
 import Dodo as Dodo
 import Effect (Effect)
@@ -56,14 +55,16 @@ import PureScript.Backend.Optimizer.Builder (BuildState, buildModules)
 import PureScript.Backend.Optimizer.CoreFn (Module(..), ModuleName(..), Qualified(..))
 import PureScript.Backend.Optimizer.Directives (parseDirectiveFile)
 import PureScript.Backend.Optimizer.Directives.Defaults (defaultDirectives)
-import PureScript.Backend.Optimizer.Semantics (EvalRef(..))
+import PureScript.Backend.Optimizer.QIMap as QIMap
+import PureScript.Backend.Optimizer.Semantics (noDirectives, unionDirectives)
 import PureScript.Backend.Optimizer.Semantics.Foreign (ForeignSemantics)
 import PureScript.Backend.Optimizer.Tracer.Printer (printModuleSteps)
 import PureScript.CST.Errors (printParseError)
-import Test.Utils (Hash, coreFnModulesFromOutput, decideModules, errored, loadDataFromFile, mkdirp, saveDataToFile)
+import Test.Utils (coreFnModulesFromOutput, decideModules, errored, mkdirp)
 
 type MainArgs =
   { compile :: Boolean
+  , clean :: Boolean
   , filter :: NonEmptyArray String
   , cwd :: Maybe String
   }
@@ -74,6 +75,11 @@ argParser =
     { compile:
         ArgParser.flag [ "--compile", "-c" ]
           "Compile generated Erlang with erlc"
+          # ArgParser.boolean
+          # ArgParser.default false
+    , clean:
+        ArgParser.flag [ "--clean", "-C" ]
+          "Run a full build, not an incremental one"
           # ArgParser.boolean
           # ArgParser.default false
     , filter:
@@ -88,7 +94,7 @@ argParser =
     }
 
 main :: Effect Unit
-main = customMain mempty
+main = customMain stock
 
 customMain :: CustomCodegen -> Effect Unit
 customMain custom = do
@@ -124,7 +130,21 @@ type CustomCodegen =
   , customEval :: Array ForeignSemantics
   , customCodegen :: Array Converter
   , customDirectives :: String -- can be used to invalidate the build too
+  , incrementalize :: Maybe Incrementalization
   }
+type Incrementalization =
+  { saveCacheToFile :: FilePath -> TotalBuildState -> Aff Unit
+  , loadCacheFromFile :: FilePath -> Aff TotalBuildState
+  , hashText :: String -> Aff Hash
+  }
+type Hash = String
+stock =
+  { customAnalysis: mempty
+  , customEval: mempty
+  , customCodegen: mempty
+  , customDirectives: mempty
+  , incrementalize: Nothing
+  } :: CustomCodegen
 
 -- Total build state: for `backend-optimizer` and for us, `backend-erl`
 type TotalBuildState =
@@ -136,17 +156,11 @@ moduleBuildState :: ModuleName -> TotalBuildState -> TotalBuildState
 moduleBuildState target { optimizerState, erlState } =
   { optimizerState:
     { built: Set.singleton target
-    , directives: optimizerState.directives # Map.filterKeys case _ of
-        EvalExtern (Qualified (Just name) _) -> name == target
-        _ -> false
-    , implementations: optimizerState.implementations # Map.filterKeys case _ of
-        Qualified (Just name) _ -> name == target
-        _ -> false
+    , directives: Tuple (fst optimizerState.directives # QIMap.matchModules (Set.singleton target)) Map.empty
+    , implementations: optimizerState.implementations # QIMap.matchModules (Set.singleton target)
     }
   , erlState:
-    { callingConventions: wrap $ unwrap erlState.callingConventions # Map.filterKeys case _ of
-        Qualified (Just name) _ -> name == target
-        _ -> false
+    { callingConventions: erlState.callingConventions # QIMap.matchModules (Set.singleton target)
     , constructors: erlState.constructors # Map.filterKeys case _ of
         Qualified (Just name) _ -> name == target
         _ -> false
@@ -157,19 +171,17 @@ mergeBuildState :: forall f. Traversable f => f TotalBuildState -> TotalBuildSta
 mergeBuildState thingies =
   { optimizerState:
     { built: foldMap _.optimizerState.built thingies
-    , directives: Map.unions $ _.optimizerState.directives <$> thingies
-    , implementations: Map.unions $ _.optimizerState.implementations <$> thingies
+    , directives: foldl unionDirectives noDirectives $ _.optimizerState.directives <$> thingies
+    , implementations: QIMap.unions $ _.optimizerState.implementations <$> thingies
     }
   , erlState:
-    { callingConventions: wrap $ Map.unions $ unwrap <<< _.erlState.callingConventions <$> thingies
+    { callingConventions: QIMap.unions $ _.erlState.callingConventions <$> thingies
     , constructors: Map.unions $ _.erlState.constructors <$> thingies
     }
   }
-saveCacheToFile = saveDataToFile :: FilePath -> TotalBuildState -> Aff Unit
-loadCacheFromFile = loadDataFromFile :: FilePath -> Aff TotalBuildState
 
 runCompile :: MainArgs -> Aff Unit
-runCompile = runCompileCustom mempty
+runCompile = runCompileCustom stock
 
 -- Check that a module is up to date, based on the current and cached hash of
 -- corefn.json, and based on the FFI source and destination paths (it will
@@ -209,9 +221,10 @@ checkModuleUpToDate { current: Just current, cached, ffi: { from, to } }
             Left _ -> pure true
 
 runCompileCustom :: CustomCodegen -> MainArgs -> Aff Unit
-runCompileCustom custom { compile, filter, cwd } = do
+runCompileCustom custom { compile, filter, cwd, clean } = do
   let
     customEval = fullForeignSemantics custom.customEval
+    qustomEval = QIMap.fromMap customEval
     customCodegen = mkConverters custom.customCodegen
     customAnalysis = custom.customAnalysis
   liftEffect $ traverse_ Process.chdir cwd
@@ -262,16 +275,24 @@ runCompileCustom custom { compile, filter, cwd } = do
 
   -- Read in all of the corefn.json modules, and their hashes
   Console.log "Reading modules ..."
-  { coreFnModules, moduleHashes: SemigroupMap currentModuleHashes } <-
+  { coreFnModules, moduleHashes: currentModuleHashes } <-
     coreFnModulesFromOutput "output" filter >>= case _ of
       Left errors -> do
         for_ errors \(Tuple filePath err) -> do
           Console.error $ filePath <> " " <> err
         liftEffect $ Process.exit' 1
-      Right (Tuple coreFnModules _) | List.null coreFnModules -> do
+      Right coreFnModules | List.null coreFnModules -> do
         Console.log "No corefn modules found in ./output; try building"
         liftEffect $ Process.exit' 0
-      Right (Tuple coreFnModules moduleHashes) -> do
+      Right coreFnModulesWithSource -> do
+        moduleHashList <- case custom.incrementalize of
+          Just { hashText } -> coreFnModulesWithSource # parTraverse
+            \{ name, corefn } -> Tuple name <$> hashText corefn
+          Nothing -> mempty
+        let moduleHashes = Map.fromFoldable moduleHashList
+        -- Free these large strings
+        -- TODO: free `full :: Lazy` somehow?
+        let coreFnModules = map _ { corefn = "" } coreFnModulesWithSource
         pure { coreFnModules, moduleHashes }
 
   -- Check the status of each module: if we can skip building them for an incremental build
@@ -304,7 +325,7 @@ runCompileCustom custom { compile, filter, cwd } = do
                       # (fromMaybe <*> String.stripSuffix (String.Pattern ".purs"))
                       # (_ <> ".erl")
                 upToDate <- checkModuleUpToDate
-                  { current: unwrap <$> Map.lookup (ModuleName name) currentModuleHashes
+                  { current: Map.lookup (ModuleName name) currentModuleHashes
                   , cached: Map.lookup name cachedModuleHashes
                   , ffi: { from: fileForeign, to: moduleOutputForeignPath }
                   }
@@ -319,7 +340,7 @@ runCompileCustom custom { compile, filter, cwd } = do
     -- And return the function to write out the completed build result file
     finish <- pure do
       moduleHashes <- pure $ Map.fromFoldable $ currentModuleHashes # mapWithIndex
-        \(ModuleName k) (Last v) -> Tuple k v
+        \(ModuleName k) v -> Tuple k v
       FS.writeTextFile UTF8 buildFile $ printBuildFile { moduleHashes, allDirectives, version: buildVersion }
     pure { finish, unchanged }
 
@@ -330,12 +351,15 @@ runCompileCustom custom { compile, filter, cwd } = do
   let { toBeBuilt, pleaseLoadCache } = decideModules { scanned: coreFnModules, unchanged }
 
   -- Restore the incremental state for modules in `pleaseLoadCache`
-  incremental <- if Set.isEmpty pleaseLoadCache then pure Nothing else do
-    Console.log $ "Reading incremental state (" <> show (Set.size pleaseLoadCache) <> " files) ..."
-    map hush $ try $ Aff.sequential do
-      mergeBuildState <$> forWithIndex (Set.toMap pleaseLoadCache)
-        \(ModuleName name) _ -> Aff.parallel do
-          loadCacheFromFile (Path.concat [ outputDir, name, "buildcache.gz" ])
+  incremental <- case custom.incrementalize of
+    _ | clean || Set.isEmpty pleaseLoadCache -> pure Nothing
+    Nothing -> pure Nothing
+    Just incrementalize -> do
+      Console.log $ "Reading incremental state (" <> show (Set.size pleaseLoadCache) <> " files) ..."
+      map hush $ try $ Aff.sequential do
+        mergeBuildState <$> forWithIndex (Set.toMap pleaseLoadCache)
+          \(ModuleName name) _ -> Aff.parallel do
+            incrementalize.loadCacheFromFile (Path.concat [ outputDir, name, "buildcache.gz" ])
 
   -- Now we can get on with the actual build!
   { optimizerState: _optimizerState, erlState: _erlState, compiledFiles } <- do
@@ -378,7 +402,7 @@ runCompileCustom custom { compile, filter, cwd } = do
           prevConventions <- liftEffect $ Ref.read erlStateRef
           let
             Tuple codegened nextConventions =
-              codegenModule { customEval, customCodegen, customAnalysis } NoDebug backend foreigns prevConventions
+              codegenModule { customEval: qustomEval, customCodegen, customAnalysis } NoDebug backend foreigns prevConventions
           let
             formatted =
               Dodo.print plainText Dodo.twoSpaces
@@ -401,8 +425,11 @@ runCompileCustom custom { compile, filter, cwd } = do
             liftEffect $ Ref.modify_ (_ <> [moduleOutputPath]) erls
             let optimizerState = { built: buildEnv.built, implementations: buildEnv.implementations, directives: buildEnv.directives }
             let erlState = nextConventions
-            saveCacheToFile (Path.concat [ outputDir, name, "buildcache.gz" ]) $
-              moduleBuildState (ModuleName name) { optimizerState, erlState }
+            case custom.incrementalize of
+              Nothing -> pure unit
+              Just { saveCacheToFile } -> do
+                saveCacheToFile (Path.concat [ outputDir, name, "buildcache.gz" ]) $
+                  moduleBuildState (ModuleName name) { optimizerState, erlState }
       , onPrepareModule: \build coreFnMod@(Module { name }) -> do
           let total = show build.moduleCount
           let index = show (build.moduleIndex + 1)

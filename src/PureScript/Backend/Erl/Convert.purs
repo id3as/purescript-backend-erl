@@ -29,6 +29,7 @@ import PureScript.Backend.Erl.Syntax (Accessor(..), ErlDefinition(..), ErlExport
 import PureScript.Backend.Erl.Syntax as S
 import PureScript.Backend.Optimizer.Convert (BackendModule, ConvertEnv, getCtx, makeExternEvalRef, makeExternEvalSpine)
 import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal(..), ModuleName(..), Prop(..), Qualified(..))
+import PureScript.Backend.Optimizer.QIMap as QIMap
 import PureScript.Backend.Optimizer.Semantics (BackendExpr(..), BackendSemantics(..), Ctx(..), Env(..), LocalBinding(..), NeutralExpr(..), foldBackendExpr, optimize)
 import PureScript.Backend.Optimizer.Semantics.Foreign (ForeignEval)
 import PureScript.Backend.Optimizer.Syntax (BackendAccessor(..), BackendOperator(..), BackendOperator1(..), BackendOperator2(..), BackendOperatorNum(..), BackendOperatorOrd(..), BackendSyntax(..), Level(..), Pair(..))
@@ -45,7 +46,7 @@ type CodegenEnv =
   }
 
 type CustomCodegen =
-  { customEval :: Map.Map (Qualified Ident) ForeignEval
+  { customEval :: QIMap.QIMap ForeignEval
   , customCodegen :: Converters
   , customAnalysis :: Array Analyzer
   }
@@ -90,9 +91,7 @@ codegenModule custom mode backendModule@{ name: currentModule, bindings, imports
           Tuple (Qualified (Just currentModule) ctor) (Array.length fields)
 
     -- Performance boost by filtering the calling conventions to the imports
-    narrowToImports = over SemigroupMap $ Map.filterKeys case _ of
-      Qualified (Just mn) _ -> Set.member mn imports || mn == currentModule
-      _ -> true
+    narrowToImports = QIMap.matchModules $ Set.insert currentModule imports
 
     codegenEnv =
       { currentModule
@@ -203,7 +202,7 @@ convertEnv { customAnalysis, customEval } { name, implementations, directives } 
   , currentLevel: 0
   , toLevel: Map.empty
   , implementations
-  , moduleImplementations: Map.empty
+  , moduleImplementations: QIMap.empty
   , directives
   , dataTypes: Map.empty
   , foreignSemantics: customEval
@@ -232,15 +231,15 @@ uncurryMore1 ::
   Conventions ->
   Tuple Ident NeutralExpr ->
   Tuple Conventions (Array (CodegenEnv -> ErlDefinition))
-uncurryMore1 custom backendModule (SemigroupMap conventions) (Tuple (Ident i) n) =
+uncurryMore1 custom backendModule conventions (Tuple (Ident i) n) =
   -- Dredge up some partially applied definitions
   case toBase unit n of
-    Just (CWB qi args) | Just arities <- Map.lookup qi conventions ->
+    Just (CWB qi args) | Just arities <- QIMap.lookup qi conventions ->
       arities # foldMapWithIndex case _, _ of
         psCall, _erlConvention
           | arity psCall > arity args -- this is not redundant with the next line
           , Just { matched, unmatched: Just unmatched } <- zipAgainst psCall args
-          , isNewOptimization thisBinding unmatched (SemigroupMap conventions) ->
+          , isNewOptimization thisBinding unmatched conventions ->
             -- abstract out the unmatched variables
             let Tuple abstracted localVars = psPatsAndVars $ autoPSVars unmatched in
             -- the Erlang definition will be called with them all flat
@@ -263,8 +262,8 @@ uncurryMore1 custom backendModule (SemigroupMap conventions) (Tuple (Ident i) n)
   callThisAs x y = Tuple (callAs thisBinding x y)
 
 isNewOptimization :: Qualified Ident -> ArityPS -> Conventions -> Boolean
-isNewOptimization qi callingPS (SemigroupMap conventions) =
-  case Map.lookup qi conventions of
+isNewOptimization qi callingPS conventions =
+  case QIMap.lookup qi conventions of
     Nothing -> true
     Just (SemigroupMap arities) ->
       not Map.member callingPS arities

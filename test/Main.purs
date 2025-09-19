@@ -57,6 +57,7 @@ import PureScript.Backend.Optimizer.Convert (BackendModule)
 import PureScript.Backend.Optimizer.CoreFn (Comment(..), Ident(..), Module(..), ModuleName(..))
 import PureScript.Backend.Optimizer.Directives (parseDirectiveFile)
 import PureScript.Backend.Optimizer.Directives.Defaults (defaultDirectives)
+import PureScript.Backend.Optimizer.QIMap as QIMap
 import Test.Eval as Eval
 import Test.Utils (bufferToUTF8, coreFnModulesFromOutput, errored, execWithStdin, loadModuleMain, mkdirp, rmrf, spawnFromParent)
 
@@ -105,7 +106,7 @@ runSnapshotTests :: TestArgs -> Aff Unit
 runSnapshotTests { accept, compile, run, filter } = do
   let
     custom =
-      { customEval: fullForeignSemantics []
+      { customEval: QIMap.fromMap (fullForeignSemantics [])
       , customCodegen: mkConverters []
       , customAnalysis: []
       }
@@ -131,7 +132,7 @@ runSnapshotTests { accept, compile, run, filter } = do
       for_ errors \(Tuple filePath err) -> do
         Console.error $ filePath <> " " <> err
       liftEffect $ Process.exit' 1
-    Right (Tuple coreFnModulePeek _) -> do
+    Right coreFnModulePeek -> do
       Console.log "Got modules"
       let { directives } = parseDirectiveFile $ defaultDirectives <> moreDirectives
       let coreFnModules = coreFnModulePeek <#> _.full >>> force

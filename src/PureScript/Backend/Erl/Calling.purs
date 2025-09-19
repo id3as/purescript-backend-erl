@@ -37,6 +37,7 @@ import PureScript.Backend.Erl.Convert.Common (erlModuleNamePs)
 import PureScript.Backend.Erl.Syntax (ErlExpr)
 import PureScript.Backend.Erl.Syntax as S
 import PureScript.Backend.Optimizer.CoreFn (Ident(..), Literal, Qualified(..))
+import PureScript.Backend.Optimizer.QIMap as QIMap
 import PureScript.Backend.Optimizer.Semantics (BackendSemantics, EvalRef, ExternSpine(..), NeutralExpr(..))
 import PureScript.Backend.Optimizer.Semantics as Sem
 import PureScript.Backend.Optimizer.Semantics.Foreign (ForeignSemantics, qualified)
@@ -171,7 +172,7 @@ thunkErl = CallingErl $ pure $ Thunk
 -- A map of calling conventions, from PS names and arities to global Erlang
 -- functions and arities (the arities must match)
 type Conventions =
-  SemigroupMap (Qualified Ident)
+  QIMap.QIMap
   ( SemigroupMap ArityPS
     (First (Either (Tuple GlobalErl Int) (CWB CallingErl GlobalErl Unit)))
   )
@@ -184,7 +185,7 @@ callAs' qi arity erl call
   | CWB erl call == conventionWithBase identity (CWB qi arity)
   = mempty
 callAs' qi arity erl call =
-  SemigroupMap $ Map.singleton qi $ SemigroupMap $ Map.singleton arity $ First $
+  QIMap.singleton qi $ SemigroupMap $ Map.singleton arity $ First $
     Right $ CWB erl call
 
 callShort :: Qualified Ident -> ArityPS -> GlobalErl -> ArityErl -> Conventions
@@ -193,17 +194,17 @@ callShort qi arity erl call =
     CallingPS BasePS (Curried args), CallingErl calls
       | [Call [_]] <- NEA.toArray calls
       , [_] <- NEA.toArray args ->
-        SemigroupMap $ Map.singleton qi $ SemigroupMap $ Map.singleton BasePS $ First $
+        QIMap.singleton qi $ SemigroupMap $ Map.singleton BasePS $ First $
           Left $ Tuple erl 1
     CallingPS BasePS (Uncurried args), CallingErl calls
       | [Call args'] <- NEA.toArray calls
       , Array.length args == Array.length args' ->
-        SemigroupMap $ Map.singleton qi $ SemigroupMap $ Map.singleton BasePS $ First $
+        QIMap.singleton qi $ SemigroupMap $ Map.singleton BasePS $ First $
           Left $ Tuple erl (Array.length args')
     CallingPS BasePS (UncurriedEffect args), CallingErl calls
       | [Call args', Thunk] <- NEA.toArray calls
       , Array.length args == Array.length args' ->
-        SemigroupMap $ Map.singleton qi $ SemigroupMap $ Map.singleton BasePS $ First $
+        QIMap.singleton qi $ SemigroupMap $ Map.singleton BasePS $ First $
           Left $ Tuple erl (Array.length args')
     _, _ -> mempty
 
@@ -404,18 +405,17 @@ class ToBase call expr base env where
   toBase :: env -> expr -> Maybe (CWB call base expr)
 
 matchBase ::
-  forall call expr base env a r.
+  forall call expr env a r.
     Ord (call a) =>
-    Ord base =>
     Calling call =>
-    ToBase call expr base env =>
-  SemigroupMap base (SemigroupMap (call a) r) ->
+    ToBase call expr (Qualified Ident) env =>
+  QIMap.QIMap (SemigroupMap (call a) r) ->
   env ->
   expr ->
-  Maybe (Tuple (MatchWithBase call expr base a) r)
-matchBase (SemigroupMap bases) env expr = do
+  Maybe (Tuple (MatchWithBase call expr (Qualified Ident) a) r)
+matchBase bases env expr = do
   CWB base calls <- toBase env expr
-  SemigroupMap arities <- Map.lookup base bases
+  SemigroupMap arities <- QIMap.lookup base bases
   Map.toUnfoldable arities # Array.reverse # Array.findMap \(Tuple arity r) -> do
     { matched, unmatched } <- zipAgainst calls arity
     Just $ Tuple
@@ -425,14 +425,13 @@ matchBase (SemigroupMap bases) env expr = do
       r
 
 matchBasePattern ::
-  forall call expr base env o f.
+  forall call expr env o f.
     Ord (call Unit) =>
-    Ord base =>
     Calling call =>
-    ToBase call expr base env =>
+    ToBase call expr (Qualified Ident) env =>
     Foldable f =>
   (env -> o -> call expr -> o) ->
-  SemigroupMap base (SemigroupMap (call Unit) (f (Pattern env (CWB call base) expr o))) ->
+  QIMap.QIMap (SemigroupMap (call Unit) (f (Pattern env (CWB call (Qualified Ident)) expr o))) ->
   env ->
   expr ->
   Maybe o
@@ -927,7 +926,7 @@ applyConventions = mapWithIndex \qi -> mapWithIndex \arity (First funNameOrCall)
         pure $ applyCall unit erlBase calls
 
 type Converters =
-  SemigroupMap (Qualified Ident)
+  QIMap.QIMap
   ( SemigroupMap ArityPS
     ( NonEmptyArray Converter
     )
@@ -936,17 +935,16 @@ type Converter =
   Pattern (NeutralExpr -> ErlExpr) (CWB CallingPS (Qualified Ident)) NeutralExpr ErlExpr
 
 indexPatterns ::
-  forall env call base i o f.
-    Ord base =>
+  forall env call i o f.
     Ord (call Unit) =>
     Applicative f =>
-    Semigroup (f (Pattern env (CWB call base) i o)) =>
-  Array (Pattern env (CWB call base) i o) ->
-  SemigroupMap base (SemigroupMap (call Unit) (f (Pattern env (CWB call base) i o)))
+    Semigroup (f (Pattern env (CWB call (Qualified Ident)) i o)) =>
+  Array (Pattern env (CWB call (Qualified Ident)) i o) ->
+  QIMap.QIMap (SemigroupMap (call Unit) (f (Pattern env (CWB call (Qualified Ident)) i o)))
 indexPatterns pats = pats # Array.foldMap \pat -> case pat of
   Pure _ -> mempty
   Pattern (CWB base arity) _ -> do
-    SemigroupMap $ Map.singleton base $ SemigroupMap $ Map.singleton arity $ pure pat
+    QIMap.singleton base $ SemigroupMap $ Map.singleton arity $ pure pat
 
 converts :: Array Converter -> (NeutralExpr -> ErlExpr) -> NeutralExpr -> Maybe ErlExpr
 converts = indexPatterns >>> converts'
