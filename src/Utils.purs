@@ -16,6 +16,7 @@ import Data.Argonaut (Json, JsonDecodeError)
 import Data.Argonaut as Json
 import Data.Argonaut.Decode.Decoders (decodeArray, decodeJObject, decodeString, getField)
 import Data.Array (intercalate)
+import Data.Array.NonEmpty as NEA
 import Data.Array.NonEmpty as NonEmptyArray
 import Data.Array.NonEmpty.Internal (NonEmptyArray)
 import Data.Bifunctor (lmap)
@@ -33,6 +34,8 @@ import Data.Semigroup.Last (Last(..))
 import Data.Set (Set)
 import Data.Set as Set
 import Data.String as String
+import Data.String.Regex as Re
+import Data.String.Regex.Unsafe (unsafeRegex)
 import Data.Tuple (Tuple(..), fst, snd)
 import Effect (Effect)
 import Effect.Aff (Aff, Milliseconds, effectCanceler, error, makeAff, throwError)
@@ -206,7 +209,7 @@ readCoreFnModule :: FilePath -> Aff (Either (Tuple FilePath String) (Tuple Modul
 readCoreFnModule filePath = do
   contents <- FS.readTextFile UTF8 filePath
   -- time <- modifiedTimeMs <$> FS.stat filePath
-  case lmap Json.printJsonDecodeError <<< decodeModulePeek =<< Json.jsonParser contents of
+  case lmap Json.printJsonDecodeError $ decodeModulePeek contents of
     Left err -> do
       pure $ Left $ Tuple filePath err
     Right mod@{ name } ->
@@ -220,15 +223,16 @@ type ModulePeek =
   , full :: Lazy (Module Ann)
   }
 
-decodeModulePeek :: Json -> JsonDecode ModulePeek
-decodeModulePeek json = do
-  obj <- decodeJObject json
+decodeModulePeek :: String -> JsonDecode ModulePeek
+decodeModulePeek s = do
+  Tuple hit j <- tryFastScan s
+  obj <- decodeJObject j
   name <- getField decodeModuleName obj "moduleName"
   path <- getField decodeString obj "modulePath"
   imports <- getField (decodeArray decodeImport) obj "imports"
   let
     importNames = Set.fromFoldable (imports <#> \(Import _ dep) -> dep)
-    full = defer \_ -> case decodeModule json of
+    full = defer \_ -> case decodeModule =<< if hit then Json.parseJson s else pure j of
       Right mod -> mod
       Left err -> unsafeCrashWith $ Json.printJsonDecodeError err
   pure { name, path, imports, importNames, full }
@@ -286,6 +290,43 @@ decideModules { scanned, unchanged } = { needsRebuild, toBeBuilt, pleaseLoadCach
       expanding both $ Set.difference next both
   depsOf = foldMap (fold <<< flip Map.lookup depMap)
 
+tryFastScan :: String -> Either JsonDecodeError (Tuple Boolean Json)
+tryFastScan s = case Re.match fastScanRegex s of
+  Just matched
+    | Just match <- NEA.head matched
+    , Right r <- Json.parseJson ("{"<>match<>"}") -> Right (Tuple true r)
+  _ -> Tuple false <$> Json.parseJson s
+
+fastScanRegex :: Re.Regex
+fastScanRegex = unsafeRegex fastScanRegexSource mempty
+
+fastScanRegexSource :: String
+fastScanRegexSource =
+  intercalate ","
+    [ key "imports" $ array importFragment
+    , key "moduleName" $ array str
+    , key "modulePath" str
+    , key "reExports" $ map $ array str
+    , sourceSpan
+    ] <> "(?=\\}\\s*$)"
+  where
+  gr re = "(?:" <> re <> ")"
+  star re = gr re <> "*"
+  str = "\"(?:[^\\\"]+|\\\\.)\""
+  int = "\\d+"
+  key k v = show k <> ":" <> v
+  array v = "\\[" <> star (v <> ",?") <> "\\]"
+  map v = "\\{" <> star (str <> ":" <> v <> ",?") <> "\\}"
+  rec kvs = "\\{" <> intercalate "," kvs <> "\\}"
+
+  sourceSpan = key "sourceSpan" $ map $ array int
+  importFragment = rec
+    [ key "annotation" $ rec
+      [ key "meta" "null"
+      , sourceSpan
+      ]
+    , key "moduleName" $ array str
+    ]
 
 
 foreign import saveDataToFile :: forall datum. FilePath -> datum -> Effect Unit
