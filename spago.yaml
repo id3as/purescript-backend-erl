@@ -138,45 +138,45 @@ workspace:
         - "unfoldable"
         - "unsafe-coerce"
     backend-optimizer:
-      path: ../purescript-backend-optimizer
-      # git: https://github.com/aristanetworks/purescript-backend-optimizer
-      # ref: nf/float-top-level-lets
-      # dependencies:
-      #   - aff
-      #   - ansi
-      #   - argonaut
-      #   - argparse-basic
-      #   - arrays
-      #   - bifunctors
-      #   - console
-      #   - control
-      #   - debug
-      #   - dodo-printer
-      #   - effect
-      #   - either
-      #   - enums
-      #   - filterable
-      #   - foldable-traversable
-      #   - foreign-object
-      #   - integers
-      #   - language-cst-parser
-      #   - lazy
-      #   - lists
-      #   - maybe
-      #   - newtype
-      #   - ordered-collections
-      #   - orders
-      #   - parallel
-      #   - partial
-      #   - posix-types
-      #   - prelude
-      #   - refs
-      #   - safe-coerce
-      #   - st
-      #   - strings
-      #   - transformers
-      #   - tuples
-      #   - unsafe-coerce
+      # path: ../purescript-backend-optimizer
+      git: https://github.com/MonoidMusician/purescript-backend-optimizer
+      ref: incremental
+      dependencies:
+        - aff
+        - ansi
+        - argonaut
+        - argparse-basic
+        - arrays
+        - bifunctors
+        - console
+        - control
+        - debug
+        - dodo-printer
+        - effect
+        - either
+        - enums
+        - filterable
+        - foldable-traversable
+        - foreign-object
+        - integers
+        - language-cst-parser
+        - lazy
+        - lists
+        - maybe
+        - newtype
+        - ordered-collections
+        - orders
+        - parallel
+        - partial
+        - posix-types
+        - prelude
+        - refs
+        - safe-coerce
+        - st
+        - strings
+        - transformers
+        - tuples
+        - unsafe-coerce
     node-glob-basic:
       git: https://github.com/natefaubion/purescript-node-glob-basic.git
       ref: v1.2.2
