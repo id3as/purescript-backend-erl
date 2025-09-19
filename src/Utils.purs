@@ -12,23 +12,26 @@ import Prelude
 import Control.Monad.Except (ExceptT(..), runExceptT)
 import Control.Monad.Writer (WriterT(..), runWriterT)
 import Control.Parallel (parTraverse)
+import Data.Argonaut (Json, JsonDecodeError)
 import Data.Argonaut as Json
+import Data.Argonaut.Decode.Decoders (decodeArray, decodeJObject, decodeString, getField)
 import Data.Array (intercalate)
 import Data.Array.NonEmpty as NonEmptyArray
 import Data.Array.NonEmpty.Internal (NonEmptyArray)
 import Data.Bifunctor (lmap)
 import Data.Compactable (separate)
 import Data.Either (Either(..))
-import Data.Foldable (foldMap, foldl)
-import Data.Lazy as Lazy
+import Data.Foldable (fold, foldMap)
+import Data.Lazy (Lazy, defer, force)
 import Data.List (List)
+import Data.List as List
 import Data.Map (SemigroupMap(..))
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Ord.Max (Max)
 import Data.Semigroup.Last (Last(..))
+import Data.Set (Set)
 import Data.Set as Set
-import Data.Set.NonEmpty as NonEmptySet
 import Data.String as String
 import Data.Tuple (Tuple(..), fst, snd)
 import Effect (Effect)
@@ -55,11 +58,12 @@ import Node.Library.Execa (ExecaResult, execa)
 import Node.Path (FilePath)
 import Node.Process as Process
 import Node.Stream as Stream
+import Partial.Unsafe (unsafeCrashWith)
 import PureScript.Backend.Erl.Convert.Common (erlModuleNamePs)
-import PureScript.Backend.Optimizer.CoreFn (Ann, Module(..), ModuleName(..))
+import PureScript.Backend.Optimizer.CoreFn (Ann(..), Import(..), Module, ModuleName(..), emptySpan, isPrimModule)
 import PureScript.Backend.Optimizer.CoreFn.Json (decodeModule)
-import PureScript.Backend.Optimizer.CoreFn.Sort (emptyPull, pullResult, resumePull, sortModules)
-import Safe.Coerce (coerce)
+import PureScript.Backend.Optimizer.CoreFn.Sort (sortModules)
+import Unsafe.Coerce (unsafeCoerce)
 
 spawnFromParent :: String -> Array String -> Aff Unit
 spawnFromParent command args = makeAff \k -> do
@@ -168,16 +172,19 @@ type LastTimestamp = Maybe (Max Milliseconds)
 coreFnModulesFromOutput
   :: FilePath
   -> NonEmptyArray String
-  -> Aff (Either (NonEmptyArray (Tuple FilePath Hash)) (Tuple (List (Module Ann)) (SemigroupMap ModuleName (Last Hash))))
-coreFnModulesFromOutput path globs = runExceptT $ coerce $ runWriterT do
+  -> Aff (Either (NonEmptyArray (Tuple FilePath Hash)) (Tuple (List ModulePeek) (SemigroupMap ModuleName (Last Hash))))
+coreFnModulesFromOutput path globs = runExceptT $ runWriterT do
   paths <- Set.toUnfoldable <$> liftAff
     (expandGlobs path ((_ <> "/corefn.json") <$> NonEmptyArray.toArray globs))
   case NonEmptyArray.toArray globs of
-    [ "**" ] ->
-      sortModules <$> modulesFromPaths paths
+    [ "*" ] ->
+      uhh sortModules <$> modulesFromPaths paths
     _ ->
-      go <<< foldl resumePull emptyPull =<< modulesFromPaths paths
+      unsafeCrashWith "TODO: reimplement --filter"
+      -- go <<< foldl resumePull emptyPull =<< modulesFromPaths paths
   where
+  uhh = unsafeCoerce :: forall i. (i (Module Ann) -> List (Module Ann)) -> i ModulePeek -> List ModulePeek
+
   modulesFromPaths :: _ -> WriterT (SemigroupMap ModuleName (Last Hash)) (ExceptT (NonEmptyArray (Tuple FilePath String)) Aff) _
   modulesFromPaths paths = WriterT $ ExceptT do
     { left, right } <- separate <$> parTraverse readCoreFnModule paths
@@ -185,26 +192,99 @@ coreFnModulesFromOutput path globs = runExceptT $ coerce $ runWriterT do
       Nothing -> pure $ Right $ Tuple (map fst right) (foldMap snd right)
       Just errors -> pure $ Left errors
 
-  pathFromModuleName (ModuleName mn) =
-    path <> "/" <> mn <> "/corefn.json"
+  -- pathFromModuleName (ModuleName mn) =
+  --   path <> "/" <> mn <> "/corefn.json"
 
-  go pull = case pullResult pull of
-    Left needed ->
-      go <<< foldl resumePull pull =<< modulesFromPaths
-        (pathFromModuleName <$> NonEmptySet.toUnfoldable needed)
-    Right modules ->
-      pure $ Lazy.force modules
+  -- go pull = case pullResult pull of
+  --   Left needed ->
+  --     go <<< foldl resumePull pull =<< modulesFromPaths
+  --       (pathFromModuleName <$> NonEmptySet.toUnfoldable needed)
+  --   Right modules ->
+  --     pure $ Lazy.force modules
 
-readCoreFnModule :: FilePath -> Aff (Either (Tuple FilePath String) (Tuple (Module Ann) (SemigroupMap ModuleName (Last Hash))))
+readCoreFnModule :: FilePath -> Aff (Either (Tuple FilePath String) (Tuple ModulePeek (SemigroupMap ModuleName (Last Hash))))
 readCoreFnModule filePath = do
   contents <- FS.readTextFile UTF8 filePath
   -- time <- modifiedTimeMs <$> FS.stat filePath
-  case lmap Json.printJsonDecodeError <<< decodeModule =<< Json.jsonParser contents of
+  case lmap Json.printJsonDecodeError <<< decodeModulePeek =<< Json.jsonParser contents of
     Left err -> do
       pure $ Left $ Tuple filePath err
-    Right mod@(Module { name }) ->
+    Right mod@{ name } ->
       pure $ Right $ Tuple mod $ SemigroupMap $ Map.singleton name $ Last $ hashSHA512 contents
 
+type ModulePeek =
+  { name :: ModuleName
+  , path :: FilePath
+  , imports :: Array (Import Ann)
+  , importNames :: Set ModuleName
+  , full :: Lazy (Module Ann)
+  }
+
+decodeModulePeek :: Json -> JsonDecode ModulePeek
+decodeModulePeek json = do
+  obj <- decodeJObject json
+  name <- getField decodeModuleName obj "moduleName"
+  path <- getField decodeString obj "modulePath"
+  imports <- getField (decodeArray decodeImport) obj "imports"
+  let
+    importNames = Set.fromFoldable (imports <#> \(Import _ dep) -> dep)
+    full = defer \_ -> case decodeModule json of
+      Right mod -> mod
+      Left err -> unsafeCrashWith $ Json.printJsonDecodeError err
+  pure { name, path, imports, importNames, full }
+
+type JsonDecode = Either JsonDecodeError
+
+decodeModuleName :: Json -> JsonDecode ModuleName
+decodeModuleName = map (ModuleName <<< intercalate ".") <<< decodeArray decodeString
+
+decodeImport :: Json -> JsonDecode (Import Ann)
+decodeImport json = do
+  obj <- decodeJObject json
+  mod <- getField decodeModuleName obj "moduleName"
+  pure $ Import (Ann { span: emptySpan, meta: Nothing }) mod
+
+
+-- Modules can be:
+-- - In need of rebuild: hashes don't match, or downstream of a rebuild
+-- - An immediate or transitive dependency of a rebuild: load from cache
+-- - Inert, not directly related to rebuildable modules
+decideModules ::
+  { scanned :: List ModulePeek
+  , unchanged :: Set ModuleName
+  } ->
+  { needsRebuild :: Set ModuleName
+  , toBeBuilt :: List (Module Ann)
+  , pleaseLoadCache :: Set ModuleName
+  , alreadyBuilt :: Set ModuleName -- less important
+  }
+decideModules { scanned, unchanged } = { needsRebuild, toBeBuilt, pleaseLoadCache, alreadyBuilt }
+  where
+  depMap = Map.fromFoldable $ scanned <#> \{ name, importNames } ->
+    Tuple name $ Set.filter (not isPrimModule) $ importNames
+  alreadyBuilt = trim unchanged
+  needsRebuild = Set.difference (Map.keys depMap) alreadyBuilt
+  toBeBuilt = map (force <<< _.full) $ scanned #
+    List.filter \{ name } -> Set.member name needsRebuild
+  pleaseLoadCache = expanding Set.empty needsRebuild `Set.difference` needsRebuild
+
+  -- Make sure all transitive deps are unchanged too
+  trim moduleSet = moduleSet # Set.filter \name ->
+    case Map.lookup name depMap of
+      Nothing -> false
+      Just deps -> Set.subset deps moduleSet
+  trimming moduleSet =
+    case trim moduleSet of
+      reduced | reduced == moduleSet -> moduleSet
+      reduced -> trimming reduced
+
+  -- Get all transitive dependencies
+  expanding moduleSet waveFront
+    | Set.isEmpty waveFront = moduleSet
+    | both <- moduleSet <> waveFront
+    , next <- depsOf waveFront =
+      expanding both $ Set.difference next both
+  depsOf = foldMap (fold <<< flip Map.lookup depMap)
 
 
 

@@ -13,18 +13,21 @@ import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Bifunctor (lmap)
 import Data.Either (Either(..), either, hush)
 import Data.Foldable (fold, foldMap, for_, traverse_)
+import Data.FoldableWithIndex (forWithIndex_)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.List as List
 import Data.Map (Map, SemigroupMap(..))
 import Data.Map as Map
-import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Monoid (power)
-import Data.Newtype (over, unwrap)
+import Data.Newtype (unwrap, wrap)
 import Data.Semigroup.Last (Last(..))
+import Data.Set (Set)
 import Data.Set as Set
 import Data.String as String
 import Data.String.CodeUnits as SCU
-import Data.Traversable (for)
+import Data.Traversable (class Traversable, for)
+import Data.TraversableWithIndex (forWithIndex)
 import Data.Tuple (Tuple(..))
 import Dodo (plainText)
 import Dodo as Dodo
@@ -33,6 +36,7 @@ import Effect.Aff (Aff, launchAff_, throwError, try)
 import Effect.Aff as Aff
 import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
+import Effect.Exception (throw)
 import Effect.Ref as Ref
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff as FS
@@ -50,14 +54,15 @@ import PureScript.Backend.Erl.Foreign (fullForeignSemantics)
 import PureScript.Backend.Erl.Foreign.Analyze (Analyzer, analyzeCustom)
 import PureScript.Backend.Erl.Parser (parseFile)
 import PureScript.Backend.Erl.Printer as P
-import PureScript.Backend.Optimizer.Builder (BuildState, buildModules, trimIncrementalState)
+import PureScript.Backend.Optimizer.Builder (BuildState, buildModules)
 import PureScript.Backend.Optimizer.CoreFn (Module(..), ModuleName(..), Qualified(..))
 import PureScript.Backend.Optimizer.Directives (parseDirectiveFile)
 import PureScript.Backend.Optimizer.Directives.Defaults (defaultDirectives)
+import PureScript.Backend.Optimizer.Semantics (EvalRef(..))
 import PureScript.Backend.Optimizer.Semantics.Foreign (ForeignSemantics)
 import PureScript.Backend.Optimizer.Tracer.Printer (printModuleSteps)
 import PureScript.CST.Errors (printParseError)
-import Test.Utils (Hash, coreFnModulesFromOutput, errored, loadDataFromFile, mkdirp, saveDataToFile)
+import Test.Utils (Hash, coreFnModulesFromOutput, decideModules, errored, loadDataFromFile, mkdirp, saveDataToFile)
 
 type MainArgs =
   { compile :: Boolean
@@ -128,6 +133,41 @@ type TotalBuildState =
   { optimizerState :: BuildState
   , erlState :: AcrossModules
   }
+splitBuildState :: Set ModuleName -> TotalBuildState -> Map ModuleName TotalBuildState
+splitBuildState names { optimizerState, erlState } =
+  Set.toMap names # mapWithIndex \target _ ->
+    { optimizerState:
+      { built: Set.singleton target
+      , directives: optimizerState.directives # Map.filterKeys case _ of
+          EvalExtern (Qualified (Just name) _) -> name == target
+          _ -> false
+      , implementations: optimizerState.implementations # Map.filterKeys case _ of
+          Qualified (Just name) _ -> name == target
+          _ -> false
+      }
+    , erlState:
+      { callingConventions: wrap $ unwrap erlState.callingConventions # Map.filterKeys case _ of
+          Qualified (Just name) _ -> name == target
+          _ -> false
+      , constructors: erlState.constructors # Map.filterKeys case _ of
+          Qualified (Just name) _ -> name == target
+          _ -> false
+      }
+    }
+mergeBuildState :: forall f. Traversable f => f TotalBuildState -> TotalBuildState
+mergeBuildState thingies =
+  { optimizerState:
+    { built: foldMap _.optimizerState.built thingies
+    , directives: Map.unions $ _.optimizerState.directives <$> thingies
+    , implementations: Map.unions $ _.optimizerState.implementations <$> thingies
+    }
+  , erlState:
+    { callingConventions: wrap $ Map.unions $ unwrap <<< _.erlState.callingConventions <$> thingies
+    , constructors: Map.unions $ _.erlState.constructors <$> thingies
+    }
+  }
+saveCacheToFile = saveDataToFile :: FilePath -> TotalBuildState -> Effect Unit
+loadCacheFromFile = loadDataFromFile :: FilePath -> Effect TotalBuildState
 
 runCompile :: MainArgs -> Aff Unit
 runCompile = runCompileCustom mempty
@@ -180,7 +220,6 @@ runCompileCustom custom { compile, filter, cwd } = do
   currentDir <- liftEffect Process.cwd
   let outputDir = Path.concat [ currentDir, "output-erl" ]
   let buildFile = Path.concat [ outputDir, "build.json" ]
-  let buildDataFile = Path.concat [ outputDir, "builddata.gz" ]
   mkdirp outputDir
 
   -- Read identifiers to trace for debugging
@@ -237,9 +276,9 @@ runCompileCustom custom { compile, filter, cwd } = do
         pure { coreFnModules, moduleHashes }
 
   -- Check the status of each module: if we can skip building them for an incremental build
-  { finish, alreadyBuilt } <- do
+  { finish, unchanged } <- do
     buildContents <- try $ FS.readTextFile UTF8 buildFile
-    alreadyBuilt <- case buildContents of
+    unchanged <- case buildContents of
       Left _ -> pure Set.empty -- Build file does not exist
       Right contents -> do
         case parseBuildFile contents of
@@ -255,7 +294,7 @@ runCompileCustom custom { compile, filter, cwd } = do
               -- We need to check foreign files since their timestamps are
               -- not tracked: we can just copy them if their interface
               -- has not changed, otherwise we need to rebuild
-              fold <$> for coreFnModules \(Module { name: ModuleName name, path: reportedPath }) -> do
+              fold <$> for coreFnModules \{ name: ModuleName name, path: reportedPath } -> do
                 let
                   -- Sorry, working around a weird language server bug/inconsistency
                   path = fromMaybe <*> String.stripPrefix (String.Pattern currentDir) $ reportedPath
@@ -272,7 +311,7 @@ runCompileCustom custom { compile, filter, cwd } = do
                   }
                 pure if upToDate then Set.singleton (ModuleName name) else mempty
     -- Check if everything was built in order to exit early
-    when (Set.size alreadyBuilt == List.length coreFnModules) do
+    when (Set.size unchanged == List.length coreFnModules) do
       Console.log "... up to date!"
       Console.log "Run `rm ./output-erl/build.json` to force a rebuild"
       liftEffect $ Process.exit' 0
@@ -283,28 +322,22 @@ runCompileCustom custom { compile, filter, cwd } = do
       moduleHashes <- pure $ Map.fromFoldable $ currentModuleHashes # mapWithIndex
         \(ModuleName k) (Last v) -> Tuple k v
       FS.writeTextFile UTF8 buildFile $ printBuildFile { moduleHashes, allDirectives, version: buildVersion }
-    pure { finish, alreadyBuilt }
+    pure { finish, unchanged }
 
-  -- Restore the incremental state
-  incremental <- if Set.isEmpty alreadyBuilt then pure Nothing else do
-    let
-      -- Filter `Map (Qualified Ident) _` to just the modules in `alreadyBuilt`
-      filterToBuilt = Map.filterKeys case _ of
-        Qualified (Just mod) _ -> Set.member mod alreadyBuilt
-        _ -> false
+  -- Modules can be:
+  -- - In need of rebuild: hashes don't match, or downstream of a rebuild
+  -- - An immediate or transitive dependency of a rebuild: load from cache
+  -- - Inert, not directly related to rebuildable modules
+  let { needsRebuild, toBeBuilt, pleaseLoadCache, alreadyBuilt } = decideModules { scanned: coreFnModules, unchanged }
+
+  -- Restore the incremental state for `pleaseLoadCache` modules
+  incremental <- if Set.isEmpty pleaseLoadCache then pure Nothing else do
+    let loadCache (ModuleName name) _ = loadCacheFromFile (Path.concat [ outputDir, name, "buildcache.gz" ]) -- <* Console.log ("  - " <> name)
     Console.log "Reading incremental state ..."
-    try (liftEffect (loadDataFromFile buildDataFile)) <#> case _ of
-      Right { optimizerState: untrimmed, erlState } ->
-        let optimizerState = trimIncrementalState coreFnModules $ untrimmed { built = alreadyBuilt }
-        in Just
-          { alreadyBuilt
-          , optimizerState
-          , erlState:
-            { callingConventions: over SemigroupMap filterToBuilt erlState.callingConventions
-            , constructors: filterToBuilt erlState.constructors
-            }
-          }
-      Left _ -> Nothing
+    map hush $ try $ liftEffect $ forWithIndex (Set.toMap pleaseLoadCache) loadCache <#> mergeBuildState
+
+  when (maybe false (\i -> i.optimizerState.built /= pleaseLoadCache) incremental) do
+    liftEffect $ throw "MISMATCH"
 
   -- Console.log $ String.joinWith "\n" $ unwrap <$> Set.toUnfoldable do
   --   Set.difference (Map.keys currentModuleHashes) (foldMap _.alreadyBuilt incremental)
@@ -318,7 +351,7 @@ runCompileCustom custom { compile, filter, cwd } = do
       Nothing -> initAcrossModules
       Just { erlState } -> erlState
     -- Call the optimizer and let it do its thing
-    optimizerState <- coreFnModules # buildModules
+    optimizerState <- toBeBuilt # buildModules
       { directives
       , analyzeCustom: analyzeCustom custom.customAnalysis
       , foreignSemantics: customEval
@@ -377,11 +410,12 @@ runCompileCustom custom { compile, filter, cwd } = do
 
   -- Final tasks:
   do
-    -- Write out build file, the build data file, and the build products file
+    -- Write out build file, the build products file, and the build cache files
     finish
-    liftEffect $ saveDataToFile buildDataFile { optimizerState, erlState }
     FS.writeTextFile UTF8 (Path.concat [ outputDir, "build_products.txt" ]) $
       String.joinWith "\n" compiledFiles <> "\n"
+    forWithIndex_ (splitBuildState needsRebuild { optimizerState, erlState }) \(ModuleName name) datum ->
+      liftEffect $ saveCacheToFile (Path.concat [ outputDir, name, "buildcache.gz" ]) datum
   do
     -- And optionally compile them all with `erlc` immediately
     when compile do
