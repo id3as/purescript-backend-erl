@@ -696,7 +696,7 @@
     "extra_packages": {
       "backend-optimizer": {
         "git": "https://github.com/MonoidMusician/purescript-backend-optimizer",
-        "ref": "incremental",
+        "ref": "incremental-float-lets",
         "dependencies": [
           "aff",
           "ansi",
@@ -977,7 +977,7 @@
     "backend-optimizer": {
       "type": "git",
       "url": "https://github.com/MonoidMusician/purescript-backend-optimizer",
-      "rev": "73fcc0724c25f29b907789b8fc57b25cc5e97f4b",
+      "rev": "b55450690959a5a16840f5bf539bfd6d8c79f35d",
       "dependencies": [
         "aff",
         "ansi",

@@ -140,7 +140,7 @@ workspace:
     backend-optimizer:
       # path: ../purescript-backend-optimizer
       git: https://github.com/MonoidMusician/purescript-backend-optimizer
-      ref: incremental
+      ref: incremental-float-lets
       dependencies:
         - aff
         - ansi
