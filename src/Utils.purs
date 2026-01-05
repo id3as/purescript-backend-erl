@@ -34,6 +34,7 @@ import Data.String.Regex as Re
 import Data.String.Regex.Unsafe (unsafeRegex)
 import Data.Tuple (Tuple(..))
 import Effect.Aff (Aff, Milliseconds, effectCanceler, error, makeAff, throwError)
+import Effect.Aff as Aff
 import Effect.Aff.Class (liftAff)
 import Effect.Class (liftEffect)
 import Effect.Class.Console (log)

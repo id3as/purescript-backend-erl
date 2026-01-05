@@ -60,7 +60,7 @@ import PureScript.Backend.Optimizer.Semantics (noDirectives, unionDirectives)
 import PureScript.Backend.Optimizer.Semantics.Foreign (ForeignSemantics)
 import PureScript.Backend.Optimizer.Tracer.Printer (printModuleSteps)
 import PureScript.CST.Errors (printParseError)
-import Test.Utils (coreFnModulesFromOutput, decideModules, errored, mkdirp)
+import Test.Utils (ModulePeek, coreFnModulesFromOutput, decideModules, errored, mkdirp, rmrf)
 
 type MainArgs =
   { compile :: Boolean
@@ -273,6 +273,21 @@ runCompileCustom custom { compile, filter, cwd, clean } = do
       { directives } = parseDirectiveFile allDirectives
     pure { directives, allDirectives }
 
+  let
+    -- If the original .purs source went away, remove it from ./output/ModuleName and ./output-erl/ModuleName
+    removeStaleModules :: ModulePeek -> Aff Boolean
+    removeStaleModules { name: ModuleName name, path: reportedPath } = do
+      let
+        path = fromMaybe <*> String.stripPrefix (String.Pattern currentDir) $ reportedPath
+        moduleCoreFnDir = Path.concat [ currentDir, "output", name ]
+        moduleOutputDir = Path.concat [ outputDir, name ]
+      Aff.try (FS.stat path) >>= case _ of
+        Left _ -> false <$ do
+          Console.warn $ "Removing " <> name <> " since " <> path <> " disappeared."
+          void $ Aff.try $ rmrf moduleCoreFnDir
+          void $ Aff.try $ rmrf moduleOutputDir
+        Right _ -> pure true
+
   -- Read in all of the corefn.json modules, and their hashes
   Console.log "Reading modules ..."
   { coreFnModules, moduleHashes: currentModuleHashes } <-
@@ -292,7 +307,8 @@ runCompileCustom custom { compile, filter, cwd, clean } = do
         let moduleHashes = Map.fromFoldable moduleHashList
         -- Free these large strings
         -- TODO: free `full :: Lazy` somehow?
-        let coreFnModules = map _ { corefn = "" } coreFnModulesWithSource
+        let coreFnModulesWithoutSource = map _ { corefn = "" } coreFnModulesWithSource
+        coreFnModules <- List.filterM removeStaleModules coreFnModulesWithoutSource
         pure { coreFnModules, moduleHashes }
 
   -- Check the status of each module: if we can skip building them for an incremental build
