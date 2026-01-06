@@ -267,7 +267,8 @@ decideModules { scanned, unchanged } = { needsRebuild, toBeBuilt, pleaseLoadCach
   needsRebuild = Set.difference (Map.keys depMap) alreadyBuilt
   toBeBuilt = map (force <<< _.full) $ scanned #
     List.filter \{ name } -> Set.member name needsRebuild
-  pleaseLoadCache = expanding Set.empty needsRebuild `Set.difference` needsRebuild
+  -- FIXME: modules have occasionally been missed, so just load them all for now ...
+  pleaseLoadCache = alreadyBuilt -- expanding Set.empty needsRebuild `Set.difference` needsRebuild
 
   -- Make sure all transitive deps are unchanged too
   trim moduleSet = moduleSet # Set.filter \name ->
