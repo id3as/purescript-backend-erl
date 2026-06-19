@@ -207,9 +207,16 @@ printExpr' prec = case _ of
         D.flexAlt (D.space <> D.text "|") (D.break <> D.text "|") <> D.space <> D.indent (printAtomic rest)
   S.Tupled a -> printBraces' $ D.indent <<< printAtomic <$> a
   S.Map fields -> D.text "#" <> printBraces_ (D.indent <<< printField printAtomic <$> fields)
+  -- Erlang warns ("updating literal") on `M#{...}` where M is a literal map.
+  -- Fuse to a single literal under last-wins semantics so the warning never
+  -- fires and we don't trade it for a `duplicate_map_key` warning either.
+  S.MapUpdate (S.Map base) extra ->
+    printExpr' prec (S.Map (fuseFields eq base extra))
   S.MapUpdate e fields | tiny e -> printAtomic e <> D.text "#" <> printBraces_ (printField printAtomic <$> fields)
   S.MapUpdate e fields -> D.text "(" <> printAtomic e <> D.text ")#" <> printBraces_ (printField printAtomic <$> fields)
   S.Record fields -> D.text "#" <> printBraces_ (D.indent <<< printField (D.text <<< escapeAtom) <$> fields)
+  S.RecordUpdate (S.Record base) extra ->
+    printExpr' prec (S.Record (fuseFields eq base extra))
   S.RecordUpdate e fields | tiny e -> printAtomic e <> D.text "#" <> printBraces_ (printField (D.text <<< escapeAtom) <$> fields)
   S.RecordUpdate e fields -> D.text "(" <> printAtomic e <> D.text ")#" <> printBraces_ (printField (D.text <<< escapeAtom) <$> fields)
 
@@ -471,3 +478,15 @@ toHexEscape s =
   case toCodePointArray s of
     [ c ] -> "\\x{" <> show (fromEnum c) <> "}"
     _ -> s
+
+-- | Drop entries from `base` whose key is shadowed by an entry in `extra`,
+-- | then append `extra`. Preserves last-wins update semantics of
+-- | `M#{...}` while collapsing it to a single literal — avoids both
+-- | `updating_literal` and `duplicate_map_key` warnings from Erlang.
+fuseFields :: forall k v. (k -> k -> Boolean) -> Array (Tuple k v) -> Array (Tuple k v) -> Array (Tuple k v)
+fuseFields keyEq base extra =
+  let
+    extraKeys = (\(Tuple k _) -> k) <$> extra
+    shadowed k = Array.any (keyEq k) extraKeys
+  in
+    Array.filter (\(Tuple k _) -> not (shadowed k)) base <> extra
