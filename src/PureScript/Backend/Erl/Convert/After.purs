@@ -371,7 +371,28 @@ knownFrom _ = mempty
 scoped :: forall a. W a -> W a
 scoped = censor $ over Multiplicative case _ of
   NullAndVoid -> Demands Map.empty Map.empty
-  Demands _ d -> Demands Map.empty d
+  Demands _ d -> Demands Map.empty (irrefutable <$> d)
+
+-- | Demand that escapes a function boundary must not carry constructor
+-- | refinements. A `Fun` is *defined* unconditionally but may only ever be
+-- | *called* under the branch conditions that established the refinement —
+-- | e.g. a fallthrough continuation for a pattern-guarded clause, whose body
+-- | checks `?IS_KNOWN_TAG(just, ...)` with an unreachable `error({fail, _})`
+-- | sibling, so the `{just, _}` refinement survives `alts`' additive combine
+-- | (soundly: IF the body runs, the tag holds). Multiplying that demand into
+-- | the definition site turns the conditional fact into an unconditional one,
+-- | and `choosePattern` then stamps a refutable `{just, _}` into an enclosing
+-- | pattern — in the worst case a function head, making the source function's
+-- | `Nothing` clauses unreachable (live paths die with function_clause; this
+-- | broke Avp.Spectrum.Video.Processor.processInput in norsk, 2026-07-30).
+-- |
+-- | Record/field demand may leak: map patterns over well-typed inputs are
+-- | irrefutable, so they only add correct destructuring. So strip just the
+-- | ADT constructor tags, recursively.
+irrefutable :: Demand -> Demand
+irrefutable (DemandADT n _ fields) = DemandADT n Nothing (irrefutable <$> fields)
+irrefutable (DemandRecord n fields) = DemandRecord n (irrefutable <$> fields)
+irrefutable d = d
 
 mightNotRun :: forall a. W a -> W a
 mightNotRun = censor $ over Multiplicative $ add one
