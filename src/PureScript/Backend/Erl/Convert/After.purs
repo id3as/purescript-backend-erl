@@ -846,13 +846,27 @@ unconsClauseBound v (CaseClause pat0 mg body) = case pat0 of
       let hName = v <> "@@fusedHd"
       let tName = v <> "@@fusedTl"
       let
-        payloadAlias = case payload0 of
-          S.MatchBoth pv _ -> Just pv
-          S.BindVar pv -> Just pv
-          _ -> Nothing
-        rw = rewriteJustUses { v, payloadAlias, hName, tName, origBody: body }
-        body' = rw body
+        clauseAlias = case payload0 of
+          S.MatchBoth pv _ -> [ pv ]
+          S.BindVar pv -> [ pv ]
+          _ -> []
+        -- Payload binders of re-matches inside the body join the alias set,
+        -- so accessor uses THROUGH them rewrite too.
+        rematchAliases = collectRematchAliases v body
+        rw = rewriteJustUses { v, payloadAliases: clauseAlias <> rematchAliases, hName, tName, origBody: body }
+        body'0 = rw body
+        -- A single remaining bare use of the whole Maybe value is replaced by
+        -- reconstructing it - allocation-neutral (the original allocated it at
+        -- the uncons) and it unblocks fusing every other path.
+        body' =
+          if countBareUses v body'0 == 1 then
+            substituteBareVar v (S.Tupled [ S.atomLiteral "just", S.Map [ Tuple (S.atomLiteral "head") (S.Var hName []), Tuple (S.atomLiteral "tail") (S.Var tName []) ] ]) body'0
+          else body'0
         mg' = coerce rw <$> mg
+      -- Converting a re-match dropped its payload binder: if any such binder
+      -- still has uses the rewriting could not reach, fusing would leave an
+      -- unbound variable - veto.
+      guardB (Array.all (\pv -> not (usesVar pv body') && not (maybe false (coerce (usesVar pv)) mg')) rematchAliases)
       -- Re-run the unused-binding strip against the REWRITTEN body: the
       -- payload binding is typically only referenced by the uses we just
       -- redirected to the fresh names.
@@ -866,6 +880,35 @@ unconsClauseBound v (CaseClause pat0 mg body) = case pat0 of
     S.Discard ->
       Just (CaseClause S.Discard mg body)
     _ -> Nothing
+  where
+  guardB true = Just unit
+  guardB false = Nothing
+
+descPat :: Int -> ErlPattern -> String
+descPat 0 _ = "..."
+descPat n p0 = p0 # case _ of
+  S.Discard -> "_"
+  S.BindVar bv -> "bind:" <> bv
+  S.MatchLiteral (S.Atom a) -> "atom:" <> a
+  S.MatchLiteral _ -> "lit"
+  S.MatchBoth bv p -> bv <> "@" <> descPat (n - 1) p
+  S.MatchMap kvs -> "#{" <> Array.intercalate "," (kvs <#> \(Tuple k p) -> k <> ":=" <> descPat (n - 1) p) <> "}"
+  S.MatchTuple ps -> "{" <> Array.intercalate "," (descPat (n - 1) <$> ps) <> "}"
+  S.MatchList ps mp -> "[" <> Array.intercalate "," (descPat (n - 1) <$> ps) <> "|" <> maybe "nil" (descPat (n - 1)) mp <> "]"
+
+-- | Payload binders of `{just, PV = #{...}} = V` re-matches in the clause.
+collectRematchAliases :: String -> ErlExpr -> Array String
+collectRematchAliases v = S.visit case _ of
+  S.Assignments asgns _ ->
+    asgns # Array.foldMap \(Tuple pat ex) -> case pat, ex of
+      S.MatchTuple [ S.MatchLiteral (S.Atom "just"), S.MatchBoth pv _ ], S.Var v' [] | v' == v -> [ pv ]
+      _, _ -> []
+  _ -> []
+
+countBareUses :: String -> ErlExpr -> Int
+countBareUses v = unwrap <<< S.visit case _ of
+  S.Var v' [] | v' == v -> Additive 1
+  _ -> Additive 0
 
 substituteBareVar :: String -> ErlExpr -> ErlExpr -> ErlExpr
 substituteBareVar v replacement = goSub
@@ -874,15 +917,26 @@ substituteBareVar v replacement = goSub
     S.Var v' [] | v' == v -> replacement
     e -> mapChildExprs goSub e
 
-type JustRewrite = { v :: String, payloadAlias :: Maybe String, hName :: String, tName :: String, origBody :: ErlExpr }
+type JustRewrite = { v :: String, payloadAliases :: Array String, hName :: String, tName :: String, origBody :: ErlExpr }
 
 rewriteJustUses :: JustRewrite -> ErlExpr -> ErlExpr
 rewriteJustUses r = goRw
   where
   goRw = case _ of
     e@(S.Var name acsrs) -> fromMaybe e (rewriteAccess r name acsrs)
+    -- The same accesses can be spelled as explicit calls rather than
+    -- Var accessors; the printer renders both identically.
+    S.FunCall (Just (S.Literal (S.Atom "erlang"))) (S.Literal (S.Atom "map_get")) [ S.Literal (S.Atom k), payloadE ]
+      | isPayloadExpr payloadE && k == "head" -> S.Var r.hName []
+      | isPayloadExpr payloadE && k == "tail" -> S.Var r.tName []
     S.Assignments asgns body -> S.Assignments (asgns >>= rwAsgn) (goRw body)
     e -> mapChildExprs goRw e
+
+  isPayloadExpr = case _ of
+    S.Var name [ AcsElement 2 ] -> name == r.v
+    S.Var name [] -> Array.elem name r.payloadAliases
+    S.FunCall (Just (S.Literal (S.Atom "erlang"))) (S.Literal (S.Atom "element")) [ S.Literal (S.Integer 2), S.Var name [] ] -> name == r.v
+    _ -> false
 
   -- `{just, <payload>} = V` (or `<payload> = <payload alias/accessor>`)
   -- assignments become direct matches of the payload's head/tail patterns
@@ -891,8 +945,8 @@ rewriteJustUses r = goRw
     S.MatchTuple [ S.MatchLiteral (S.Atom "just"), payload ], S.Var v' []
       | v' == r.v
       , Just asgns' <- payloadMatches (stripUnusedWrappers payload) -> asgns'
-    _, S.Var name acsrs
-      | isPayloadRef name acsrs
+    _, ex'
+      | isPayloadRefExpr ex'
       , Just asgns' <- payloadMatches (stripUnusedWrappers pat) -> asgns'
     _, _ -> [ Tuple pat (goRw ex) ]
 
@@ -900,12 +954,17 @@ rewriteJustUses r = goRw
   -- never read in the (original) clause body; a wrapper that IS read would
   -- need the record materialized, so leave it and let the veto fire.
   stripUnusedWrappers = case _ of
-    S.MatchBoth pv inner | not (usesVar pv r.origBody) -> stripUnusedWrappers inner
+    S.MatchBoth pv inner | not (usesVar pv r.origBody) || Array.elem pv r.payloadAliases -> stripUnusedWrappers inner
     p -> p
 
   isPayloadRef name acsrs =
     (name == r.v && acsrs == [ AcsElement 2 ])
-      || (Just name == r.payloadAlias && Array.null acsrs)
+      || (Array.elem name r.payloadAliases && Array.null acsrs)
+
+  isPayloadRefExpr = case _ of
+    S.Var name acsrs -> isPayloadRef name acsrs
+    S.FunCall (Just (S.Literal (S.Atom "erlang"))) (S.Literal (S.Atom "element")) [ S.Literal (S.Integer 2), S.Var name [] ] -> name == r.v
+    _ -> false
 
   payloadMatches = case _ of
     S.MatchMap kvs | Array.all (\(Tuple k _) -> k == "head" || k == "tail") kvs ->
@@ -914,12 +973,12 @@ rewriteJustUses r = goRw
     _ -> Nothing
 
   rewriteAccess :: JustRewrite -> String -> Accessors -> Maybe ErlExpr
-  rewriteAccess { v, payloadAlias, hName, tName } name acsrs = do
+  rewriteAccess { v, payloadAliases, hName, tName } name acsrs = do
     rest0 <-
       if name == v then case Array.uncons acsrs of
         Just { head: AcsElement 2, tail } -> Just tail
         _ -> Nothing
-      else if Just name == payloadAlias then Just acsrs
+      else if Array.elem name payloadAliases then Just acsrs
       else Nothing
     { head: acs, tail: rest } <- Array.uncons rest0
     case acs of
