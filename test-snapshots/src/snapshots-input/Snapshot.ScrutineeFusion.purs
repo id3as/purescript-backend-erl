@@ -55,8 +55,16 @@ lookupNested m k = case Map.lookup k m of
   Just (Tuple _ b) -> b
   Nothing -> -1
 
+-- The Maybe value escapes whole: must NOT fuse (lookup analogue of `escapes`).
+memoish :: Map Atom Int -> Atom -> Maybe Int
+memoish m k = case Map.lookup k m of
+  Nothing -> Nothing
+  found -> found
+
 main :: Effect Unit
 main = do
+  assertEqual { expected: Just 9, actual: memoish (Map.singleton (atom "m") 9) (atom "m") }
+  assertEqual { expected: Nothing, actual: memoish (Map.singleton (atom "m") 9) (atom "q") }
   assertEqual { expected: 6, actual: result.sumList }
   assertEqual { expected: 2, actual: result.countJusts }
   assertEqual { expected: 2, actual: result.len }

@@ -802,13 +802,65 @@ fuseUniqueCaseUse v call scope = do
   guardB false = Nothing
 
 -- | Like `fuseView`, but for a case over a *named* binding of the view result,
--- | where clause bodies may reference the name: uncons clauses go through the
--- | use-rewriting variant; lookup keeps the strict no-uses rule for now.
+-- | where clause bodies may reference the name: both views go through
+-- | use-rewriting variants.
 fuseViewBound :: String -> ErlExpr -> NonEmptyArray CaseClause -> Maybe ErlExpr
 fuseViewBound v call clauses = case call of
   S.FunCall (Just (S.Literal (S.Atom "erl_data_list_types@ps"))) (S.Literal (S.Atom "uncons")) [ lst ] ->
     S.Case lst <$> traverse (unconsClauseBound v) clauses
+  S.FunCall (Just (S.Literal (S.Atom "erl_data_map@ps"))) (S.Literal (S.Atom "lookup")) [ k, m ] ->
+    S.Case (S.callGlobal "maps" "find" [ k, m ]) <$> traverse (findClauseBound v) clauses
   _ -> fuseView call clauses
+
+-- | Bound-scrutinee lookup clause: `{nothing}` -> `error` (bare uses of the
+-- | Maybe become the literal), `{just, P}` -> `{ok, P}` with a fresh payload
+-- | name bound when the clause references the Maybe: `{just, X} = V`
+-- | re-matches become direct matches of X against the payload name,
+-- | `element(2, V)` accesses become the name, and a single remaining bare use
+-- | of V is reconstructed as `{just, Payload}` (allocation-neutral - the
+-- | original allocated it at the lookup).
+findClauseBound :: String -> CaseClause -> Maybe CaseClause
+findClauseBound v (CaseClause pat0 mg body) = case dropUnusedBind mg body pat0 of
+  S.MatchTuple [ S.MatchLiteral (S.Atom "nothing") ] -> do
+    let sub = substituteBareVar v (S.Tupled [ S.atomLiteral "nothing" ])
+    Just (CaseClause (S.MatchLiteral (S.Atom "error")) (coerce sub <$> mg) (sub body))
+  S.MatchTuple [ S.MatchLiteral (S.Atom "just"), payload ] -> do
+    let pName = v <> "@@fusedVal"
+    let rw = rewriteLookupUses { v, pName }
+    let body'0 = rw body
+    let
+      body' =
+        if countBareUses v body'0 == 1 then
+          substituteBareVar v (S.Tupled [ S.atomLiteral "just", S.Var pName [] ]) body'0
+        else body'0
+    let mg' = coerce rw <$> mg
+    let
+      payload' =
+        if usesVar pName body' || maybe false (coerce (usesVar pName)) mg' then andMatch pName payload
+        else payload
+    Just (CaseClause (S.MatchTuple [ S.MatchLiteral (S.Atom "ok"), payload' ]) mg' body')
+  S.Discard ->
+    Just (CaseClause S.Discard mg body)
+  _ -> Nothing
+
+type LookupRewrite = { v :: String, pName :: String }
+
+rewriteLookupUses :: LookupRewrite -> ErlExpr -> ErlExpr
+rewriteLookupUses r = goRw
+  where
+  goRw = case _ of
+    e@(S.Var v' acsrs) | v' == r.v -> case Array.uncons acsrs of
+      Just { head: AcsElement 2, tail } -> S.Var r.pName tail
+      _ -> e
+    S.FunCall (Just (S.Literal (S.Atom "erlang"))) (S.Literal (S.Atom "element")) [ S.Literal (S.Integer 2), S.Var v' [] ]
+      | v' == r.v -> S.Var r.pName []
+    S.Assignments asgns body -> S.Assignments (rwAsgn <$> asgns) (goRw body)
+    e -> mapChildExprs goRw e
+
+  rwAsgn (Tuple pat ex) = case pat, ex of
+    S.MatchTuple [ S.MatchLiteral (S.Atom "just"), payloadPat ], S.Var v' []
+      | v' == r.v -> Tuple payloadPat (S.Var r.pName [])
+    _, _ -> Tuple pat (goRw ex)
 
 countVarUses :: String -> ErlExpr -> Int
 countVarUses v = unwrap <<< S.visit case _ of

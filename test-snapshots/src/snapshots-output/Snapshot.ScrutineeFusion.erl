@@ -1,9 +1,12 @@
 % Snapshot.ScrutineeFusion
 -module(snapshot_scrutineeFusion@ps).
 -export([ fromFoldable/0
-        , assertEqual1/0
+        , assertEqual/0
+        , assertEqual2/0
         , sumList/0
         , sumList/1
+        , memoish/0
+        , memoish/2
         , lookupNested/0
         , lookupNested/2
         , len/0
@@ -41,9 +44,43 @@
 fromFoldable() ->
   ((data_foldable@ps:foldrArray())(erl_data_list_types@ps:cons()))([]).
 
-assertEqual1() ->
+assertEqual() ->
+  test_assert@ps:assertEqual(
+    #{ eq =>
+       fun
+         (X) ->
+           fun
+             (Y) ->
+               case X of
+                 {nothing} ->
+                   ?IS_KNOWN_TAG(nothing, 0, Y);
+                 _ ->
+                   ?IS_KNOWN_TAG(just, 1, X)
+                     andalso (?IS_KNOWN_TAG(just, 1, Y)
+                       andalso ((erlang:element(2, X))
+                         =:= (erlang:element(2, Y))))
+               end
+           end
+       end
+     },
+    #{ show =>
+       fun
+         (V) ->
+           case V of
+             {just, V@1} ->
+               <<"(Just ", (data_show@foreign:showIntImpl(V@1))/binary, ")">>;
+             {nothing} ->
+               <<"Nothing">>;
+             _ ->
+               erlang:error({fail, <<"Failed pattern match">>})
+           end
+       end
+     }
+  ).
+
+assertEqual2() ->
   ?MEMOIZE_AS(
-    {snapshot_scrutineeFusion@ps, assertEqual1, '(memoized)'},
+    {snapshot_scrutineeFusion@ps, assertEqual2, '(memoized)'},
     25,
     test_assert@ps:assertEqual(
       #{ eq =>
@@ -133,6 +170,26 @@ sumList(L) ->
       V + (sumList(V@1));
     _ ->
       erlang:error({fail, <<"Failed pattern match">>})
+  end.
+
+memoish() ->
+  fun
+    (M) ->
+      fun
+        (K) ->
+          memoish(M, K)
+      end
+  end.
+
+memoish(M, K) ->
+  begin
+    V = erl_data_map@ps:lookup(K, M),
+    case V of
+      {nothing} ->
+        {nothing};
+      _ ->
+        V
+    end
   end.
 
 lookupNested() ->
@@ -260,12 +317,19 @@ result() ->
   ?MEMOIZE_AS(
     {snapshot_scrutineeFusion@ps, 'main.0', '(memoized)'},
     23,
-    test_assert@ps:'assertEqual\''(
-      data_eq@ps:eqInt(),
-      data_show@ps:showInt(),
-      <<"">>,
-      #{ expected => 6, actual => erlang:map_get(sumList, result()) }
-    )
+    (assertEqual())
+    (#{ expected => {just, 9}
+      , actual =>
+        begin
+          V = erl_data_map@ps:lookup(m, #{ m => 9 }),
+          case V of
+            {nothing} ->
+              {nothing};
+            _ ->
+              V
+          end
+        end
+      })
   ).
 
 main() ->
@@ -276,6 +340,25 @@ main() ->
         V@1 = data_eq@ps:eqInt(),
         V@2 = result(),
         ('main.0'())(),
+        ((assertEqual())
+         (#{ expected => {nothing}
+           , actual =>
+             begin
+               V@3 = erl_data_map@ps:lookup(q, #{ m => 9 }),
+               case V@3 of
+                 {nothing} ->
+                   {nothing};
+                 _ ->
+                   V@3
+               end
+             end
+           }))(),
+        (test_assert@ps:'assertEqual\''(
+           V@1,
+           V,
+           <<"">>,
+           #{ expected => 6, actual => erlang:map_get(sumList, V@2) }
+         ))(),
         (test_assert@ps:'assertEqual\''(
            V@1,
            V,
@@ -288,7 +371,7 @@ main() ->
            <<"">>,
            #{ expected => 2, actual => erlang:map_get(len, V@2) }
          ))(),
-        ((assertEqual1())
+        ((assertEqual2())
          (#{ expected => {just, #{ head => 7, tail => [] }}
            , actual => erlang:map_get(escapes, V@2)
            }))(),
