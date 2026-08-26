@@ -33,6 +33,7 @@ import Data.Identity (Identity(..))
 import Data.Map (Map, SemigroupMap(..))
 import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, isJust, maybe)
+import Data.Maybe.First (First(..))
 import Data.Monoid.Additive (Additive(..))
 import Data.Monoid.Disj (Disj(..))
 import Data.Monoid.Endo (Endo(..))
@@ -45,7 +46,7 @@ import Partial.Unsafe (unsafeCrashWith)
 import Prim.Coerce (class Coercible)
 import PureScript.Backend.Erl.Calling (GlobalErl(..), applyCall, callErl)
 import PureScript.Backend.Erl.Convert.Scoping (renameRoot)
-import PureScript.Backend.Erl.Syntax (Accessor(..), Accessors, CaseClause(..), ErlDefinition(..), ErlExpr(..), ErlPattern, FunHead(..), Guard(..), IfClause(..), access, self, shortCircuits)
+import PureScript.Backend.Erl.Syntax (Accessor(..), Accessors, CaseClause(..), ErlDefinition(..), ErlExpr(..), ErlPattern, FunHead(..), Guard(..), IfClause(..), Visit(..), access, self, shortCircuits)
 import PureScript.Backend.Erl.Syntax as S
 import Safe.Coerce (coerce)
 import Unsafe.Coerce (unsafeCoerce)
@@ -746,13 +747,84 @@ fuseScrutinees = go
 fuse1 :: ErlExpr -> Maybe ErlExpr
 fuse1 = case _ of
   S.Case scrut clauses -> fuseView scrut clauses
-  S.Assignments asgns (S.Case (S.Var v []) clauses)
-    | Just { init: firsts, last: Tuple (S.BindVar v') call } <- Array.unsnoc asgns
-    , v' == v
-    , not (NEA.any (clauseTouches v) clauses)
-    -> fuseView call clauses <#> \fused ->
-        if Array.null firsts then fused else S.Assignments firsts fused
+  S.Assignments asgns body -> fuseBoundViews asgns body
   _ -> Nothing
+
+-- | Within an assignment block, a binding `V = <view call>` whose variable's
+-- | ONLY use in the rest of the block is as the scrutinee of a single `case`
+-- | can be fused in place: the binding is dropped and the case rewritten
+-- | against the underlying value. The view calls are pure and cannot throw on
+-- | well-typed input, so evaluating them at the case position instead of the
+-- | binding position is unobservable.
+fuseBoundViews :: Array (Tuple ErlPattern ErlExpr) -> ErlExpr -> Maybe ErlExpr
+fuseBoundViews asgns body = go' [] asgns
+  where
+  go' _ [] = Nothing
+  go' before after = do
+    { head: asgn, tail: rest } <- Array.uncons after
+    case asgn of
+      Tuple (S.BindVar v) call | isViewCall call -> do
+        let scope = if Array.null rest then body else S.Assignments rest body
+        case fuseUniqueCaseUse v call scope of
+          Just scope' -> Just do
+            let before' = before <> []
+            case scope' of
+              S.Assignments rest' body' | not Array.null before' ->
+                S.Assignments (before' <> rest') body'
+              _ | Array.null before' -> scope'
+              _ -> S.Assignments before' scope'
+          Nothing -> go' (before <> [ asgn ]) rest
+      _ -> go' (before <> [ asgn ]) rest
+
+isViewCall :: ErlExpr -> Boolean
+isViewCall = case _ of
+  S.FunCall (Just (S.Literal (S.Atom "erl_data_list_types@ps"))) (S.Literal (S.Atom "uncons")) [ _ ] -> true
+  S.FunCall (Just (S.Literal (S.Atom "erl_data_map@ps"))) (S.Literal (S.Atom "lookup")) [ _, _ ] -> true
+  _ -> false
+
+-- | If `v` occurs exactly once in `scope`, as the scrutinee of a `case` that
+-- | the view fusion can rewrite, return the scope with that case fused (and no
+-- | remaining uses of `v`). Also requires no pattern in scope to rebind (pin)
+-- | `v`. Uniqueness makes a replace-all traversal a replace-one.
+fuseUniqueCaseUse :: String -> ErlExpr -> ErlExpr -> Maybe ErlExpr
+fuseUniqueCaseUse v call scope = do
+  guardB (countVarUses v scope == 1)
+  guardB (not (patternBinds v scope))
+  clauses <- unwrap (findCaseOn v scope)
+  fused <- fuseView call clauses
+  let scope' = rewriteCasesOn v fused scope
+  guardB (not (usesVar v scope'))
+  pure scope'
+  where
+  guardB true = Just unit
+  guardB false = Nothing
+
+countVarUses :: String -> ErlExpr -> Int
+countVarUses v = unwrap <<< S.visit case _ of
+  S.Var v' _ | v' == v -> Additive 1
+  _ -> Additive 0
+
+patternBinds :: String -> ErlExpr -> Boolean
+patternBinds v = unwrap <<< S.visit case _ of
+  S.Assignments asgns _ -> Disj (Array.any (Array.elem v <<< names <<< fst) asgns)
+  S.Case _ cs -> Disj (NEA.any (\(CaseClause p _ _) -> Array.elem v (names p)) cs)
+  S.Fun _ heads -> Disj (Array.any (\(Tuple (FunHead ps _) _) -> Array.any (Array.elem v <<< names) ps) heads)
+  _ -> Disj false
+
+-- | Find the `case V of` - but never inside a `fun`: moving the (pure) view
+-- | call into a closure could re-evaluate it on every invocation.
+findCaseOn :: String -> ErlExpr -> First (NonEmptyArray CaseClause)
+findCaseOn v = S.visit' case _ of
+  S.Fun _ _ -> ShortCircuit (First Nothing)
+  S.Case (S.Var v' []) clauses | v' == v -> Append (First (Just clauses))
+  _ -> Append (First Nothing)
+
+rewriteCasesOn :: String -> ErlExpr -> ErlExpr -> ErlExpr
+rewriteCasesOn v replacement = goAll
+  where
+  goAll e = case e of
+    S.Case (S.Var v' []) _ | v' == v -> replacement
+    _ -> mapChildExprs goAll e
 
 -- | Does the clause mention the variable at all - in its body, its guard, or
 -- | (as an Erlang pin, since Erlang has no shadowing) its pattern?
