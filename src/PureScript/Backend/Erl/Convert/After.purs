@@ -32,8 +32,9 @@ import Data.FunctorWithIndex (mapWithIndex)
 import Data.Identity (Identity(..))
 import Data.Map (Map, SemigroupMap(..))
 import Data.Map as Map
-import Data.Maybe (Maybe(..), fromMaybe, isJust)
+import Data.Maybe (Maybe(..), fromMaybe, isJust, maybe)
 import Data.Monoid.Additive (Additive(..))
+import Data.Monoid.Disj (Disj(..))
 import Data.Monoid.Endo (Endo(..))
 import Data.Monoid.Multiplicative (Multiplicative(..))
 import Data.Newtype (over, unwrap)
@@ -168,6 +169,7 @@ optimizePatterns = identity
     >>> optimizePatternDemand
     >>> flip runWriterT mempty
     >>> (\(Tuple e _) -> optimizePatternRewrite e mempty)
+    >>> fuseScrutinees
     >>> renameRoot
     -- Run it twice since otherwise there are gaps in the chosen numbered
     -- variables from variables that did not end up being necessary
@@ -710,3 +712,138 @@ zipPat (S.MatchLiteral l1) (S.MatchLiteral l2) =
 zipPat (S.MatchTuple t1) (S.MatchTuple t2) | Array.length t1 == Array.length t2 =
   S.MatchTuple <$> sequence (Array.zipWith zipPat t1 t2)
 zipPat _ _ = Nothing
+
+--------------------------------------------------------------------------------
+-- Scrutinee fusion                                                           --
+--------------------------------------------------------------------------------
+
+-- | Fuse a `case` over the result of a known Maybe-returning "view" call into
+-- | a direct match on the underlying value, eliminating the intermediate
+-- | `{just, _}`/record allocation that exists only to be scrutinized:
+-- |
+-- |     V = erl_data_list_types@ps:uncons(L),      case L of
+-- |     case V of                                    [] -> A;
+-- |       {nothing} -> A;                     =>     [H | T] -> B
+-- |       {just, #{head := H, tail := T}} -> B     end
+-- |     end
+-- |
+-- | and `Erl.Data.Map.lookup` similarly to `maps:find` (map patterns cannot
+-- | take arbitrary key expressions, but `maps:find` still removes the
+-- | `{just, _}` re-wrap on top of `{ok, _}`).
+-- |
+-- | The rewrite is clause-for-clause, preserving order, guards and any
+-- | fallthrough behaviour of refutable sub-patterns. It bails whenever the
+-- | Maybe value itself escapes: bound by the pattern (`BindVar`/`MatchBoth`),
+-- | referenced anywhere in a clause body or guard, or rebound (pinned) by a
+-- | clause pattern.
+fuseScrutinees :: ErlExpr -> ErlExpr
+fuseScrutinees = go
+  where
+  go e0 = do
+    let e1 = mapChildExprs go e0
+    fromMaybe e1 (fuse1 e1)
+
+fuse1 :: ErlExpr -> Maybe ErlExpr
+fuse1 = case _ of
+  S.Case scrut clauses -> fuseView scrut clauses
+  S.Assignments asgns (S.Case (S.Var v []) clauses)
+    | Just { init: firsts, last: Tuple (S.BindVar v') call } <- Array.unsnoc asgns
+    , v' == v
+    , not (NEA.any (clauseTouches v) clauses)
+    -> fuseView call clauses <#> \fused ->
+        if Array.null firsts then fused else S.Assignments firsts fused
+  _ -> Nothing
+
+-- | Does the clause mention the variable at all - in its body, its guard, or
+-- | (as an Erlang pin, since Erlang has no shadowing) its pattern?
+clauseTouches :: String -> CaseClause -> Boolean
+clauseTouches v (CaseClause pat mg body) =
+  Array.elem v (names pat)
+    || usesVar v body
+    || maybe false (coerce (usesVar v)) mg
+
+usesVar :: String -> ErlExpr -> Boolean
+usesVar v = unwrap <<< S.visit case _ of
+  S.Var v' _ | v' == v -> Disj true
+  _ -> Disj false
+
+fuseView :: ErlExpr -> NonEmptyArray CaseClause -> Maybe ErlExpr
+fuseView (S.FunCall (Just (S.Literal (S.Atom "erl_data_list_types@ps"))) (S.Literal (S.Atom "uncons")) [ lst ]) clauses =
+  S.Case lst <$> traverse unconsClause clauses
+fuseView (S.FunCall (Just (S.Literal (S.Atom "erl_data_map@ps"))) (S.Literal (S.Atom "lookup")) [ k, m ]) clauses =
+  S.Case (S.callGlobal "maps" "find" [ k, m ]) <$> traverse findClause clauses
+fuseView _ _ = Nothing
+
+-- | `{nothing}` -> `[]`; `{just, #{head := PH, tail := PT}}` -> `[PH | PT]`.
+-- | Refutable sub-patterns keep their fallthrough position. A payload (or
+-- | whole-Maybe) binding that the clause never uses - the demand pass invents
+-- | one for every payload it destructures - is dropped; a binding that IS used
+-- | aborts the fusion (the record would need materializing).
+unconsClause :: CaseClause -> Maybe CaseClause
+unconsClause (CaseClause pat0 mg body) = case dropUnusedBind mg body pat0 of
+  S.MatchTuple [ S.MatchLiteral (S.Atom "nothing") ] ->
+    Just (CaseClause (S.MatchList [] Nothing) mg body)
+  S.MatchTuple [ S.MatchLiteral (S.Atom "just"), payload ] -> do
+    Tuple ph pt <- unconsPayload (dropUnusedBind mg body payload)
+    Just (CaseClause (S.MatchList [ ph ] (Just pt)) mg body)
+  S.Discard ->
+    Just (CaseClause S.Discard mg body)
+  _ -> Nothing
+
+-- | Strip `V = <pat>` / bare `V` bindings whose variable the clause never
+-- | reads - they only exist to be inspected, which the fused pattern now does
+-- | directly.
+dropUnusedBind :: Maybe Guard -> ErlExpr -> ErlPattern -> ErlPattern
+dropUnusedBind mg body = case _ of
+  S.MatchBoth v inner | not (usedInClause v) -> dropUnusedBind mg body inner
+  S.BindVar v | not (usedInClause v) -> S.Discard
+  p -> p
+  where
+  usedInClause v = usesVar v body || maybe false (coerce (usesVar v)) mg
+
+unconsPayload :: ErlPattern -> Maybe (Tuple ErlPattern ErlPattern)
+unconsPayload = case _ of
+  S.MatchMap kvs | Array.all (\(Tuple k _) -> k == "head" || k == "tail") kvs ->
+    Just $ Tuple (patFor "head" kvs) (patFor "tail" kvs)
+  S.Discard ->
+    Just (Tuple S.Discard S.Discard)
+  _ -> Nothing
+  where
+  patFor k kvs = maybe S.Discard snd (Array.find (fst >>> eq k) kvs)
+
+-- | `{nothing}` -> `error`; `{just, P}` -> `{ok, P}` - the shapes of
+-- | `maps:find`. Clause-for-clause; aborts if the Maybe value is bound.
+findClause :: CaseClause -> Maybe CaseClause
+findClause (CaseClause pat mg body) = case pat of
+  S.MatchTuple [ S.MatchLiteral (S.Atom "nothing") ] ->
+    Just (CaseClause (S.MatchLiteral (S.Atom "error")) mg body)
+  S.MatchTuple [ S.MatchLiteral (S.Atom "just"), payload ] ->
+    Just (CaseClause (S.MatchTuple [ S.MatchLiteral (S.Atom "ok"), payload ]) mg body)
+  S.Discard ->
+    Just (CaseClause S.Discard mg body)
+  _ -> Nothing
+
+-- | Plain one-level functorial map over sub-expressions.
+mapChildExprs :: (ErlExpr -> ErlExpr) -> ErlExpr -> ErlExpr
+mapChildExprs f = case _ of
+  e@(S.Literal _) -> e
+  e@(S.Var _ _) -> e
+  S.List es -> S.List (f <$> es)
+  S.ListCons es e -> S.ListCons (f <$> es) (f e)
+  S.Tupled es -> S.Tupled (f <$> es)
+  S.Map kvs -> S.Map (kvs <#> \(Tuple k v) -> Tuple (f k) (f v))
+  S.MapUpdate e kvs -> S.MapUpdate (f e) (kvs <#> \(Tuple k v) -> Tuple (f k) (f v))
+  S.Record kvs -> S.Record (map f <$> kvs)
+  S.RecordUpdate e kvs -> S.RecordUpdate (f e) (map f <$> kvs)
+  S.Assignments asgns e -> S.Assignments (map f <$> asgns) (f e)
+  S.Fun name heads -> S.Fun name $ heads <#> \(Tuple (FunHead pats mg) b) ->
+    Tuple (FunHead pats (coerce f <$> mg)) (f b)
+  S.FunCall me e es -> S.FunCall (f <$> me) (f e) (f <$> es)
+  S.FunName me e arity -> S.FunName (f <$> me) (f e) arity
+  S.Macro name margs -> S.Macro name (map f <$> margs)
+  S.If cs -> S.If $ cs <#> \(IfClause g b) -> IfClause (coerce f g) (f b)
+  S.Case e cs -> S.Case (f e) $ cs <#> \(CaseClause p mg b) ->
+    CaseClause p (coerce f <$> mg) (f b)
+  S.BinOp op a b -> S.BinOp op (f a) (f b)
+  S.UnaryOp op a -> S.UnaryOp op (f a)
+  S.BinaryAppend a b -> S.BinaryAppend (f a) (f b)
