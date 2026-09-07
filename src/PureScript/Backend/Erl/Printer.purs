@@ -148,8 +148,21 @@ printAtomic :: ErlExpr -> Doc Void
 printAtomic e = D.flexGroup $ printExpr' atomic e
 
 printStatement :: Tuple ErlPattern ErlExpr -> Doc Void
+printStatement (Tuple S.Discard e)
+  -- A case/if in statement position can have branches that are bare pure
+  -- calls (e.g. element/2), which erlc flags with "the result of ... is
+  -- ignored"; assigning to _ is the suppression erlc itself suggests.
+  | statementNeedsUnderscore e =
+      D.flexGroup $ D.text "_ =" <> D.spaceBreak <> D.indent (printAtomic e)
 printStatement (Tuple S.Discard e) = printAtomic e
 printStatement (Tuple pat e) = D.flexGroup $ printPattern pat <> D.text " =" <> D.spaceBreak <> (D.indent (printAtomic e))
+
+statementNeedsUnderscore :: ErlExpr -> Boolean
+statementNeedsUnderscore = case _ of
+  S.Case _ _ -> true
+  S.If _ -> true
+  S.Assignments _ e -> statementNeedsUnderscore e
+  _ -> false
 
 printPattern :: ErlPattern -> Doc Void
 printPattern = case _ of
@@ -212,11 +225,17 @@ printExpr' prec = case _ of
   -- fires and we don't trade it for a `duplicate_map_key` warning either.
   S.MapUpdate (S.Map base) extra ->
     printExpr' prec (S.Map (fuseFields eq base extra))
+  -- Chained updates (e.g. nested Map.insert) fuse pairwise so the innermost
+  -- update eventually meets a literal base and the rule above fires.
+  S.MapUpdate (S.MapUpdate e inner) extra ->
+    printExpr' prec (S.MapUpdate e (fuseFields eq inner extra))
   S.MapUpdate e fields | tiny e -> printAtomic e <> D.text "#" <> printBraces_ (printField printAtomic <$> fields)
   S.MapUpdate e fields -> D.text "(" <> printAtomic e <> D.text ")#" <> printBraces_ (printField printAtomic <$> fields)
   S.Record fields -> D.text "#" <> printBraces_ (D.indent <<< printField (D.text <<< escapeAtom) <$> fields)
   S.RecordUpdate (S.Record base) extra ->
     printExpr' prec (S.Record (fuseFields eq base extra))
+  S.RecordUpdate (S.RecordUpdate e inner) extra ->
+    printExpr' prec (S.RecordUpdate e (fuseFields eq inner extra))
   S.RecordUpdate e fields | tiny e -> printAtomic e <> D.text "#" <> printBraces_ (printField (D.text <<< escapeAtom) <$> fields)
   S.RecordUpdate e fields -> D.text "(" <> printAtomic e <> D.text ")#" <> printBraces_ (printField (D.text <<< escapeAtom) <$> fields)
 
