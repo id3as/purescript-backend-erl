@@ -610,6 +610,16 @@ codegenPrimOp codegenEnv = case _ of
           OpLt -> S.BinOp S.LessThan
           OpLte -> S.BinOp S.LessThanOrEqualTo
 
+      -- Number equality is arithmetic (==)/(/=), not (=:=)/(=/=): from OTP 27
+      -- =:= distinguishes 0.0 from -0.0 (PureScript's == does not), and erlc
+      -- warns on any =:= against a 0.0 literal.
+      opOrdNumber :: BackendOperatorOrd -> ErlExpr -> ErlExpr -> ErlExpr
+      opOrdNumber =
+        case _ of
+          OpEq -> S.BinOp S.EqualTo
+          OpNotEq -> S.BinOp S.NotEqualTo
+          o' -> opOrd o'
+
     in
       case o of
         OpArrayIndex ->
@@ -656,7 +666,7 @@ codegenPrimOp codegenEnv = case _ of
           )
           x'
           y'
-        OpNumberOrd o' -> opOrd o' x' y'
+        OpNumberOrd o' -> opOrdNumber o' x' y'
         OpStringAppend ->
           S.BinaryAppend x' y'
         OpStringOrd o' -> opOrd o' x' y'

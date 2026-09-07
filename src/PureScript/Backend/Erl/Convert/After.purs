@@ -32,7 +32,7 @@ import Data.FunctorWithIndex (mapWithIndex)
 import Data.Identity (Identity(..))
 import Data.Map (Map, SemigroupMap(..))
 import Data.Map as Map
-import Data.Maybe (Maybe(..), fromMaybe, isJust, maybe)
+import Data.Maybe (Maybe(..), fromMaybe, isJust, isNothing, maybe)
 import Data.Maybe.First (First(..))
 import Data.Monoid.Additive (Additive(..))
 import Data.Monoid.Disj (Disj(..))
@@ -608,7 +608,7 @@ optimizePatternRewrite = case _ of
       mg' <- oprg mg
       e' <- opr e
       pure $ CaseClause pat mg' e'
-    pure $ S.Case expr' cases'
+    pure $ S.Case expr' (pruneUnreachableClauses cases')
   S.If cases -> do
     cases' <- for cases \(IfClause cond e) -> do
       cond' <- coerce opr cond
@@ -637,6 +637,46 @@ optimizePatternRewrite = case _ of
   S.UnaryOp op e -> S.UnaryOp op <$> opr e
   S.BinaryAppend e1 e2 -> S.BinaryAppend <$> opr e1 <*> opr e2
 
+-- | Drop case clauses that can never match because an earlier guardless
+-- | clause already matches everything their pattern matches. The redundant
+-- | branches come out of backend-optimizer's case elaboration (and survive
+-- | `optimizeIf`), and erlc warns on each one ("this clause cannot match
+-- | because a previous clause ... matches the same pattern").
+pruneUnreachableClauses :: NonEmptyArray CaseClause -> NonEmptyArray CaseClause
+pruneUnreachableClauses cases =
+  fromMaybe cases $ NEA.fromArray $ foldl keep [] cases
+  where
+  keep acc c@(CaseClause pat _ _)
+    | Array.any (\(CaseClause pat' mg' _) -> isNothing mg' && subsumes pat' pat) acc = acc
+    | otherwise = Array.snoc acc c
+
+-- | Does every value matched by the second pattern also match the first?
+-- | Conservative: false when unsure. Variables only bind, so binding
+-- | differences do not affect subsumption.
+subsumes :: ErlPattern -> ErlPattern -> Boolean
+subsumes = case _, _ of
+  S.Discard, _ -> true
+  S.BindVar _, _ -> true
+  S.MatchBoth _ p, q -> subsumes p q
+  p, S.MatchBoth _ q -> subsumes p q
+  S.MatchLiteral l1, S.MatchLiteral l2 -> l1 == l2
+  S.MatchTuple ps, S.MatchTuple qs ->
+    Array.length ps == Array.length qs
+      && Array.all identity (Array.zipWith subsumes ps qs)
+  S.MatchList ps mp, S.MatchList qs mq ->
+    Array.length ps == Array.length qs
+      && Array.all identity (Array.zipWith subsumes ps qs)
+      && case mp, mq of
+        Nothing, Nothing -> true
+        Just p, Just q -> subsumes p q
+        _, _ -> false
+  -- A map pattern matches any map with at least its keys, so fewer or equal
+  -- constraints subsume more.
+  S.MatchMap ps, S.MatchMap qs ->
+    ps # Array.all \(Tuple k p) ->
+      qs # Array.any \(Tuple k' q) -> k == k' && subsumes p q
+  _, _ -> false
+
 matchTag
   :: Guard
   -> Maybe
@@ -660,7 +700,7 @@ optimizeIf cases = case NEA.head cases of
     | Just { name, acsrs } <- matchTag cond
     , Just newCases <- caseOn name acsrs cases
     ->
-      S.Case (S.Var name acsrs) $ NEA.appendArray newCases $
+      S.Case (S.Var name acsrs) $ pruneUnreachableClauses $ NEA.appendArray newCases $
         case NEA.fromArray (NEA.drop (NEA.length newCases) cases) of
           Nothing -> []
           Just fallbacks -> pure $
