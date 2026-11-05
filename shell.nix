@@ -17,7 +17,7 @@ let
     name = "purescript-overlay";
     url = "https://github.com/thomashoneyman/purescript-overlay.git";
     ref = "main";
-    rev = "1cf88ab9d83596db0e0c0d304a16809c410e2917";
+    rev = "8046182d2b23144cbb4370dabc5cc7b632bf7c02";
   };
 
   # purerl releases, used to build the test-snapshots package
@@ -44,10 +44,10 @@ mkShell {
   buildInputs = [
     nodejs_22
 
-    # PureScript compiler and build tool; spago 0.93.45 is the version that wrote
-    # the committed spago.lock files (0.93.27 and 1.0.x rewrite them).
+    # PureScript compiler and build tool; spago matches package.json and is
+    # the version that wrote the committed spago.lock files.
     purs-bin.purs-0_15_15
-    spago-bin.spago-0_93_45
+    spago-bin.spago-1_0_5
 
     # purerl backend, for building test-snapshots
     purerl.purerl-0-0-22
