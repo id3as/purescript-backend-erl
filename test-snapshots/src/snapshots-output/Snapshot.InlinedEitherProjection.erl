@@ -15,7 +15,7 @@ segment() ->
   fun segment/1.
 
 segment(R) ->
-  <<"x", R#{ x => 1 }/binary>>.
+  <<"x", (R#{ x => 1 })/binary>>.
 
 describe() ->
   fun describe/1.
@@ -54,63 +54,23 @@ describe(N) ->
                 end
               end
           end),
-        case case V@3 of
-            {left, _} ->
-              false;
-            {right, _} ->
-              true;
-            _ ->
-              erlang:error({fail, <<"Failed pattern match">>})
-          end of
-          true ->
+        case V@3 of
+          {left, V@4} ->
+            snapshot_inlinedEitherProjection@foreign:crash(<<
+              "cannot: ",
+              V@4/binary,
+              "."
+            >>);
+          {right, #{ renumbering := V@5, track := V@6 }} ->
             begin
-              V@8 =
-                case V@3 of
-                  {left, #{ context := V@4 }} ->
-                    V@4;
-                  {right, #{ track := V@5 }} ->
-                    V@5 + 1;
-                  _ ->
-                    erlang:error({fail, <<"Failed pattern match">>})
-                end
-                  + case V@3 of
-                    {left, #{ renumbering := V@6 }} ->
-                      V@6;
-                    {right, #{ renumbering := V@7 }} ->
-                      V@7;
-                    _ ->
-                      erlang:error({fail, <<"Failed pattern match">>})
-                  end,
+              V@7 = (V@6 + 1) + V@5,
               fun
                 () ->
-                  V@8
+                  V@7
               end
             end;
           _ ->
-            case case V@3 of
-                {left, _} ->
-                  true;
-                {right, _} ->
-                  false;
-                _ ->
-                  erlang:error({fail, <<"Failed pattern match">>})
-              end of
-              true ->
-                snapshot_inlinedEitherProjection@foreign:crash(case V@3 of
-                  {left, V@9} ->
-                    <<"cannot: ", V@9/binary, ".">>;
-                  {right, #{ renumbering := V@10, track := V@11 }} ->
-                    <<
-                      "cannot: ",
-                      #{ context => V@11 + 1, renumbering => V@10 }/binary,
-                      "."
-                    >>;
-                  _ ->
-                    erlang:error({fail, <<"Failed pattern match">>})
-                end);
-              _ ->
-                erlang:error({fail, <<"Failed pattern match">>})
-            end
+            erlang:error({fail, <<"Failed pattern match">>})
         end
       end;
     true ->
