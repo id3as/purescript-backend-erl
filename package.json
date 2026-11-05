@@ -18,7 +18,7 @@
     "prepublishOnly": "rm -rf bundle/index.js output output-es && npm run build"
   },
   "devDependencies": {
-    "spago": "^0.93.27"
+    "spago": "^1.0.5"
   },
   "author": "id3as",
   "license": "MIT",

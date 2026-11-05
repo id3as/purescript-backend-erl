@@ -69,9 +69,9 @@ package:
       - parallel
       - refs
 workspace:
-  package_set:
+  packageSet:
     registry: 43.0.0
-  extra_packages:
+  extraPackages:
     dodo-printer:
       git: https://github.com/natefaubion/purescript-dodo-printer
       ref: v2.2.1
