@@ -98,16 +98,17 @@ caseInChain(I) ->
           end,
         ('don\'tInlineMeMe'(<<"y">>))(),
         V1 = ((erlang:map_get(compare, data_ord@ps:ordInt()))(I))(8),
-        case V1 of
-          {eQ} ->
-            unit;
-          {lT} ->
-            ('don\'tInlineMeMe'(<<"LT">>))();
-          {gT} ->
-            ('don\'tInlineMeMe'(<<"GT">>))();
-          _ ->
-            (erlang:error({fail, <<"Failed pattern match">>}))()
-        end,
+        _ =
+          case V1 of
+            {eQ} ->
+              unit;
+            {lT} ->
+              ('don\'tInlineMeMe'(<<"LT">>))();
+            {gT} ->
+              ('don\'tInlineMeMe'(<<"GT">>))();
+            _ ->
+              (erlang:error({fail, <<"Failed pattern match">>}))()
+          end,
         V@1
       end
   end.

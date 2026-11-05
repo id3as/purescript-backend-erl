@@ -34,7 +34,7 @@ numberComparison() ->
   end.
 
 numberComparison(X, Y) ->
-  array:from_list([X =:= Y, X =/= Y, X < Y, X =< Y, X >= Y, X > Y]).
+  array:from_list([X == Y, X /= Y, X < Y, X =< Y, X >= Y, X > Y]).
 
 integerComparison() ->
   fun

@@ -39,7 +39,7 @@ h() ->
 
 h(V) ->
   if
-    V =:= 3.14 ->
+    V == 3.14 ->
       3.14159;
     true ->
       erlang:error({fail, <<"Failed pattern match">>})
