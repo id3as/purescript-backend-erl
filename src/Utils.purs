@@ -67,6 +67,10 @@ import Unsafe.Coerce (unsafeCoerce)
 spawnFromParent :: String -> Array String -> Aff Unit
 spawnFromParent command args = makeAff \k -> do
   childProc <- ChildProcess.spawn command args
+  -- The child's stdio defaults to pipes; forward them so its output is visible
+  -- and so it cannot block on a full, unread pipe (as happened in CI).
+  Stream.pipe (ChildProcess.stdout childProc) Process.stdout
+  Stream.pipe (ChildProcess.stderr childProc) Process.stderr
   childProc # EE.on_ ChildProcess.exitH case _ of
     Normally code
       | code > 0 -> Process.exit' code
