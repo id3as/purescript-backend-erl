@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push to the same branch / PR cancels the run still in progress.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    # A full run takes a few minutes; anything longer is a hang.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+        with:
+          # nix-shell looks up <nixpkgs> for its own bash; point it at the same
+          # pinned nixpkgs as shell.nix instead of an unpinned channel.
+          nix_path: nixpkgs=https://github.com/NixOS/nixpkgs/archive/ac62194c3917d5f474c1a844b6fd6da2db95077d.tar.gz
+
+      - name: Print toolchain versions
+        run: |
+          nix-shell --run '
+            purs --version
+            spago --version
+            purerl --version
+            node --version
+            erl -noshell -eval "io:format(\"OTP ~s~n\", [erlang:system_info(otp_release)]), halt()."
+          '
+
+      - name: Build
+        run: nix-shell --run 'spago build'
+
+      # Generates Erlang for every snapshot, compiles it with erlc, runs the
+      # snapshot mains, and fails on any diff against snapshots-output.
+      - name: Test
+        run: nix-shell --run "spago test -- --run --filter '*'"

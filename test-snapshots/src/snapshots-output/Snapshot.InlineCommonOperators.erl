@@ -194,8 +194,8 @@ inlineBinary(I, N, B, S, C) ->
    , addNum => N + N
    , mulNum => N * N
    , subNum => N - N
-   , eqNum => N =:= N
-   , notEqNum => N =/= N
+   , eqNum => N == N
+   , notEqNum => N /= N
    , eqInt => I =:= I
    , notInt => I =/= I
    , eqString => S =:= S

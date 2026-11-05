@@ -22,8 +22,12 @@ Note: `purescript-backend-erl` is the name of the repository, while `purs-backen
 
 ### Tests
 
-Run tests with `spago test -- --accept --run` to accept new golden output and compile and run the resulting Erlang tests.
+Run tests with `spago test -- --run --filter '*'` to generate Erlang for every snapshot, compile it with `erlc`, run the resulting Erlang tests, and diff the generated code against the stored golden output.
+Add `--accept` to accept new golden output.
 (Not all tests have assertions (yet).)
+
+The tests need `purs`, `spago`, `purerl` and Erlang/OTP on the `PATH`.
+`shell.nix` pins all of these; `nix-shell` gives the same toolchain that CI uses (see `.github/workflows/ci.yml`).
 
 ## Results
 
