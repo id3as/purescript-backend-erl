@@ -452,7 +452,24 @@ printBinaryLiteral = finish <<< go
   go (S.Literal (S.String s))
     | isAscii s = [ D.text $ "\"" <> escapeErlString s <> "\"" ]
     | otherwise = [ D.text $ "\"" <> escapeErlString s <> "\"/utf8" ]
-  go s = [ printExpr s <> D.text "/binary" ]
+  go s = [ printSegment s <> D.text "/binary" ]
+
+  -- A segment value must be an `expr_max` in Erlang's grammar: a variable,
+  -- literal, list, tuple, parenthesised expression or a block (`begin`,
+  -- `case`, `if`, `fun`, ...). `printExpr` already parenthesises calls and
+  -- operators, but maps and records print bare and `#{..}/binary` is a
+  -- syntax error (id3as/purescript-backend-erl#1).
+  printSegment s
+    | segmentNeedsParens s = printParens (printExpr s)
+    | otherwise = printExpr s
+
+  segmentNeedsParens = case _ of
+    S.Map _ -> true
+    S.MapUpdate _ _ -> true
+    S.Record _ -> true
+    S.RecordUpdate _ _ -> true
+    S.Macro _ _ -> true
+    _ -> false
 
 printField :: forall k. (k -> Doc Void) -> Tuple k ErlExpr -> Doc Void
 printField k (Tuple f e) =

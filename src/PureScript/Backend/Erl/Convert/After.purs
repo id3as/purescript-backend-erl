@@ -430,26 +430,23 @@ optimizePatternDemand = case _ of
         (FunHead (choosePattern d <$> pats) mg')
         (optimizeDemands ds e')
     pure $ S.Fun name cases'
+  S.Case expr cases | Just e <- caseOfBool expr cases -> opd e
   S.Case expr cases -> do
     expr' <- opd expr
-    cases' <- alts cases \(CaseClause pat mg e) -> do
-      mg' <- opdg mg
-      let k = knownByMatching expr pat <> foldMap knownFrom (coerce <$> mg)
-      e' <- withKnown k (opd e)
-      pure $ Tuple [pat] \d ds -> CaseClause
-        (choosePattern d pat)
-        mg'
-        (optimizeDemands ds e')
-    pure $ S.Case expr' cases'
-  S.If cases -> do
-    cases' <- alts cases \(IfClause cond e) -> do
-      cond' <- coerce opd cond
-      let k = knownFrom (coerce cond)
-      e' <- withKnown k (opd e)
-      pure $ Tuple [] \_d ds -> IfClause cond' (optimizeDemands ds e')
-    -- The first conditional always runs, so we want to include it in the analysis
-    -- void $ censor justDemands $ opd $ (\(IfClause (Guard cond) _) -> cond) (NEA.head cases)
-    pure $ S.If cases'
+    case caseOfLiteral expr' cases of
+      Just e -> opd e
+      Nothing -> do
+        cases' <- alts cases \(CaseClause pat mg e) -> do
+          mg' <- opdg mg
+          let k = knownByMatching expr pat <> foldMap knownFrom (coerce <$> mg)
+          e' <- withKnown k (opd e)
+          pure $ Tuple [pat] \d ds -> CaseClause
+            (choosePattern d pat)
+            mg'
+            (optimizeDemands ds e')
+        pure $ S.Case expr' cases'
+  S.If cases -> WriterT \r ->
+    runWriterT (maybe (opdIf cases) opd (pruneKnownIf r cases)) r
   e@(S.Var name acsrs) -> WriterT \r -> do
     let
       d = Multiplicative $ Demands Map.empty $ Map.singleton name $
@@ -489,6 +486,171 @@ optimizePatternDemand = case _ of
   S.BinOp op e1 e2 -> S.BinOp op <$> opd e1 <*> opd e2
   S.UnaryOp op e -> S.UnaryOp op <$> opd e
   S.BinaryAppend e1 e2 -> S.BinaryAppend <$> opd e1 <*> opd e2
+
+opdIf :: NonEmptyArray IfClause -> W ErlExpr
+opdIf cases = do
+  cases' <- alts cases \(IfClause cond e) -> do
+    cond' <- coerce opd cond
+    let k = knownFrom (coerce cond)
+    e' <- withKnown k (opd e)
+    pure $ Tuple [] \_d ds -> IfClause cond' (optimizeDemands ds e')
+  -- The first conditional always runs, so we want to include it in the analysis
+  -- void $ censor justDemands $ opd $ (\(IfClause (Guard cond) _) -> cond) (NEA.head cases)
+  pure $ S.If cases'
+
+--------------------------------------------------------------------------------
+-- Known-constructor simplification                                           --
+--------------------------------------------------------------------------------
+
+-- | backend-optimizer distributes accessors and primops over a `Branch`
+-- | (case-of-case), so a value inlined from a function that pattern matches
+-- | an ADT reaches us as one `if`/`case` over the scrutinee per use site, with
+-- | an arm per constructor. Where such a use sits under a condition that has
+-- | already fixed the scrutinee's constructor, every other arm is dead - and
+-- | ill-typed, since its projection belongs to a different constructor: a
+-- | `Left` arm consuming `Right`'s record as a binary, say, which is a syntax
+-- | error once the binary construction is distributed into it
+-- | (id3as/purescript-backend-erl#1).
+-- |
+-- | The demand pass already threads the constructor facts established by
+-- | enclosing `?IS_KNOWN_TAG` guards down the tree (`withKnown`), so it is the
+-- | place to decide those arms, and doing it here also keeps the dead arms'
+-- | demands out of the analysis. Three rewrites cooperate:
+-- |
+-- |   - `caseOfBool`: `case <branches to true/false> of true -> A; _ -> B`
+-- |     (the converter's encoding of a non-guard condition) becomes the
+-- |     branches selecting A or B directly, which exposes their guards;
+-- |   - `pruneKnownIf`: `if` clauses whose guard the known constructors refute
+-- |     are dropped, and the chain is cut at the first guard they establish;
+-- |   - `caseOfLiteral`: a `case` whose scrutinee collapsed to a literal takes
+-- |     the clause that matches it.
+
+-- | The constructor (tag and arity) an enclosing guard established for a
+-- | variable, or for a field reached from it through the given accessors.
+knownTagOf :: String -> Accessors -> MDemands -> Maybe (Tuple String Int)
+knownTagOf name acsrs (Multiplicative (Demands _ m)) = Map.lookup name m >>= go acsrs
+  where
+  go acs d = case Array.uncons acs, d of
+    Nothing, DemandADT _ tag _ -> tag
+    Just { head: AcsElement i, tail }, DemandADT _ _ fields -> Map.lookup i fields >>= go tail
+    Just { head: AcsKey k, tail }, DemandRecord _ fields -> Map.lookup k fields >>= go tail
+    _, _ -> Nothing
+knownTagOf _ _ _ = Nothing
+
+-- | Decide a guard from the known constructors, where they suffice to.
+decideGuard :: MDemands -> ErlExpr -> Maybe Boolean
+decideGuard known = go
+  where
+  go = case _ of
+    S.Literal (S.Atom "true") -> Just true
+    S.Literal (S.Atom "false") -> Just false
+    S.Macro "IS_KNOWN_TAG" (Just args)
+      | [ S.Literal (S.Atom tag), S.Literal (S.Integer arity), S.Var name acsrs ] <- NEA.toArray args ->
+          knownTagOf name acsrs known <#> eq (Tuple tag arity)
+    S.BinOp S.AndAlso a b -> case go a, go b of
+      Just false, _ -> Just false
+      _, Just false -> Just false
+      Just true, Just true -> Just true
+      _, _ -> Nothing
+    S.BinOp S.OrElse a b -> case go a, go b of
+      Just true, _ -> Just true
+      _, Just true -> Just true
+      Just false, Just false -> Just false
+      _, _ -> Nothing
+    S.UnaryOp S.Not a -> not <$> go a
+    _ -> Nothing
+
+-- | Drop `if` clauses the known constructors refute, and cut the chain at the
+-- | first clause they establish (which then collapses to its body when it
+-- | comes first). `Nothing` when nothing was decided, so the caller falls
+-- | through to the ordinary handling instead of looping.
+pruneKnownIf :: MDemands -> NonEmptyArray IfClause -> Maybe ErlExpr
+pruneKnownIf known clauses = do
+  let { acc, changed } = foldl step { acc: [], changed: false, done: false } clauses
+  guard changed
+  acc' <- NEA.fromArray acc
+  pure case NEA.head acc' of
+    IfClause (Guard (S.Literal (S.Atom "true"))) body | NEA.length acc' == 1 -> body
+    _ -> S.If acc'
+  where
+  step st@{ done: true } _ = st
+  step { acc, changed } c@(IfClause (Guard cond) body) = case decideGuard known cond of
+    Just false -> { acc, changed: true, done: false }
+    Just true ->
+      { acc: Array.snoc acc (IfClause (Guard (S.Literal (S.Atom "true"))) body)
+      , changed: changed || cond /= S.Literal (S.Atom "true")
+      , done: true
+      }
+    Nothing -> { acc: Array.snoc acc c, changed, done: false }
+
+-- | `case <branches to booleans> of true -> A; _ -> B` - how the converter
+-- | encodes a condition that is not a guard expression, here a constructor
+-- | test that backend-optimizer distributed over a `Branch` - becomes the
+-- | branches selecting A or B directly. Arms that only fail stay as they are.
+-- | A and B each move into at most one arm, so no code is duplicated.
+caseOfBool :: ErlExpr -> NonEmptyArray CaseClause -> Maybe ErlExpr
+caseOfBool scrut clauses = do
+  Tuple onTrue onFalse <- boolClauses
+  let
+    select e = case e of
+      S.Literal (S.Atom "true") -> Just onTrue
+      S.Literal (S.Atom "false") -> Just onFalse
+      _ | isFailure e -> Just e
+      _ -> Nothing
+    atMostOnce arms lit = Array.length (NEA.filter (eq (S.Literal (S.Atom lit))) arms) <= 1
+    distinct arms = atMostOnce arms "true" && atMostOnce arms "false"
+  case scrut of
+    S.If conds -> do
+      guard $ distinct $ conds <#> \(IfClause _ e) -> e
+      S.If <$> for conds \(IfClause g e) -> IfClause g <$> select e
+    S.Case inner innerClauses -> do
+      guard $ distinct $ innerClauses <#> \(CaseClause _ _ e) -> e
+      S.Case inner <$> for innerClauses \(CaseClause p mg e) -> CaseClause p mg <$> select e
+    _ -> Nothing
+  where
+  boolClauses = case NEA.toArray clauses of
+    [ CaseClause (S.MatchLiteral (S.Atom "true")) Nothing a, CaseClause other Nothing b ]
+      | other == S.Discard || other == S.MatchLiteral (S.Atom "false") -> Just (Tuple a b)
+    [ CaseClause (S.MatchLiteral (S.Atom "false")) Nothing b, CaseClause other Nothing a ]
+      | other == S.Discard || other == S.MatchLiteral (S.Atom "true") -> Just (Tuple a b)
+    _ -> Nothing
+
+-- | A `case` whose scrutinee is a literal (an `if` collapsed above it,
+-- | typically) takes the first clause that matches it. Stops at a guarded
+-- | clause that could match, since the guard is not decided here.
+caseOfLiteral :: ErlExpr -> NonEmptyArray CaseClause -> Maybe ErlExpr
+caseOfLiteral scrut@(S.Literal lit) clauses = go (NEA.toArray clauses)
+  where
+  go cs = do
+    { head: CaseClause pat mg body, tail } <- Array.uncons cs
+    let
+      skip = go tail
+      take binds = case mg of
+        Nothing -> Just case binds of
+          Nothing -> body
+          Just v -> S.Assignments [ Tuple (S.BindVar v) scrut ] body
+        Just _ -> Nothing
+    case pat of
+      S.MatchLiteral l | l == lit -> take Nothing
+      S.MatchLiteral _ -> skip
+      S.Discard -> take Nothing
+      S.BindVar v -> take (Just v)
+      S.MatchBoth v S.Discard -> take (Just v)
+      S.MatchBoth v (S.MatchLiteral l) | l == lit -> take (Just v)
+      S.MatchBoth _ (S.MatchLiteral _) -> skip
+      S.MatchBoth _ _ -> skip
+      S.MatchTuple _ -> skip
+      S.MatchMap _ -> skip
+      S.MatchList _ _ -> skip
+caseOfLiteral _ _ = Nothing
+
+-- | The failure the converter emits for an unmatched pattern (and which the
+-- | demand analysis treats as unreachable).
+isFailure :: ErlExpr -> Boolean
+isFailure = case _ of
+  S.FunCall (Just (S.Literal (S.Atom "erlang"))) (S.Literal (S.Atom "error"))
+    [ S.Tupled [ S.Literal (S.Atom "fail"), S.Literal (S.String _) ] ] -> true
+  _ -> false
 
 -- | Recognize a call to a global Erlang pure function (one with no arguments).
 globalThunk :: ErlExpr -> Maybe GlobalErl
